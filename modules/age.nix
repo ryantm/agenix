@@ -6,6 +6,7 @@ let
   cfg = config.age;
   users = config.users.users;
 
+  identities = builtins.concatStringsSep " " (map (path: "-i ${path}") cfg.sshKeyPaths);
   installSecret = secretType: ''
     TMP_DIR=$(mktemp -d)
     TMP_FILE="$TMP_DIR/file"
@@ -13,7 +14,6 @@ let
     install -o '${secretType.owner}' -g '${secretType.group}' -m '${secretType.mode}' "$TMP_FILE" '${secretType.path}'
     rm -rf "$TMP_DIR"
   '';
-
   installAllSecrets = builtins.concatStringsSep (map installSecret (builtins.attrValues cfg.secrets));
 
   secretType = types.submodule ({ config, ... }: {
@@ -65,9 +65,6 @@ let
       };
     };
   });
-
-  identities = builtins.concatStringsSep " " (map (path: "-i ${path}") cfg.sshKeyPaths);
-
 in {
   options.age = {
     secrets = mkOption {
