@@ -67,12 +67,7 @@ let
     chown ${secretType.owner}:${secretType.group} "${secretType.path}"
   '';
 
-  installAllSecrets =
-
-    let
-      st =  (map installSecret (builtins.attrValues cfg.secrets));
-      a = builtins.concatStringsSep "\n" st;
-    in builtins.trace (builtins.toString st) a;
+  installAllSecrets = builtins.concatStringsSep (map installSecret (builtins.attrValues cfg.secrets));
 
 in {
   options.age = {
