@@ -61,10 +61,11 @@ let
   identities = builtins.concatStringsSep " " (map (path: "-i ${path}") cfg.sshKeyPaths);
 
   installSecret = secretType: ''
-    rm -f "${secretType.path}"
-    ${pkgs.age}/bin/age --decrypt ${identities} -o "${secretType.path}" "${secretType.file}"
-    chmod ${secretType.mode} "${secretType.path}"
-    chown ${secretType.owner}:${secretType.group} "${secretType.path}"
+    TMP_DIR=$(mktemp -d)
+    TMP_FILE="$TMP_DIR/file"
+    (umask 0400; ${pkgs.age}/bin/age --decrypt ${identities} -o "$TMP_FILE" "${secretType.file}")
+    install -o '${secretType.owner}' -g '${secretType.group}' -m '${secretType.mode}' "$TMP_FILE" '${secretType.path}'
+    rm -rf "$TMP_DIR"
   '';
 
   installAllSecrets = builtins.concatStringsSep (map installSecret (builtins.attrValues cfg.secrets));
