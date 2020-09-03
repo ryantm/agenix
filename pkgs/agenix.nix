@@ -1,6 +1,7 @@
-{writeShellScriptBin, runtimeShell, age, yq-go} :
+{writeShellScriptBin, runtimeShell, age} :
 writeShellScriptBin "agenix" ''
 set -euo pipefail
+
 PACKAGE="agenix"
 
 function show_help () {
@@ -21,14 +22,14 @@ function show_help () {
   echo ' '
   echo 'EDITOR environment variable of editor to use when editing FILE'
   echo ' '
-  echo 'RULES environment variable with path to YAML file specifying recipient public keys.'
-  echo "Defaults to 'secrets.yaml'"
+  echo 'RULES environment variable with path to Nix file specifying recipient public keys.'
+  echo "Defaults to 'secrets.nix'"
 }
 
 test $# -eq 0 && (show_help && exit 1)
 
 REKEY=0
-DECRYPT=(--decrypt)
+DEFAULT_DECRYPT=(--decrypt)
 
 while test $# -gt 0; do
   case "$1" in
@@ -49,7 +50,7 @@ while test $# -gt 0; do
     -i|--identity)
       shift
       if test $# -gt 0; then
-        DECRYPT+=(--identity "$1")
+        DEFAULT_DECRYPT+=(--identity "$1")
       else
         echo "no PRIVATE_KEY specified"
         exit 1
@@ -67,7 +68,7 @@ while test $# -gt 0; do
   esac
 done
 
-RULES=''${RULES:-secrets.yaml}
+RULES=''${RULES:-secrets.nix}
 
 function cleanup {
     if [ ! -z ''${CLEARTEXT_DIR+x} ]
@@ -83,7 +84,7 @@ trap "cleanup" 0 2 3 15
 
 function edit {
     FILE=$1
-    KEYS=$(${yq-go}/bin/yq r "$RULES" "secrets.(name==$FILE).public_keys.**")
+    KEYS=$(nix eval -f "$RULES" --raw "\"$FILE\".public_keys" --apply "builtins.concatStringsSep \"\n\"")
     if [ -z "$KEYS" ]
     then
         >&2 echo "There is no rule for $FILE in $RULES."
@@ -95,6 +96,7 @@ function edit {
 
     if [ -f "$FILE" ]
     then
+        DECRYPT=("''${DEFAULT_DECRYPT[@]}")
         while IFS= read -r key
         do
             DECRYPT+=(--identity "$key")
@@ -123,7 +125,7 @@ function edit {
 
 function rekey {
     echo "rekeying..."
-    FILES=$(${yq-go}/bin/yq r "$RULES" "secrets.*.name")
+    FILES=$(nix eval -f "$RULES" --raw --apply "f: builtins.concatStringsSep \"\n\" (builtins.attrNames f)")
     for FILE in $FILES
     do
         EDITOR=: edit $FILE

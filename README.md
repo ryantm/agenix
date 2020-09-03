@@ -114,29 +114,23 @@ nix run github:ryantm/agenix -- --help
 
 ## Tutorial
 
-1. Make a directory to store secrets and a YAML file for configuring encryption.
+1. Make a directory to store secrets and `secrets.nix` file for listing secrets and their public keys:
 
    ```console
    $ mkdir secrets
    $ cd secerts
-   $ touch secrets.yaml
+   $ touch secrets.nix
    ```
-2. Add public keys to `secrets.yaml` file (hint: use `ssh-keyscan` or GitHub (for example, https://github.com/ryantm.keys)):
-   ```yaml
-   public_keys:
-     # users
-     - &user1 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIL0idNvgGiucWgup/mP78zyC23uFjYq0evcWdjGQUaBH
-     # systems
-     - &system1 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPJDyIr/FSz1cJdcoW69R+NrWzwGK/+3gJpqD1t8L2zE
-
-   secrets:
-     - name: secret1.age
-       public_keys:
-         - *user1
-         - *system1
-     - name: secret2.age
-       public_keys:
-         - *user1
+2. Add public keys to `secrets.nix` file (hint: use `ssh-keyscan` or GitHub (for example, https://github.com/ryantm.keys)):
+   ```nix
+   let
+     user1 = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIL0idNvgGiucWgup/mP78zyC23uFjYq0evcWdjGQUaBH";
+     system1 = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPJDyIr/FSz1cJdcoW69R+NrWzwGK/+3gJpqD1t8L2zE";
+   in
+   {
+     "secret1.age".public_keys = [ user1 system1];
+     "secret2.age".public_keys = [ user1 ];
+   }
    ```
 3. Edit secret files (assuming your SSH private key is in ~/.ssh/):
    ```console
@@ -150,7 +144,7 @@ nix run github:ryantm/agenix -- --help
 
 ## Rekeying
 
-If you change the public keys in `secrets.yaml`, you should rekey your
+If you change the public keys in `secrets.nix`, you should rekey your
 secrets:
 
 ```console
