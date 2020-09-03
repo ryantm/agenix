@@ -35,8 +35,7 @@ let
           type = types.str;
           default = "/run/secrets/${config.name}";
           description = ''
-            Path where secrets are symlinked to.
-            If the default is kept no symlink is created.
+            Path where the decrypted secret is installed.
           '';
         };
       mode = mkOption {
