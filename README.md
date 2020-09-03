@@ -121,7 +121,7 @@ nix run github:ryantm/agenix -- --help
    $ cd secerts
    $ touch secrets.yaml
    ```
-2. Add public keys to `secrets.yaml` file (hint use `ssh-keyscan` or GitHub (for example, https://github.com/ryantm.keys):
+2. Add public keys to `secrets.yaml` file (hint: use `ssh-keyscan` or GitHub (for example, https://github.com/ryantm.keys)):
    ```yaml
    public_keys:
      # users
