@@ -164,7 +164,7 @@ improved upon by reading the identities from the age file.
 
 ## Threat model/Warnings
 
-This library has not be audited by a security professional.
+This project has not be audited by a security professional.
 
 People unfamiliar with `age` might be surprised that secrets are not
 authenticated. This means that every attacker that has write access to
