@@ -1,6 +1,6 @@
 {writeShellScriptBin, runtimeShell, age} :
 writeShellScriptBin "agenix" ''
-set -euo pipefail
+set -Eeuo pipefail
 
 PACKAGE="agenix"
 
@@ -84,7 +84,7 @@ trap "cleanup" 0 2 3 15
 
 function edit {
     FILE=$1
-    KEYS=$(nix-instantiate --eval -E "(let rules = import $RULES; in builtins.concatStringsSep \"\n\" rules.\"$FILE\".public_keys)" | sed 's/"//g' | sed 's/\\n/\n/g')
+    KEYS=$((nix-instantiate --eval -E "(let rules = import $RULES; in builtins.concatStringsSep \"\n\" rules.\"$FILE\".public_keys)" | sed 's/"//g' | sed 's/\\n/\n/g') || exit 1)
 
     if [ -z "$KEYS" ]
     then
@@ -101,12 +101,20 @@ function edit {
         while IFS= read -r key
         do
             DECRYPT+=(--identity "$key")
-        done <<<$(find ~/.ssh -maxdepth 1 -type f -not -name "*pub" -not -name "config" -not -name "authorized_keys" -not -name "known_hosts")
+        done <<<"$((find ~/.ssh -maxdepth 1 -type f -not -name "*pub" -not -name "config" -not -name "authorized_keys" -not -name "known_hosts") || exit 1)"
         DECRYPT+=(-o "$CLEARTEXT_FILE" "$FILE")
-        ${age}/bin/age "''${DECRYPT[@]}"
+        ${age}/bin/age "''${DECRYPT[@]}" || exit 1
+        cp "$CLEARTEXT_FILE" "$CLEARTEXT_FILE.before"
     fi
 
     $EDITOR "$CLEARTEXT_FILE"
+
+    if [ ! -f "$CLEARTEXT_FILE" ]
+    then
+      echo "$FILE wasn't created."
+      return
+    fi
+    [ -f "$FILE" ] && [ "$EDITOR" != ":" ] && diff "$CLEARTEXT_FILE.before" "$CLEARTEXT_FILE" 1>/dev/null && echo "$FILE wasn't changed, skipping re-encryption." && return
 
     ENCRYPT=()
     while IFS= read -r key
@@ -119,21 +127,22 @@ function edit {
 
     ENCRYPT+=(-o "$REENCRYPTED_FILE")
 
-    cat "$CLEARTEXT_FILE" | ${age}/bin/age "''${ENCRYPT[@]}"
+    ${age}/bin/age "''${ENCRYPT[@]}" <"$CLEARTEXT_FILE" || exit 1
 
     mv -f "$REENCRYPTED_FILE" "$1"
 }
 
 function rekey {
-    echo "rekeying..."
-    FILES=$(nix-instantiate --eval -E "(let rules = import $RULES; in builtins.concatStringsSep \"\n\" (builtins.attrNames rules))"  | sed 's/"//g' | sed 's/\\n/\n/g')
+    FILES=$((nix-instantiate --eval -E "(let rules = import $RULES; in builtins.concatStringsSep \"\n\" (builtins.attrNames rules))"  | sed 's/"//g' | sed 's/\\n/\n/g') || exit 1)
 
     for FILE in $FILES
     do
-        EDITOR=: edit $FILE
+        echo "rekeying $FILE..."
+        EDITOR=: edit "$FILE"
+        cleanup
     done
 }
 
 [ $REKEY -eq 1 ] && rekey && exit 0
-edit $FILE && exit 0
+edit "$FILE" && cleanup && exit 0
 ''
