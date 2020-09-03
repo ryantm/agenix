@@ -23,7 +23,7 @@ function show_help () {
   echo 'EDITOR environment variable of editor to use when editing FILE'
   echo ' '
   echo 'RULES environment variable with path to Nix file specifying recipient public keys.'
-  echo "Defaults to 'secrets.nix'"
+  echo "Defaults to './secrets.nix'"
 }
 
 test $# -eq 0 && (show_help && exit 1)
@@ -68,7 +68,7 @@ while test $# -gt 0; do
   esac
 done
 
-RULES=''${RULES:-secrets.nix}
+RULES=''${RULES:-./secrets.nix}
 
 function cleanup {
     if [ ! -z ''${CLEARTEXT_DIR+x} ]
@@ -84,7 +84,8 @@ trap "cleanup" 0 2 3 15
 
 function edit {
     FILE=$1
-    KEYS=$(nix eval -f "$RULES" --raw "\"$FILE\".public_keys" --apply "builtins.concatStringsSep \"\n\"")
+    KEYS=$(nix-instantiate --eval -E "(let rules = import $RULES; in builtins.concatStringsSep \"\n\" rules.\"$FILE\".public_keys)" | sed 's/"//g' | sed 's/\\n/\n/g')
+
     if [ -z "$KEYS" ]
     then
         >&2 echo "There is no rule for $FILE in $RULES."
@@ -125,7 +126,8 @@ function edit {
 
 function rekey {
     echo "rekeying..."
-    FILES=$(nix eval -f "$RULES" --raw --apply "f: builtins.concatStringsSep \"\n\" (builtins.attrNames f)")
+    FILES=$(nix-instantiate --eval -E "(let rules = import $RULES; in builtins.concatStringsSep \"\n\" (builtins.attrNames rules))"  | sed 's/"//g' | sed 's/\\n/\n/g')
+
     for FILE in $FILES
     do
         EDITOR=: edit $FILE
