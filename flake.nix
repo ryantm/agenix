@@ -12,7 +12,7 @@
     forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f system);
   in {
     nixosModules.age = import ./modules/age.nix;
-    # packages = forAllSystems (system: nixpkgs.legacyPackages.${system}.callPackage ./default.nix {});
-#    defaultPackage = forAllSystems (system: self.packages.${system}.age-nix); # 
+    packages = forAllSystems (system: nixpkgs.legacyPackages.${system}.callPackage ./default.nix {});
+    defaultPackage = forAllSystems (system: self.packages.${system}.agenix);
   };
 }

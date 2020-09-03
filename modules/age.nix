@@ -13,7 +13,6 @@ let
     chmod ${secretType.mode} "$TMP_FILE"
     chown ${secretType.owner}:${secretType.group} "$TMP_FILE"
     mv -f "$TMP_FILE" '${secretType.path}'
-
   '';
   installAllSecrets = builtins.concatStringsSep "\n" (map installSecret (builtins.attrValues cfg.secrets));
 
@@ -27,15 +26,12 @@ let
         '';
       };
       file = mkOption {
-        type = types.either types.str types.path;
+        type = types.path;
         description = ''
           Age file the secret is loaded from.
         '';
       };
-      path = assert assertMsg (builtins.pathExists config.file) ''
-          Cannot find path '${config.file}' set in 'age.secrets."${config._module.args.name}".file'
-        '';
-        mkOption {
+      path = mkOption {
           type = types.str;
           default = "/run/secrets/${config.name}";
           description = ''
@@ -81,20 +77,15 @@ in {
                   map (e: e.path) (lib.filter (e: e.type == "rsa" || e.type == "ed25519") config.services.openssh.hostKeys)
                 else [];
       description = ''
-        Path to SSH keys to be used as identities in age file decryption.
+        Path to SSH keys to be used as identities in age decryption.
       '';
     };
   };
   config = mkIf (cfg.secrets != {}) {
     assertions = [{
       assertion = cfg.sshKeyPaths != [];
-      message = "Either age.sshKeyPaths must be set.";
-    }] ++ map (name: let
-      inherit (cfg.secrets.${name}) file;
-    in {
-      assertion = builtins.isPath file;
-      message = "${file} is not in the nix store. Either add it to the nix store.";
-    }) (builtins.attrNames cfg.secrets);
+      message = "age.sshKeyPaths must be set.";
+    }];
 
     system.activationScripts.setup-secrets = stringAfter [ "users" "groups" ] installAllSecrets;
   };
