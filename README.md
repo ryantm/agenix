@@ -2,7 +2,10 @@
 
 [age](https://github.com/FiloSottile/age)-encrypted secrets for NixOS.
 
-# Features
+It consists of a NixOS module `age`, and a CLI tool called `agenix`
+used for editing and rekeying the secret files.
+
+## Features
 
 * Secrets are encrypted with SSH keys
 ** system public keys via `ssh-keyscan`
@@ -10,11 +13,11 @@
 * No GPG
 * Very little code, so it should be easy for you to audit
 
-# Installation
+## Installation
 
 Choose one of the following methods:
 
-#### [niv](https://github.com/nmattia/niv) (Current recommendation)
+### [niv](https://github.com/nmattia/niv) (Current recommendation)
 
 First add it to niv:
 
@@ -22,7 +25,9 @@ First add it to niv:
 $ niv add ryantm/agenix
 ```
 
-  Than add the following to your configuration.nix in the `imports` list:
+#### Module
+
+Then add the following to your configuration.nix in the `imports` list:
 
 ```nix
 {
@@ -30,7 +35,7 @@ $ niv add ryantm/agenix
 }
 ```
 
-#### nix-channel
+### nix-channel
 
   As root run:
 
@@ -47,11 +52,11 @@ $ nix-channel --update
 }
 ```
 
-#### fetchTarball
+### fetchTarball
 
   Add the following to your configuration.nix:
 
-``` nix
+```nix
 {
   imports = [ "${builtins.fetchTarball "https://github.com/ryantm/agenix/archive/master.tar.gz"}/modules/age" ];
 }
@@ -74,9 +79,11 @@ $ nix-channel --update
 }
 ```
 
-#### Flakes
+### Flakes
 
-``` nix
+#### Module
+
+```nix
 {
   inputs.agenix.url = "github:ryantm/agenix";
   # optional, not necessary for the module
@@ -96,6 +103,82 @@ $ nix-channel --update
 }
 ```
 
-# Tutorial
+#### CLI
 
-# Threat model
+You don't need to install it:
+
+```console
+nix run github:ryantm/agenix -- --help
+```
+
+
+## Tutorial
+
+1. Make a directory to store secrets and a YAML file for configuring encryption.
+
+   ```console
+   $ mkdir secrets
+   $ cd secerts
+   $ touch secrets.yaml
+   ```
+2. Add public keys to `secrets.yaml` file (hint use `ssh-keyscan` or GitHub (for example, https://github.com/ryantm.keys):
+   ```yaml
+   public_keys:
+     # users
+     - &user1 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIL0idNvgGiucWgup/mP78zyC23uFjYq0evcWdjGQUaBH
+     # systems
+     - &system1 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPJDyIr/FSz1cJdcoW69R+NrWzwGK/+3gJpqD1t8L2zE
+
+   secrets:
+     - name: secret1.age
+       public_keys:
+         - *user1
+         - *system1
+     - name: secret2.age
+       public_keys:
+         - *user1
+   ```
+3. Edit secret files (assuming your SSH private key is in ~/.ssh/):
+   ```console
+   $ agenix -e secret1.age
+   ```
+4. Add secret to NixOS module config:
+   ```nix
+   age.secrets.secret1 = ../secrets/secret1.age;
+   ```
+5. NixOS rebuild or use your deployment too like usual.
+
+## Rekeying
+
+If you change the public keys in `secrets.yaml`, you should rekey your
+secrets:
+
+```console
+$ agenix --rekey
+```
+
+To rekey a secret, you have to be able to decrypt it. Because of
+randomness in `age`'s encryption algorithms, the files always change
+when rekeyed, even if the identities do not. This eventually could be
+improved upon by reading the identities from the age file.
+
+## Threat model/Warnings
+
+This library has not be audited by a security professional.
+
+People unfamiliar with `age` might be surprised that secrets are not
+authenticated. This means that every attacker that has write access to
+the repository can modify secrets because public keys are exposed.
+This seems like not a problem on the first glance because changing the
+configuration itself could expose secrets easily. However it is easier
+to review configuration changes rather than random secrets (for
+example 4096-bit rsa keys).  This would be solved by having a message
+authentication code (MAC) like other implementations like GPG or
+[sops](https://github.com/Mic92/sops-nix) have, however this was left
+out for simplicity in `age`.
+
+## Acknowledgements
+
+This project is based off of
+[sops-nix](https://github.com/Mic92/sops-nix) created Mic92. Thank you
+to Mic92 for inspiration and help with making this.

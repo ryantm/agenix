@@ -6,15 +6,18 @@ PACKAGE="agenix"
 function show_help () {
   echo "$PACKAGE - edit and rekey age secret files"
   echo " "
-  echo "$PACKAGE -e FILE"
-  echo "$PACKAGE -r"
+  echo "$PACKAGE -e FILE [-i PRIVATE_KEY]"
+  echo "$PACKAGE -r [-i PRIVATE_KEY]"
   echo ' '
   echo 'options:'
   echo '-h, --help                show help'
   echo '-e, --edit FILE           edits FILE using $EDITOR'
   echo '-r, --rekey               re-encrypts all secrets with specified recipients'
+  echo '-i, --identity            identity to use when decrypting'
   echo ' '
   echo 'FILE an age-encrypted file'
+  echo ' '
+  echo 'PRIVATE_KEY a path to a private SSH key used to decrypt file'
   echo ' '
   echo 'EDITOR environment variable of editor to use when editing FILE'
   echo ' '
@@ -25,6 +28,7 @@ function show_help () {
 test $# -eq 0 && (show_help && exit 1)
 
 REKEY=0
+DECRYPT=(--decrypt)
 
 while test $# -gt 0; do
   case "$1" in
@@ -37,7 +41,17 @@ while test $# -gt 0; do
       if test $# -gt 0; then
         export FILE=$1
       else
-        echo "no file specified"
+        echo "no FILE specified"
+        exit 1
+      fi
+      shift
+      ;;
+    -i|--identity)
+      shift
+      if test $# -gt 0; then
+        DECRYPT+=(--identity "$1")
+      else
+        echo "no PRIVATE_KEY specified"
         exit 1
       fi
       shift
@@ -81,7 +95,6 @@ function edit {
 
     if [ -f "$FILE" ]
     then
-        DECRYPT=(--decrypt)
         while IFS= read -r key
         do
             DECRYPT+=(--identity "$key")
