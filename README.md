@@ -106,13 +106,13 @@ $ nix-channel --update
 
 #### CLI
 
-You don't need to install it:
+You don't need to install it,
 
 ```console
 nix run github:ryantm/agenix -- --help
 ```
 
-if you want to (change the system based on your system):
+but, if you want to (change the system based on your system):
 
 ```nix
 {
