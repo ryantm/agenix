@@ -84,7 +84,7 @@ trap "cleanup" 0 2 3 15
 
 function edit {
     FILE=$1
-    KEYS=$((nix-instantiate --eval -E "(let rules = import $RULES; in builtins.concatStringsSep \"\n\" rules.\"$FILE\".public_keys)" | sed 's/"//g' | sed 's/\\n/\n/g') || exit 1)
+    KEYS=$((nix-instantiate --eval -E "(let rules = import $RULES; in builtins.concatStringsSep \"\n\" rules.\"$FILE\".publicKeys)" | sed 's/"//g' | sed 's/\\n/\n/g') || exit 1)
 
     if [ -z "$KEYS" ]
     then
