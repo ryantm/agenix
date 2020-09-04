@@ -12,6 +12,7 @@ used for editing and rekeying the secret files.
   * can use public keys available on GitHub for users (for example, https://github.com/ryantm.keys)
 * No GPG
 * Very little code, so it should be easy for you to audit
+* Encrypted secrets are stored in the Nix store, so a separate distribution mechanism is not necessary
 
 ## Installation
 
@@ -111,6 +112,15 @@ You don't need to install it:
 nix run github:ryantm/agenix -- --help
 ```
 
+if you want to (change the system based on your system):
+
+```nix
+{
+  environment.systemPackages = [ agenix.defaultPackage.x86_64-linux ];
+}
+```
+
+
 
 ## Tutorial
 
@@ -138,7 +148,7 @@ nix run github:ryantm/agenix -- --help
    ```
 4. Add secret to NixOS module config:
    ```nix
-   age.secrets.secret1 = ../secrets/secret1.age;
+   age.secrets.secret1.file = ../secrets/secret1.age;
    ```
 5. NixOS rebuild or use your deployment too like usual.
 
