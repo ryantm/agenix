@@ -14,7 +14,12 @@ let
     chown ${secretType.owner}:${secretType.group} "$TMP_FILE"
     mv -f "$TMP_FILE" '${secretType.path}'
   '';
-  installAllSecrets = builtins.concatStringsSep "\n" (map installSecret (builtins.attrValues cfg.secrets));
+
+  rootOwnedSecrets = builtins.filter (st: st.owner == "root" && st.group == "root") (builtins.attrValues cfg.secrets);
+  installRootOwnedSecrets = builtins.concatStringsSep "\n" (map installSecret rootOwnedSecrets);
+
+  nonRootSecrets = builtins.filter (st: st.owner != "root" && st.group != "root") (builtins.attrValues cfg.secrets);
+  installNonRootSecrets = builtins.concatStringsSep "\n" (map installSecret nonRootSecrets);
 
   secretType = types.submodule ({ config, ... }: {
     options = {
@@ -86,6 +91,12 @@ in {
       message = "age.sshKeyPaths must be set.";
     }];
 
-    system.activationScripts.setup-secrets = stringAfter [ "users" "groups" ] installAllSecrets;
+    # Secrets with root owner and group can be installed before users
+    # exist. This allows user password files to be encrypted.
+    system.activationScripts.agenixRoot = installRootOwnedSecrets;
+    system.activationScripts.users.deps = [ "agenixRoot" ];
+
+    # Other secrets need to wait for users and groups to exist.
+    system.activationScripts.agenix = stringAfter [ "users" "groups" ] installNonRootSecrets;
   };
 }
