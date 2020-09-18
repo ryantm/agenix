@@ -28,6 +28,9 @@ function show_help () {
   echo ' '
   echo 'RULES environment variable with path to Nix file specifying recipient public keys.'
   echo "Defaults to './secrets.nix'"
+  echo ' '
+  echo "age binary path: ${ageBin}"
+  echo "age version: $(${ageBin} --version)"
 }
 
 test $# -eq 0 && (show_help && exit 1)
