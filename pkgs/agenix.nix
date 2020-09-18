@@ -1,4 +1,8 @@
-{writeShellScriptBin, runtimeShell, age} :
+{writeShellScriptBin, runtimeShell, pkgs} :
+let
+  rage = pkgs.callPackage ./rage.nix {};
+  ageBin = "${rage}/bin/rage";
+in
 writeShellScriptBin "agenix" ''
 set -Eeuo pipefail
 
@@ -103,7 +107,7 @@ function edit {
             DECRYPT+=(--identity "$key")
         done <<<"$((find ~/.ssh -maxdepth 1 -type f -not -name "*pub" -not -name "config" -not -name "authorized_keys" -not -name "known_hosts") || exit 1)"
         DECRYPT+=(-o "$CLEARTEXT_FILE" "$FILE")
-        ${age}/bin/age "''${DECRYPT[@]}" || exit 1
+        ${ageBin} "''${DECRYPT[@]}" || exit 1
         cp "$CLEARTEXT_FILE" "$CLEARTEXT_FILE.before"
     fi
 
@@ -127,7 +131,7 @@ function edit {
 
     ENCRYPT+=(-o "$REENCRYPTED_FILE")
 
-    ${age}/bin/age "''${ENCRYPT[@]}" <"$CLEARTEXT_FILE" || exit 1
+    ${ageBin} "''${ENCRYPT[@]}" <"$CLEARTEXT_FILE" || exit 1
 
     mv -f "$REENCRYPTED_FILE" "$1"
 }
