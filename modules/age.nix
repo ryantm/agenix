@@ -4,6 +4,9 @@ with lib;
 
 let
   cfg = config.age;
+  rage = pkgs.callPackage ../pkgs/rage.nix {};
+  ageBin = "${rage}/bin/rage";
+
   users = config.users.users;
 
   identities = builtins.concatStringsSep " " (map (path: "-i ${path}") cfg.sshKeyPaths);
@@ -11,7 +14,7 @@ let
     echo "decrypting ${secretType.file} to ${secretType.path}..."
     TMP_FILE="${secretType.path}.tmp"
     mkdir -p $(dirname ${secretType.path})
-    (umask 0400; ${pkgs.age}/bin/age --decrypt ${identities} -o "$TMP_FILE" "${secretType.file}")
+    (umask 0400; ${ageBin} --decrypt ${identities} -o "$TMP_FILE" "${secretType.file}")
     chmod ${secretType.mode} "$TMP_FILE"
     chown ${secretType.owner}:${secretType.group} "$TMP_FILE"
     mv -f "$TMP_FILE" '${secretType.path}'
