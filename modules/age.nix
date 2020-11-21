@@ -8,7 +8,9 @@ let
 
   identities = builtins.concatStringsSep " " (map (path: "-i ${path}") cfg.sshKeyPaths);
   installSecret = secretType: ''
+    echo "decrypting ${secretType.file} to ${secretType.path}..."
     TMP_FILE="${secretType.path}.tmp"
+    mkdir -p $(dirname ${secretType.path})
     (umask 0400; ${pkgs.age}/bin/age --decrypt ${identities} -o "$TMP_FILE" "${secretType.file}")
     chmod ${secretType.mode} "$TMP_FILE"
     chown ${secretType.owner}:${secretType.group} "$TMP_FILE"
@@ -16,10 +18,10 @@ let
   '';
 
   rootOwnedSecrets = builtins.filter (st: st.owner == "root" && st.group == "root") (builtins.attrValues cfg.secrets);
-  installRootOwnedSecrets = builtins.concatStringsSep "\n" (map installSecret rootOwnedSecrets);
+  installRootOwnedSecrets = builtins.concatStringsSep "\n" (["echo '[agenix] decrypting root secrets...'"] ++ (map installSecret rootOwnedSecrets));
 
   nonRootSecrets = builtins.filter (st: st.owner != "root" && st.group != "root") (builtins.attrValues cfg.secrets);
-  installNonRootSecrets = builtins.concatStringsSep "\n" (map installSecret nonRootSecrets);
+  installNonRootSecrets = builtins.concatStringsSep "\n" (["echo '[agenix] decrypting non-root secrets...'"] ++ (map installSecret nonRootSecrets));
 
   secretType = types.submodule ({ config, ... }: {
     options = {
