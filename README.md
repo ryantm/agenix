@@ -17,6 +17,10 @@ All files in the Nix store are readable by any system user, so it is not a suita
 * Very little code, so it should be easy for you to audit
 * Encrypted secrets are stored in the Nix store, so a separate distribution mechanism is not necessary
 
+## Notices
+
+* If you want to manage user's hashed passwords, you must use a version of NixOS with [commit e6b8587](https://github.com/NixOS/nixpkgs/commit/e6b8587b25a19528695c5c270e6ff1c209705c31), so the root-owned secrets can be decrypted before the user activation script runs. Currently only available on `unstable`.
+
 ## Installation
 
 Choose one of the following methods:
