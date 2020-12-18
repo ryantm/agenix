@@ -133,7 +133,7 @@ but, if you want to (change the system based on your system):
 
    ```ShellSession
    $ mkdir secrets
-   $ cd secerts
+   $ cd secrets
    $ touch secrets.nix
    ```
 2. Add public keys to `secrets.nix` file (hint: use `ssh-keyscan` or GitHub (for example, https://github.com/ryantm.keys)):
