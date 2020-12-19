@@ -105,10 +105,16 @@ function edit {
     if [ -f "$FILE" ]
     then
         DECRYPT=("''${DEFAULT_DECRYPT[@]}")
-        while IFS= read -r key
-        do
-            DECRYPT+=(--identity "$key")
-        done <<<"$((find ~/.ssh -maxdepth 1 -type f -not -name "*pub" -not -name "config" -not -name "authorized_keys" -not -name "known_hosts") || exit 1)"
+        if [ -f "$HOME/.ssh/id_rsa" ]; then
+            DECRYPT+=(--identity "$HOME/.ssh/id_rsa")
+        fi
+        if [ -f "$HOME/.ssh/id_ed25519" ]; then
+            DECRYPT+=(--identity "$HOME/.ssh/id_ed25519")
+        fi
+        if [[ "''${DECRYPT[*]}" != *"--identity"* ]]; then
+          echo "No identity found to decrypt $FILE. Try adding an SSH key at $HOME/.ssh/id_rsa or $HOME/.ssh/id_ed25519 or using the --identity flag to specify a file."
+          exit 1
+        fi
         DECRYPT+=(-o "$CLEARTEXT_FILE" "$FILE")
         ${ageBin} "''${DECRYPT[@]}" || exit 1
         cp "$CLEARTEXT_FILE" "$CLEARTEXT_FILE.before"
