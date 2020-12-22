@@ -23,7 +23,7 @@ let
   rootOwnedSecrets = builtins.filter (st: st.owner == "root" && st.group == "root") (builtins.attrValues cfg.secrets);
   installRootOwnedSecrets = builtins.concatStringsSep "\n" (["echo '[agenix] decrypting root secrets...'"] ++ (map installSecret rootOwnedSecrets));
 
-  nonRootSecrets = builtins.filter (st: st.owner != "root" && st.group != "root") (builtins.attrValues cfg.secrets);
+  nonRootSecrets = builtins.filter (st: st.owner != "root" || st.group != "root") (builtins.attrValues cfg.secrets);
   installNonRootSecrets = builtins.concatStringsSep "\n" (["echo '[agenix] decrypting non-root secrets...'"] ++ (map installSecret nonRootSecrets));
 
   secretType = types.submodule ({ config, ... }: {
