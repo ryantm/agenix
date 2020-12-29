@@ -7,6 +7,7 @@
     let
       exports = {
         nixosModules.age = import ./modules/age.nix;
+        overlay = import ./overlay.nix;
       };
       outputs = flake-utils.lib.eachDefaultSystem (system: {
         packages = nixpkgs.legacyPackages.${system}.callPackage ./default.nix { };
