@@ -38,8 +38,6 @@ test $# -eq 0 && (show_help && exit 1)
 
 REKEY=0
 GIT_DIFF_TEXTCONV=0
-GIT_FILTER_SMUDGE=0
-GIT_FILTER_CLEAN=0
 DEFAULT_DECRYPT=(--decrypt)
 
 while test $# -gt 0; do
@@ -68,14 +66,6 @@ while test $# -gt 0; do
       fi
       shift
       GIT_DIFF_TEXTCONV=1
-      ;;
-    --git-filter-smudge)
-      shift
-      GIT_FILTER_SMUDGE=1
-      ;;
-    --git-filter-clean)
-      shift
-      GIT_FILTER_CLEAN=1
       ;;
     -i|--identity)
       shift
@@ -154,14 +144,6 @@ function git_diff_textconv {
         DECRYPT+=("$FILE")
     ${ageBin} "''${DECRYPT[@]}" || exit 1
 }
-function git_filter_smudge {
-    _decrypt_args
-    ${ageBin} "''${DECRYPT[@]}" || exit 1
-}
-function git_filter_clean {
-    _encrypt_args
-    ${ageBin} "''${ENCRYPT[@]}" || exit 1
-}
 
 function edit {
     FILE=$1
@@ -212,7 +194,5 @@ function rekey {
 
 [ $REKEY -eq 1 ] && rekey && exit 0
 [ $GIT_DIFF_TEXTCONV -eq 1 ] && git_diff_textconv && exit 0
-[ $GIT_FILTER_SMUDGE -eq 1 ] && git_filter_smudge && exit 0
-[ $GIT_FILTER_CLEAN -eq 1 ] && git_filter_clean && exit 0
 edit "$FILE" && cleanup && exit 0
 ''
