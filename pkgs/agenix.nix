@@ -1,6 +1,9 @@
 {writeShellScriptBin, runtimeShell, pkgs} :
 let
-  rage = pkgs.callPackage ./rage.nix {};
+  # we need at least rage 0.5.0 to support ssh keys
+  rage = if pkgs.rage.version < "0.5.0"
+         then  pkgs.callPackage ./rage.nix {}
+         else pkgs.rage;
   ageBin = "${rage}/bin/rage";
 in
 writeShellScriptBin "agenix" ''
