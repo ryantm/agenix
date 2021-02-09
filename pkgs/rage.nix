@@ -1,24 +1,27 @@
-{stdenv, rustPlatform, fetchFromGitHub, installShellFiles, darwin }:
+{ stdenv, rustPlatform, fetchFromGitHub, installShellFiles, darwin }:
 
 rustPlatform.buildRustPackage rec {
   pname = "rage";
-  version = "unstable-2020-09-05";
+  version = "0.5.0";
 
   src = fetchFromGitHub {
     owner = "str4d";
     repo = pname;
-    rev = "8368992e60cbedb2d6b725c3e25440e65d8544d1";
-    sha256 = "sha256-ICcApZQrR4hGxo/RcFMktenE4dswAXA2/nJ5D++O2ig=";
+    rev = "v${version}";
+    sha256 = "sha256-XSDfAsXfwSoe5JMdJtZlC324Sra+4fVJhE3/k2TthEc=";
   };
 
-  cargoSha256 = "sha256-QwNtp7Hxsiads3bh8NRra25RdPbIdjp+pSWTllAvdmQ=";
+  cargoSha256 = "sha256-GPr5zxeODAjD+ynp/nned9gZUiReYcdzosuEbLIKZSs=";
 
   nativeBuildInputs = [ installShellFiles ];
 
-  buildInputs = stdenv.lib.optionals stdenv.isDarwin [ 
-    darwin.Security
-    darwin.apple_sdk.frameworks.Foundation
+  buildInputs = with darwin; stdenv.lib.optionals stdenv.isDarwin [
+    Security
+    Foundation
   ];
+
+  # cargo test has an x86-only dependency
+  doCheck = stdenv.hostPlatform.isx86;
 
   postBuild = ''
     cargo run --example generate-docs
@@ -34,7 +37,7 @@ rustPlatform.buildRustPackage rec {
     description = "A simple, secure and modern encryption tool with small explicit keys, no config options, and UNIX-style composability";
     homepage = "https://github.com/str4d/rage";
     changelog = "https://github.com/str4d/rage/releases/tag/v${version}";
-    license = licenses.asl20;
-    maintainers = [ maintainers.marsam ];
+    license = with licenses; [ asl20 mit ]; # either at your option
+    maintainers = with maintainers; [ marsam ryantm ];
   };
 }
