@@ -15,7 +15,7 @@ rustPlatform.buildRustPackage rec {
 
   nativeBuildInputs = [ installShellFiles ];
 
-  buildInputs = with darwin; stdenv.lib.optionals stdenv.isDarwin [
+  buildInputs = with darwin.apple_sdk.frameworks; stdenv.lib.optionals stdenv.isDarwin [
     Security
     Foundation
   ];
