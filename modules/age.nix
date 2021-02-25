@@ -16,16 +16,19 @@ let
 
   identities = builtins.concatStringsSep " " (map (path: "-i ${path}") cfg.sshKeyPaths);
   installSecret = secretType: ''
-    echo "decrypting ${secretType.file} to ${secretType.path}..."
-    TMP_FILE="${secretType.path}.tmp"
-    mkdir -p $(dirname ${secretType.path})
+    _truePath="${cfg.secretsMountPoint}/$_count/${secretType.name}"
+    echo "decrypting '${secretType.file}' to '$_truePath'..."
+    TMP_FILE="$_truePath.tmp"
+    mkdir -p "$(dirname "$_truePath")"
+    mkdir -p "$(dirname "${secretType.path}")"
     (
       umask u=r,g=,o=
       LANG=${config.i18n.defaultLocale} ${ageBin} --decrypt ${identities} -o "$TMP_FILE" "${secretType.file}"
     )
     chmod ${secretType.mode} "$TMP_FILE"
     chown ${secretType.owner}:${secretType.group} "$TMP_FILE"
-    mv -f "$TMP_FILE" '${secretType.path}'
+    mv -f "$TMP_FILE" "$_truePath"
+    [ "${secretType.path}" != "/run/secrets/${secretType.name}" ] && ln -sfn "/run/secrets/${secretType.name}" "${secretType.path}"
   '';
 
   isRootSecret = st: (st.owner == "root" || st.owner == "0") && (st.group == "root" || st.group == "0");
@@ -92,6 +95,17 @@ in
         Attrset of secrets.
       '';
     };
+    secretsMountPoint = mkOption {
+      type = types.addCheck types.str
+        (s:
+          (builtins.match "[ \t\n]*" s) == null # non-empty
+            && (builtins.match ".+/" s) == null) # without trailing slash
+      // { description = "${types.str.description} (with check: non-empty without trailing slash)"; };
+      default = "/run/secrets.d";
+      description = ''
+        Where secrets are created before they are symlinked to /run/secrets
+      '';
+    };
     sshKeyPaths = mkOption {
       type = types.listOf types.path;
       default =
@@ -110,14 +124,54 @@ in
       message = "age.sshKeyPaths must be set.";
     }];
 
+    # Create a new directory full of secrets for symlinking (this helps
+    # ensure removed secrets are actually removed, or at least become
+    # invalid symlinks).
+    system.activationScripts.agenixMountSecrets = ''
+      _count="$(basename "$(readlink /run/secrets)" || echo 0)"
+      (( ++_count ))
+      echo "[agenix] symlinking new secrets to /run/secrets (generation $_count)..."
+      mkdir -p "${cfg.secretsMountPoint}"
+      chmod 0750 "${cfg.secretsMountPoint}"
+      grep -q "${cfg.secretsMountPoint} ramfs" /proc/mounts || mount -t ramfs none "${cfg.secretsMountPoint}" -o nodev,nosuid,mode=0750
+      mkdir -p "${cfg.secretsMountPoint}/$_count"
+      chmod 0750 "${cfg.secretsMountPoint}/$_count"
+      chown :keys "${cfg.secretsMountPoint}" "${cfg.secretsMountPoint}/$_count"
+      ln -sfn "${cfg.secretsMountPoint}/$_count" /run/secrets
+    '';
+
     # Secrets with root owner and group can be installed before users
     # exist. This allows user password files to be encrypted.
-    system.activationScripts.agenixRoot = stringAfter [ "specialfs" ] installRootOwnedSecrets;
+    system.activationScripts.agenixRoot = {
+      text = installRootOwnedSecrets;
+      deps = [ "agenixMountSecrets" "specialfs" ];
+    };
     system.activationScripts.users.deps = [ "agenixRoot" ];
 
-    # Other secrets need to wait for users and groups to exist.
-    system.activationScripts.agenix = stringAfter [ "users" "groups" "specialfs" ] installNonRootSecrets;
+    # chown the secrets mountpoint and the current generation to the keys group
+    # instead of leaving it root:root.
+    system.activationScripts.agenixChownKeys = {
+      text = ''
+        chown :keys "${cfg.secretsMountPoint}" "${cfg.secretsMountPoint}/$_agenix_generation"
+      '';
+      deps = [
+        "users"
+        "groups"
+        "agenixMountSecrets"
+      ];
+    };
 
+    # Other secrets need to wait for users and groups to exist.
+    system.activationScripts.agenix = {
+      text = installNonRootSecrets;
+      deps = [
+        "users"
+        "groups"
+        "specialfs"
+        "agenixMountSecrets"
+        "agenixChownKeys"
+      ];
+    };
   };
 
 }
