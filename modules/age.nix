@@ -14,7 +14,7 @@ let
     echo "decrypting ${secretType.file} to ${secretType.path}..."
     TMP_FILE="${secretType.path}.tmp"
     mkdir -p $(dirname ${secretType.path})
-    (umask 0400; ${ageBin} --decrypt ${identities} -o "$TMP_FILE" "${secretType.file}")
+    (umask 0400; LANG=${config.i18n.defaultLocale} ${ageBin} --decrypt ${identities} -o "$TMP_FILE" "${secretType.file}")
     chmod ${secretType.mode} "$TMP_FILE"
     chown ${secretType.owner}:${secretType.group} "$TMP_FILE"
     mv -f "$TMP_FILE" '${secretType.path}'
