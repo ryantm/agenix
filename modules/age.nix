@@ -138,6 +138,11 @@ in
       chmod 0750 "${cfg.secretsMountPoint}/$_count"
       chown :keys "${cfg.secretsMountPoint}" "${cfg.secretsMountPoint}/$_count"
       ln -sfn "${cfg.secretsMountPoint}/$_count" /run/secrets
+
+      (( _agenix_generation > 1 )) && {
+        echo "[agenix] removing old secrets (generation $(( _agenix_generation - 1 )))..."
+        rm -rf "${cfg.secretsMountPoint}/$(( _agenix_generation - 1 ))"
+      }
     '';
 
     # Secrets with root owner and group can be installed before users
