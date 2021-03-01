@@ -21,10 +21,10 @@ let
   '';
 
   rootOwnedSecrets = builtins.filter (st: st.owner == "root" && st.group == "root") (builtins.attrValues cfg.secrets);
-  installRootOwnedSecrets = builtins.concatStringsSep "\n" (["echo '[agenix] decrypting root secrets...'"] ++ (map installSecret rootOwnedSecrets));
+  installRootOwnedSecrets = builtins.concatStringsSep "\n" ([ "echo '[agenix] decrypting root secrets...'" ] ++ (map installSecret rootOwnedSecrets));
 
   nonRootSecrets = builtins.filter (st: st.owner != "root" || st.group != "root") (builtins.attrValues cfg.secrets);
-  installNonRootSecrets = builtins.concatStringsSep "\n" (["echo '[agenix] decrypting non-root secrets...'"] ++ (map installSecret nonRootSecrets));
+  installNonRootSecrets = builtins.concatStringsSep "\n" ([ "echo '[agenix] decrypting non-root secrets...'" ] ++ (map installSecret nonRootSecrets));
 
   secretType = types.submodule ({ config, ... }: {
     options = {
@@ -42,12 +42,12 @@ let
         '';
       };
       path = mkOption {
-          type = types.str;
-          default = "/run/secrets/${config.name}";
-          description = ''
-            Path where the decrypted secret is installed.
-          '';
-        };
+        type = types.str;
+        default = "/run/secrets/${config.name}";
+        description = ''
+          Path where the decrypted secret is installed.
+        '';
+      };
       mode = mkOption {
         type = types.str;
         default = "0400";
@@ -71,28 +71,30 @@ let
       };
     };
   });
-in {
+in
+{
   options.age = {
     secrets = mkOption {
       type = types.attrsOf secretType;
-      default = {};
+      default = { };
       description = ''
         Attrset of secrets.
       '';
     };
     sshKeyPaths = mkOption {
       type = types.listOf types.path;
-      default = if config.services.openssh.enable then
-                  map (e: e.path) (lib.filter (e: e.type == "rsa" || e.type == "ed25519") config.services.openssh.hostKeys)
-                else [];
+      default =
+        if config.services.openssh.enable then
+          map (e: e.path) (lib.filter (e: e.type == "rsa" || e.type == "ed25519") config.services.openssh.hostKeys)
+        else [ ];
       description = ''
         Path to SSH keys to be used as identities in age decryption.
       '';
     };
   };
-  config = mkIf (cfg.secrets != {}) {
+  config = mkIf (cfg.secrets != { }) {
     assertions = [{
-      assertion = cfg.sshKeyPaths != [];
+      assertion = cfg.sshKeyPaths != [ ];
       message = "age.sshKeyPaths must be set.";
     }];
 
