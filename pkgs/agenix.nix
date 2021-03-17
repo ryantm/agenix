@@ -40,6 +40,7 @@ function show_help () {
 test $# -eq 0 && (show_help && exit 1)
 
 REKEY=0
+GIT_DIFF_TEXTCONV=0
 DEFAULT_DECRYPT=(--decrypt)
 
 while test $# -gt 0; do
@@ -57,6 +58,17 @@ while test $# -gt 0; do
         exit 1
       fi
       shift
+      ;;
+    --git-diff-textconv)
+      shift
+      if test $# -gt 0; then
+        export FILE=$1
+      else
+        echo "no FILE specified"
+        exit 1
+      fi
+      shift
+      GIT_DIFF_TEXTCONV=1
       ;;
     -i|--identity)
       shift
@@ -97,8 +109,7 @@ function cleanup {
 }
 trap "cleanup" 0 2 3 15
 
-function edit {
-    FILE=$1
+function _keys {
     KEYS=$((nix-instantiate --eval -E "(let rules = import $RULES; in builtins.concatStringsSep \"\n\" rules.\"$FILE\".publicKeys)" | sed 's/"//g' | sed 's/\\n/\n/g') || exit 1)
 
     if [ -z "$KEYS" ]
@@ -106,23 +117,47 @@ function edit {
         >&2 echo "There is no rule for $FILE in $RULES."
         exit 1
     fi
+}
+
+function _decrypt_args {
+    DECRYPT=("''${DEFAULT_DECRYPT[@]}")
+    if [ -f "$HOME/.ssh/id_rsa" ]; then
+        DECRYPT+=(--identity "$HOME/.ssh/id_rsa")
+    fi
+    if [ -f "$HOME/.ssh/id_ed25519" ]; then
+        DECRYPT+=(--identity "$HOME/.ssh/id_ed25519")
+    fi
+    if [[ "''${DECRYPT[*]}" != *"--identity"* ]]; then
+      echo "No identity found to decrypt $FILE. Try adding an SSH key at $HOME/.ssh/id_rsa or $HOME/.ssh/id_ed25519 or using the --identity flag to specify a file."
+      exit 1
+    fi
+}
+
+function _encrypt_args {
+    ENCRYPT=()
+    while IFS= read -r key
+    do
+        ENCRYPT+=(--recipient "$key")
+    done <<< "$KEYS"
+}
+
+function git_diff_textconv {
+    FILE=$1
+    _decrypt_args
+        DECRYPT+=("$FILE")
+    ${ageBin} "''${DECRYPT[@]}" || exit 1
+}
+
+function edit {
+    FILE=$1
+    _keys
 
     CLEARTEXT_DIR=$(mktemp -d)
     CLEARTEXT_FILE="$CLEARTEXT_DIR/$(basename "$FILE")"
 
     if [ -f "$FILE" ]
     then
-        DECRYPT=("''${DEFAULT_DECRYPT[@]}")
-        if [ -f "$HOME/.ssh/id_rsa" ]; then
-            DECRYPT+=(--identity "$HOME/.ssh/id_rsa")
-        fi
-        if [ -f "$HOME/.ssh/id_ed25519" ]; then
-            DECRYPT+=(--identity "$HOME/.ssh/id_ed25519")
-        fi
-        if [[ "''${DECRYPT[*]}" != *"--identity"* ]]; then
-          echo "No identity found to decrypt $FILE. Try adding an SSH key at $HOME/.ssh/id_rsa or $HOME/.ssh/id_ed25519 or using the --identity flag to specify a file."
-          exit 1
-        fi
+        _decrypt_args
         DECRYPT+=(-o "$CLEARTEXT_FILE" "$FILE")
         ${ageBin} "''${DECRYPT[@]}" || exit 1
         cp "$CLEARTEXT_FILE" "$CLEARTEXT_FILE.before"
@@ -137,11 +172,7 @@ function edit {
     fi
     [ -f "$FILE" ] && [ "$EDITOR" != ":" ] && diff "$CLEARTEXT_FILE.before" "$CLEARTEXT_FILE" 1>/dev/null && echo "$FILE wasn't changed, skipping re-encryption." && return
 
-    ENCRYPT=()
-    while IFS= read -r key
-    do
-        ENCRYPT+=(--recipient "$key")
-    done <<< "$KEYS"
+    _encrypt_args
 
     REENCRYPTED_DIR=$(mktemp -d)
     REENCRYPTED_FILE="$REENCRYPTED_DIR/$(basename "$FILE")"
@@ -165,5 +196,6 @@ function rekey {
 }
 
 [ $REKEY -eq 1 ] && rekey && exit 0
+[ $GIT_DIFF_TEXTCONV -eq 1 ] && git_diff_textconv && exit 0
 edit "$FILE" && cleanup && exit 0
 ''
