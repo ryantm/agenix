@@ -99,7 +99,7 @@ trap "cleanup" 0 2 3 15
 
 function edit {
     FILE=$1
-    KEYS=$((nix-instantiate --eval -E "(let rules = import $RULES; in builtins.concatStringsSep \"\n\" rules.\"$FILE\".publicKeys)" | sed 's/"//g' | sed 's/\\n/\n/g') || exit 1)
+    KEYS=$((nix-instantiate --eval -E "(let rules = import $RULES; in builtins.concatStringsSep \"\n\" rules.\"$FILE\".publicKeys)" | ${pkgs.gnused}/bin/sed 's/"//g' | ${pkgs.gnused}/bin/sed 's/\\n/\n/g') || exit 1)
 
     if [ -z "$KEYS" ]
     then
@@ -154,7 +154,7 @@ function edit {
 }
 
 function rekey {
-    FILES=$((nix-instantiate --eval -E "(let rules = import $RULES; in builtins.concatStringsSep \"\n\" (builtins.attrNames rules))"  | sed 's/"//g' | sed 's/\\n/\n/g') || exit 1)
+    FILES=$((nix-instantiate --eval -E "(let rules = import $RULES; in builtins.concatStringsSep \"\n\" (builtins.attrNames rules))"  | ${pkgs.gnused}/bin/sed 's/"//g' | ${pkgs.gnused}/bin/sed 's/\\n/\n/g') || exit 1)
 
     for FILE in $FILES
     do
