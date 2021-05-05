@@ -165,7 +165,7 @@ function edit {
 }
 
 function rekey {
-    FILES=$((${nixInstantiate} --eval -E "(let rules = import $RULES; in builtins.concatStringsSep \"\n\" (builtins.attrNames rules))"  | sed 's/"//g' | sed 's/\\n/\n/g') || exit 1)
+    FILES=$((${nixInstantiate} --eval -E "(let rules = import $RULES; in builtins.concatStringsSep \"\n\" (builtins.attrNames rules))"  | ${sedBin} 's/"//g' | ${sedBin} 's/\\n/\n/g') || exit 1)
 
     for FILE in $FILES
     do
