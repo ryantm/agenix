@@ -1,10 +1,21 @@
-{writeShellScriptBin, runtimeShell, pkgs} :
+{
+  writeShellScriptBin,
+  runtimeShell,
+  callPackage,
+  rage,
+  gnused,
+  nix,
+  mktemp,
+} :
 let
   # we need at least rage 0.5.0 to support ssh keys
-  rage = if pkgs.rage.version < "0.5.0"
-         then  pkgs.callPackage ./rage.nix {}
-         else pkgs.rage;
-  ageBin = "${rage}/bin/rage";
+  rageToUse = if rage.version < "0.5.0"
+         then callPackage ./rage.nix {}
+         else rage;
+  ageBin = "${rageToUse}/bin/rage";
+  sedBin = "${gnused}/bin/sed";
+  nixInstantiate = "${nix}/bin/nix-instantiate";
+  mktempBin = "${mktemp}/bin/mktemp";
 in
 writeShellScriptBin "agenix" ''
 set -Eeuo pipefail
@@ -99,7 +110,7 @@ trap "cleanup" 0 2 3 15
 
 function edit {
     FILE=$1
-    KEYS=$((nix-instantiate --eval -E "(let rules = import $RULES; in builtins.concatStringsSep \"\n\" rules.\"$FILE\".publicKeys)" | sed 's/"//g' | sed 's/\\n/\n/g') || exit 1)
+    KEYS=$((${nixInstantiate} --eval -E "(let rules = import $RULES; in builtins.concatStringsSep \"\n\" rules.\"$FILE\".publicKeys)" | ${sedBin} 's/"//g' | ${sedBin} 's/\\n/\n/g') || exit 1)
 
     if [ -z "$KEYS" ]
     then
@@ -107,7 +118,7 @@ function edit {
         exit 1
     fi
 
-    CLEARTEXT_DIR=$(mktemp -d)
+    CLEARTEXT_DIR=$(${mktempBin} -d)
     CLEARTEXT_FILE="$CLEARTEXT_DIR/$(basename "$FILE")"
 
     if [ -f "$FILE" ]
@@ -143,7 +154,7 @@ function edit {
         ENCRYPT+=(--recipient "$key")
     done <<< "$KEYS"
 
-    REENCRYPTED_DIR=$(mktemp -d)
+    REENCRYPTED_DIR=$(${mktempBin} -d)
     REENCRYPTED_FILE="$REENCRYPTED_DIR/$(basename "$FILE")"
 
     ENCRYPT+=(-o "$REENCRYPTED_FILE")
@@ -154,7 +165,7 @@ function edit {
 }
 
 function rekey {
-    FILES=$((nix-instantiate --eval -E "(let rules = import $RULES; in builtins.concatStringsSep \"\n\" (builtins.attrNames rules))"  | sed 's/"//g' | sed 's/\\n/\n/g') || exit 1)
+    FILES=$((${nixInstantiate} --eval -E "(let rules = import $RULES; in builtins.concatStringsSep \"\n\" (builtins.attrNames rules))"  | sed 's/"//g' | sed 's/\\n/\n/g') || exit 1)
 
     for FILE in $FILES
     do
