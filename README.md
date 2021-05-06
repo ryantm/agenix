@@ -161,7 +161,10 @@ but, if you want to (change the system based on your system):
    ```nix
    age.secrets.secret1.file = ../secrets/secret1.age;
    ```
+      
 5. NixOS rebuild or use your deployment tool like usual.
+
+   The secret will be decrypted to the value of `age.secrets.secret1.path` (`/run/secrets/secret1` by default). For per-secret options controlling ownership etc, see [modules/age.nix](modules/age.nix).
 
 ## Rekeying
 
