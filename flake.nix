@@ -1,30 +1,27 @@
 {
-  description = "Secret management with age";
+  description = "Awesome secret management with age";
 
-  outputs = { self, nixpkgs }:
-  let
-    agenix = system: nixpkgs.legacyPackages.${system}.callPackage ./pkgs/agenix.nix {};
-  in {
+  inputs.flake-utils.url = "github:numtide/flake-utils";
 
-    nixosModules.age = import ./modules/age.nix;
+  outputs = { self, nixpkgs, flake-utils }:
+    let
+      exports = {
+        nixosModules.age = import ./modules/age.nix;
+        overlay = import ./overlay.nix;
+      };
 
-    overlay = import ./overlay.nix;
-
-    packages."aarch64-linux".agenix = agenix "aarch64-linux";
-    defaultPackage."aarch64-linux" = self.packages."aarch64-linux".agenix;
-
-    packages."i686-linux".agenix = agenix "i686-linux";
-    defaultPackage."i686-linux" = self.packages."i686-linux".agenix;
-
-    packages."x86_64-darwin".agenix = agenix "x86_64-darwin";
-    defaultPackage."x86_64-darwin" = self.packages."x86_64-darwin".agenix;
-
-    packages."x86_64-linux".agenix = agenix "x86_64-linux";
-    defaultPackage."x86_64-linux" = self.packages."x86_64-linux".agenix;
-    checks."x86_64-linux".integration = import ./test/integration.nix {
-      inherit nixpkgs; pkgs = nixpkgs.legacyPackages."x86_64-linux"; system = "x86_64-linux";
-    };
-
-  };
-
+      outputs = flake-utils.lib.eachDefaultSystem (system:
+        let pkgs = nixpkgs.legacyPackages.${system}; in
+        {
+          defaultPackage = pkgs.callPackage ./default.nix { };
+          packages = self.defaultPackage;
+        }
+        // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
+          checks.integration = import ./test/integration.nix {
+            inherit nixpkgs system pkgs;
+          };
+        }
+      );
+    in
+    exports // outputs;
 }
