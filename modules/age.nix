@@ -25,10 +25,13 @@ let
     mv -f "$TMP_FILE" '${secretType.path}'
   '';
 
-  rootOwnedSecrets = builtins.filter (st: st.owner == "root" && st.group == "root") (builtins.attrValues cfg.secrets);
+  isRootSecret = st: (st.owner == "root" || st.owner == "0") && (st.group == "root" || st.group == "0");
+  isNotRootSecret = st: !(isRootSecret st);
+
+  rootOwnedSecrets = builtins.filter isRootSecret (builtins.attrValues cfg.secrets);
   installRootOwnedSecrets = builtins.concatStringsSep "\n" ([ "echo '[agenix] decrypting root secrets...'" ] ++ (map installSecret rootOwnedSecrets));
 
-  nonRootSecrets = builtins.filter (st: st.owner != "root" || st.group != "root") (builtins.attrValues cfg.secrets);
+  nonRootSecrets = builtins.filter isNotRootSecret (builtins.attrValues cfg.secrets);
   installNonRootSecrets = builtins.concatStringsSep "\n" ([ "echo '[agenix] decrypting non-root secrets...'" ] ++ (map installSecret nonRootSecrets));
 
   secretType = types.submodule ({ config, ... }: {
@@ -62,14 +65,14 @@ let
       };
       owner = mkOption {
         type = types.str;
-        default = "root";
+        default = "0";
         description = ''
           User of the file.
         '';
       };
       group = mkOption {
         type = types.str;
-        default = users.${config.owner}.group;
+        default = users.${config.owner}.group or "0";
         description = ''
           Group of the file.
         '';
@@ -105,7 +108,7 @@ in
 
     # Secrets with root owner and group can be installed before users
     # exist. This allows user password files to be encrypted.
-    system.activationScripts.agenixRoot = installRootOwnedSecrets;
+    system.activationScripts.agenixRoot.text = installRootOwnedSecrets;
     system.activationScripts.users.deps = [ "agenixRoot" ];
 
     # Other secrets need to wait for users and groups to exist.
