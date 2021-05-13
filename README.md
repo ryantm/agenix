@@ -130,14 +130,18 @@ but, if you want to (change the system based on your system):
 
 ## Tutorial
 
-1. Make a directory to store secrets and `secrets.nix` file for listing secrets and their public keys:
+1. The system you want to deploy secrets to should already exist and
+   have `sshd` running on it so that it has generated SSH host keys in
+   `/etc/ssh/`.
+
+2. Make a directory to store secrets and `secrets.nix` file for listing secrets and their public keys:
 
    ```ShellSession
    $ mkdir secrets
    $ cd secrets
    $ touch secrets.nix
    ```
-2. Add public keys to `secrets.nix` file (hint: use `ssh-keyscan` or GitHub (for example, https://github.com/ryantm.keys)):
+3. Add public keys to `secrets.nix` file (hint: use `ssh-keyscan` or GitHub (for example, https://github.com/ryantm.keys)):
    ```nix
    let
      user1 = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIL0idNvgGiucWgup/mP78zyC23uFjYq0evcWdjGQUaBH";
@@ -153,15 +157,15 @@ but, if you want to (change the system based on your system):
      "secret2.age".publicKeys = users ++ systems;
    }
    ```
-3. Edit secret files (these instructions assume your SSH private key is in ~/.ssh/):
+4. Edit secret files (these instructions assume your SSH private key is in ~/.ssh/):
    ```ShellSession
    $ agenix -e secret1.age
    ```
-4. Add secret to a NixOS module config:
+5. Add secret to a NixOS module config:
    ```nix
    age.secrets.secret1.file = ../secrets/secret1.age;
    ```
-5. NixOS rebuild or use your deployment tool like usual.
+6. NixOS rebuild or use your deployment tool like usual.
 
    The secret will be decrypted to the value of `age.secrets.secret1.path` (`/run/secrets/secret1` by default). For per-secret options controlling ownership etc, see [modules/age.nix](modules/age.nix).
 
