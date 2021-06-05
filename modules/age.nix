@@ -5,12 +5,13 @@ with lib;
 let
   cfg = config.age;
 
-  # we need at least rage 0.5.0 to support ssh keys
+  # we need at least rage 0.6.0 to support yubikey
   rage =
-    if lib.versionOlder pkgs.rage.version "0.5.0"
+    if lib.versionOlder pkgs.rage.version "0.6.0"
     then pkgs.callPackage ../pkgs/rage.nix { }
     else pkgs.rage;
   ageBin = "${rage}/bin/rage";
+  ykPlugin = pkgs.callPackage ../pkgs/age-plugin-yubikey.nix { };
 
   users = config.users.users;
 
@@ -21,7 +22,7 @@ let
     mkdir -p $(dirname ${secretType.path})
     (
       umask u=r,g=,o=
-      LANG=${config.i18n.defaultLocale} ${ageBin} --decrypt ${identities} -o "$TMP_FILE" "${secretType.file}"
+      PATH=${ykPlugin}/bin:$PATH LANG=${config.i18n.defaultLocale} ${ageBin} --decrypt ${identities} -o "$TMP_FILE" "${secretType.file}"
     )
     chmod ${secretType.mode} "$TMP_FILE"
     chown ${secretType.owner}:${secretType.group} "$TMP_FILE"
