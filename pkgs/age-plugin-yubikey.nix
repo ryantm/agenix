@@ -21,6 +21,6 @@ rustPlatform.buildRustPackage rec {
     homepage = "https://github.com/str4d/${pname}";
     changelog = "https://github.com/str4d/${pname}/releases/tag/v${version}";
     license = with licenses; [ asl20 mit ]; # either at your option
-    maintainers = with maintainers; [ marsam ryantm ];
+    maintainers = with maintainers; [ nrdxp ];
   };
 }
