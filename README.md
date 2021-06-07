@@ -183,6 +183,22 @@ randomness in `age`'s encryption algorithms, the files always change
 when rekeyed, even if the identities do not. (This eventually could be
 improved upon by reading the identities from the age file.)
 
+## YubiKey Support
+
+There is now a rage plugin to allow for encrypting age files with a YubiKey.
+Agenix offers preliminary support for this use case.
+
+For ease of use, the required `age-plugin-yubikey` binary is included in the
+agenix devshell.
+
+Be sure to setup your YubiKey as outlined in the official
+[plugin instructions][yk-plugin].
+
+Once you have a proper key generated, run `age-plugin-yubikey -i > yubi_id`
+to save the identity for the key. Consider the `recipient` as the public key,
+set it accordingly in `secrets.nix`, and invoke agenix as
+`agenix -i yubi_id # ...` to target the yubikey identity.
+
 ## Threat model/Warnings
 
 This project has not be audited by a security professional.
@@ -201,3 +217,5 @@ out for simplicity in `age`.
 ## Acknowledgements
 
 This project is based off of [sops-nix](https://github.com/Mic92/sops-nix) created Mic92. Thank you to Mic92 for inspiration and advice.
+
+[yk-plugin]: https://github.com/str4d/age-plugin-yubikey#configuration
