@@ -17,6 +17,10 @@ let
   nixInstantiate = "${nix}/bin/nix-instantiate";
   mktempBin = "${mktemp}/bin/mktemp";
 in
+{
+  meta.description = "agenix manages secrets with age for nix";
+}
+//
 writeShellScriptBin "agenix" ''
 set -Eeuo pipefail
 
