@@ -1,4 +1,5 @@
 {
+  lib,
   writeShellScriptBin,
   runtimeShell,
   callPackage,
@@ -17,7 +18,7 @@ let
   nixInstantiate = "${nix}/bin/nix-instantiate";
   mktempBin = "${mktemp}/bin/mktemp";
 in
-writeShellScriptBin "agenix" ''
+lib.recursiveUpdate (writeShellScriptBin "agenix" ''
 set -Eeuo pipefail
 
 PACKAGE="agenix"
@@ -177,4 +178,8 @@ function rekey {
 
 [ $REKEY -eq 1 ] && rekey && exit 0
 edit "$FILE" && cleanup && exit 0
-''
+'')
+
+{
+  meta.description = "age-encrypted secrets for NixOS";
+}
