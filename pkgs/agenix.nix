@@ -7,6 +7,7 @@
   gnused,
   nix,
   mktemp,
+  diffutils,
 } :
 let
   # we need at least rage 0.5.0 to support ssh keys
@@ -17,6 +18,7 @@ let
   sedBin = "${gnused}/bin/sed";
   nixInstantiate = "${nix}/bin/nix-instantiate";
   mktempBin = "${mktemp}/bin/mktemp";
+  diffBin = "${diffutils}/bin/diff";
 in
 lib.recursiveUpdate (writeShellScriptBin "agenix" ''
 set -Eeuo pipefail
@@ -147,7 +149,7 @@ function edit {
       echo "$FILE wasn't created."
       return
     fi
-    [ -f "$FILE" ] && [ "$EDITOR" != ":" ] && diff "$CLEARTEXT_FILE.before" "$CLEARTEXT_FILE" 1>/dev/null && echo "$FILE wasn't changed, skipping re-encryption." && return
+    [ -f "$FILE" ] && [ "$EDITOR" != ":" ] && ${diffBin} "$CLEARTEXT_FILE.before" "$CLEARTEXT_FILE" 1>/dev/null && echo "$FILE wasn't changed, skipping re-encryption." && return
 
     ENCRYPT=()
     while IFS= read -r key
