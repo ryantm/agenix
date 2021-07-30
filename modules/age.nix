@@ -111,10 +111,10 @@ in
 
     # Secrets with root owner and group can be installed before users
     # exist. This allows user password files to be encrypted.
-    system.activationScripts.agenixRoot.text = installRootOwnedSecrets;
+    system.activationScripts.agenixRoot = stringAfter [ "specialfs" ] installRootOwnedSecrets;
     system.activationScripts.users.deps = [ "agenixRoot" ];
 
     # Other secrets need to wait for users and groups to exist.
-    system.activationScripts.agenix = stringAfter [ "users" "groups" ] installNonRootSecrets;
+    system.activationScripts.agenix = stringAfter [ "users" "groups" "specialfs" ] installNonRootSecrets;
   };
 }
