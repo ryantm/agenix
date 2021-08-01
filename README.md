@@ -57,7 +57,7 @@ $ nix-channel --update
 
 ```nix
 {
-  imports = [ <agenix/modules/age> ];
+  imports = [ <agenix/modules/age.nix> ];
 }
 ```
 
@@ -67,7 +67,7 @@ $ nix-channel --update
 
 ```nix
 {
-  imports = [ "${builtins.fetchTarball "https://github.com/ryantm/agenix/archive/master.tar.gz"}/modules/age" ];
+  imports = [ "${builtins.fetchTarball "https://github.com/ryantm/agenix/archive/master.tar.gz"}/modules/age.nix" ];
 }
 ```
 
