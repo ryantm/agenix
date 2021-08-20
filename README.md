@@ -194,10 +194,22 @@ agenix devshell.
 Be sure to setup your YubiKey as outlined in the official
 [plugin instructions][yk-plugin].
 
+#### Warning
+> A pin policy of 'never' may be used to avoid being asked for a PIN at
+> activation time. However, this will give anyone with physical access to your
+> yubikey the power to decrypt your secrets without a PIN.
+
 Once you have a proper key generated, run `age-plugin-yubikey -i > yubi_id`
 to save the identity for the key. Consider the `recipient` as the public key,
 set it accordingly in `secrets.nix`, and invoke agenix as
 `agenix -i yubi_id # ...` to target the yubikey identity.
+
+To decrypt secrets properly at activation time, be sure to also set:
+```nix
+{
+  age.sshKeyPaths = [ "${self}/path/to/age-plugin-yubikey-identity" ];
+}
+```
 
 ## Threat model/Warnings
 
