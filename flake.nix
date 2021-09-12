@@ -7,6 +7,7 @@
   in {
 
     nixosModules.age = import ./modules/age.nix;
+    homeManagerModules.age = import ./modules/hm-age.nix;
 
     overlay = import ./overlay.nix;
 
