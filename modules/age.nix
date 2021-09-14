@@ -16,16 +16,29 @@ let
 
   identities = builtins.concatStringsSep " " (map (path: "-i ${path}") cfg.sshKeyPaths);
   installSecret = secretType: ''
-    echo "decrypting ${secretType.file} to ${secretType.path}..."
-    TMP_FILE="${secretType.path}.tmp"
-    mkdir -p $(dirname ${secretType.path})
+    echo "[agenix] decrypting ${secretType.file} to ${secretType.path}..."
+
+    if [[ "$NIXOS_ACTION" == "dry-activate" ]]; then
+      OUT_DIR="$(mktemp -d)"
+    else
+      OUT_DIR="$(dirname ${secretType.path})"
+      mkdir -p "$OUT_DIR"
+    fi
+
+    TMP_FILE="$OUT_DIR/tmp"
     (
       umask u=r,g=,o=
       LANG=${config.i18n.defaultLocale} ${ageBin} --decrypt ${identities} -o "$TMP_FILE" "${secretType.file}"
     )
     chmod ${secretType.mode} "$TMP_FILE"
     chown ${secretType.owner}:${secretType.group} "$TMP_FILE"
-    mv -f "$TMP_FILE" '${secretType.path}'
+
+    if [[ "$NIXOS_ACTION" == "dry-activate" ]]; then
+      echo "[agenix] dry-run, not moving decrypted secret"
+      rm -r "$OUT_DIR"
+    else
+      mv -f "$TMP_FILE" '${secretType.path}'
+    fi
   '';
 
   isRootSecret = st: (st.owner == "root" || st.owner == "0") && (st.group == "root" || st.group == "0");
@@ -112,7 +125,11 @@ in
 
     # Secrets with root owner and group can be installed before users
     # exist. This allows user password files to be encrypted.
-    system.activationScripts.agenixRoot = stringAfter [ "specialfs" ] installRootOwnedSecrets;
+    system.activationScripts.agenixRoot = {
+      deps = [ "specialfs" ];
+      supportsDryActivation = true;
+      text = installRootOwnedSecrets;
+    };
     system.activationScripts.users.deps = [ "agenixRoot" ];
 
     # Other secrets need to wait for users and groups to exist.
