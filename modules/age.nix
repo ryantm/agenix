@@ -103,29 +103,21 @@ in
       '';
     };
   };
-  config = mkIf (cfg.secrets != { }) (mkMerge [
 
-    {
-      assertions = [{
-        assertion = cfg.sshKeyPaths != [ ];
-        message = "age.sshKeyPaths must be set.";
-      }];
+  config = mkIf (cfg.secrets != { }) {
+    assertions = [{
+      assertion = cfg.sshKeyPaths != [ ];
+      message = "age.sshKeyPaths must be set.";
+    }];
 
-      # Secrets with root owner and group can be installed before users
-      # exist. This allows user password files to be encrypted.
-      system.activationScripts.agenixRoot = stringAfter [ "specialfs" ] installRootOwnedSecrets;
-      system.activationScripts.users.deps = [ "agenixRoot" ];
+    # Secrets with root owner and group can be installed before users
+    # exist. This allows user password files to be encrypted.
+    system.activationScripts.agenixRoot = stringAfter [ "specialfs" ] installRootOwnedSecrets;
+    system.activationScripts.users.deps = [ "agenixRoot" ];
 
-      # Other secrets need to wait for users and groups to exist.
-      system.activationScripts.agenix = stringAfter [ "users" "groups" "specialfs" ] installNonRootSecrets;
+    # Other secrets need to wait for users and groups to exist.
+    system.activationScripts.agenix = stringAfter [ "users" "groups" "specialfs" ] installNonRootSecrets;
 
-    }
+  };
 
-    # workaround for #54
-    (optionalAttrs (builtins.hasAttr "dryActivationScript" options.system) {
-      system.activationScripts.users.supportsDryActivation = mkForce false;
-      system.activationScripts.groups.supportsDryActivation = mkForce false;
-    })
-
-  ]);
 }
