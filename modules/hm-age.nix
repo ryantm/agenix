@@ -84,10 +84,6 @@ in
         Attrset of secrets.
       '';
     };
-    sshAskpass = mkOption {
-      type = types.str;
-      default = "${pkgs.ssh-askpass-fullscreen}/bin/ssh-askpass-fullscreen";
-    };
     sshKeyPaths = mkOption {
       type = types.listOf types.path;
       default = [];
