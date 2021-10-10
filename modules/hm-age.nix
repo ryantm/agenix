@@ -13,12 +13,13 @@ let
   ageBin = "${rage}/bin/rage";
 
   identities = builtins.concatStringsSep " " (map (path: "-i ${path}") cfg.sshKeyPaths);
+    
   installSecret = secretType: ''
     echo "decrypting ${secretType.file} to ${secretType.path}..."
     TMP_FILE="${secretType.path}.tmp"
     $DRY_RUN_CMD mkdir $VERBOSE_ARG -p $(dirname ${secretType.path})
     (
-      umask u=r,g=,o=
+      $DRY_RUN_CMD umask u=r,g=,o=
       $DRY_RUN_CMD ${ageBin} --decrypt ${identities} -o "$TMP_FILE" "${secretType.file}"
     )
     $DRY_RUN_CMD chmod $VERBOSE_ARG ${secretType.mode} "$TMP_FILE"
@@ -26,14 +27,7 @@ let
     $DRY_RUN_CMD mv $VERBOSE_ARG -f "$TMP_FILE" "${secretType.path}"
   '';
 
-  isRootSecret = st: (st.owner == "root" || st.owner == "0") && (st.group == "root" || st.group == "0");
-  isNotRootSecret = st: !(isRootSecret st);
-
-  rootOwnedSecrets = builtins.filter isRootSecret (builtins.attrValues cfg.secrets);
-  installRootOwnedSecrets = builtins.concatStringsSep "\n" ([ "echo '[agenix] decrypting root secrets...'" ] ++ (map installSecret rootOwnedSecrets));
-
-  nonRootSecrets = builtins.filter isNotRootSecret (builtins.attrValues cfg.secrets);
-  installNonRootSecrets = builtins.concatStringsSep "\n" ([ "echo '[agenix] decrypting non-root secrets...'" ] ++ (map installSecret nonRootSecrets));
+  installSecrets = builtins.concatStringsSep "\n" (["echo '[agenix] decrypting user secrets...'" ] ++ (map installSecret cfg.secrets));
 
   secretType = types.submodule ({ config, ... }: {
     options = {
@@ -90,6 +84,10 @@ in
         Attrset of secrets.
       '';
     };
+    sshAskpass = mkOption {
+      type = types.str;
+      default = "${pkgs.ssh-askpass-fullscreen}/bin/ssh-askpass-fullscreen";
+    };
     sshKeyPaths = mkOption {
       type = types.listOf types.path;
       default = [];
@@ -109,7 +107,7 @@ in
         message = "age.sshKeyPaths must be set.";
       }];
 
-      home.activation.agenix = hm.dag.entryAfter [ "writeBoundary" ] installNonRootSecrets;
+      home.activation.agenix = hm.dag.entryAfter [ "writeBoundary" ] installSecrets;
     }
   ]);
 }
