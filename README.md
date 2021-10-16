@@ -53,11 +53,21 @@ $ nix-channel --add https://github.com/ryantm/agenix/archive/master.tar.gz ageni
 $ nix-channel --update
 ```
 
-  Than add the following to your configuration.nix in the `imports` list:
+  Then add the following to your configuration.nix in the `imports` list:
 
 ```nix
 {
   imports = [ <agenix/modules/age.nix> ];
+}
+```
+
+#### CLI
+
+  To install the `agenix` binary:
+
+```nix
+{
+  environment.systemPackages = [ import <agenix> {}.agenix ];
 }
 ```
 
