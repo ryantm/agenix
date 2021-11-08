@@ -16,7 +16,11 @@ let
 
   identities = builtins.concatStringsSep " " (map (path: "-i ${path}") cfg.sshKeyPaths);
   installSecret = secretType: ''
-    _truePath="${cfg.secretsMountPoint}/$_count/${secretType.name}"
+    ${if secretType.symlink then ''
+      _truePath="${cfg.secretsMountPoint}/$_agenix_generation/${secretType.name}"
+    '' else ''
+      _truePath="${secretType.path}"
+    ''}
     echo "decrypting '${secretType.file}' to '$_truePath'..."
     TMP_FILE="$_truePath.tmp"
     mkdir -p "$(dirname "$_truePath")"
@@ -28,7 +32,10 @@ let
     chmod ${secretType.mode} "$TMP_FILE"
     chown ${secretType.owner}:${secretType.group} "$TMP_FILE"
     mv -f "$TMP_FILE" "$_truePath"
-    [ "${secretType.path}" != "/run/agenix/${secretType.name}" ] && ln -sfn "/run/agenix/${secretType.name}" "${secretType.path}"
+
+    ${optionalString secretType.symlink ''
+      [ "${secretType.path}" != "/run/agenix/${secretType.name}" ] && ln -sfn "/run/agenix/${secretType.name}" "${secretType.path}"
+    ''}
   '';
 
   isRootSecret = st: (st.owner == "root" || st.owner == "0") && (st.group == "root" || st.group == "0");
@@ -83,6 +90,7 @@ let
           Group of the file.
         '';
       };
+      symlink = mkEnableOption "symlinking secrets to their destination" // { default = true; };
     };
   });
 in

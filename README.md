@@ -193,6 +193,22 @@ randomness in `age`'s encryption algorithms, the files always change
 when rekeyed, even if the identities do not. (This eventually could be
 improved upon by reading the identities from the age file.)
 
+## Don't symlink secret
+
+If your secret cannot be a symlink, you should set the `symlink` option to `false`:
+
+```nix
+{
+  age.secrets.some-secret = {
+    file = ./secret;
+    path = "/var/lib/some-service/some-secret";
+    symlink = false;
+  };
+}
+```
+
+Instead of first decrypting the secret to `/run/agenix` and then symlinking to its `path`, the secret will instead be forcibly moved to its `path`. Please note that, currently, there are no cleanup mechanisms for secrets that are not symlinked by agenix.
+
 ## Threat model/Warnings
 
 This project has not be audited by a security professional.
