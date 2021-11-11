@@ -37,6 +37,10 @@ let
   nonRootSecrets = builtins.filter isNotRootSecret (builtins.attrValues cfg.secrets);
   installNonRootSecrets = builtins.concatStringsSep "\n" ([ "echo '[agenix] decrypting non-root secrets...'" ] ++ (map installSecret nonRootSecrets));
 
+  destinationPaths = map (secret: secret.path) (builtins.attrValues cfg.secrets);
+  agenixSystemFilename = "agenix-cache.json";
+  agenixSystemFile = pkgs.writeText agenixSystemFilename (builtins.toJSON destinationPaths);
+
   secretType = types.submodule ({ config, ... }: {
     options = {
       name = mkOption {
@@ -104,20 +108,50 @@ in
     };
   };
 
-  config = mkIf (cfg.secrets != { }) {
-    assertions = [{
-      assertion = cfg.sshKeyPaths != [ ];
-      message = "age.sshKeyPaths must be set.";
-    }];
+  config = mkMerge [
 
-    # Secrets with root owner and group can be installed before users
-    # exist. This allows user password files to be encrypted.
-    system.activationScripts.agenixRoot = stringAfter [ "specialfs" ] installRootOwnedSecrets;
-    system.activationScripts.users.deps = [ "agenixRoot" ];
+    (mkIf (cfg.secrets != { }) {
+      assertions = [{
+        assertion = cfg.sshKeyPaths != [ ];
+        message = "age.sshKeyPaths must be set.";
+      }];
 
-    # Other secrets need to wait for users and groups to exist.
-    system.activationScripts.agenix = stringAfter [ "users" "groups" "specialfs" ] installNonRootSecrets;
+      # Secrets with root owner and group can be installed before users
+      # exist. This allows user password files to be encrypted.
+      system.activationScripts.agenixRoot = stringAfter [ "specialfs" ] installRootOwnedSecrets;
+      system.activationScripts.users.deps = [ "agenixRoot" ];
 
-  };
+      # Other secrets need to wait for users and groups to exist.
+      system.activationScripts.agenix = stringAfter [ "users" "groups" "specialfs" ] installNonRootSecrets;
+
+      system.extraSystemBuilderCmds = ''
+        ln -s ${agenixSystemFile} $out/${agenixSystemFilename}
+      '';
+    })
+
+    {
+      # read from /run/current-system/${agenixSystemFilename} to ensure we are reading the file of
+      # the current activated configuration
+      system.activationScripts.agenixCleanup = noDepEntry ''
+        if [ -f "/run/current-system/${agenixSystemFilename}" ]; then
+          echo '[agenix] cleaning up old secrets...'
+
+          files_to_be_removed=($(${pkgs.jq}/bin/jq \
+            --null-input \
+            --raw-output \
+            --argfile current "/run/current-system/${agenixSystemFilename}" \
+            --argfile new "${agenixSystemFile}" \
+            '$current - $new | .[]'))
+
+          for file in "''${files_to_be_removed[@]}"; do
+            echo "removing $file..."
+            rm "$file"
+            rmdir --ignore-fail-on-non-empty --parents "$(dirname "$file")"
+          done
+        fi
+      '';
+    }
+
+  ];
 
 }
