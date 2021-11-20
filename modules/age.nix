@@ -140,10 +140,10 @@ in
       (( ++_agenix_generation ))
       echo "[agenix] symlinking new secrets to /run/agenix (generation $_agenix_generation)..."
       mkdir -p "${cfg.secretsMountPoint}"
-      chmod 0750 "${cfg.secretsMountPoint}"
-      grep -q "${cfg.secretsMountPoint} ramfs" /proc/mounts || mount -t ramfs none "${cfg.secretsMountPoint}" -o nodev,nosuid,mode=0750
+      chmod 0751 "${cfg.secretsMountPoint}"
+      grep -q "${cfg.secretsMountPoint} ramfs" /proc/mounts || mount -t ramfs none "${cfg.secretsMountPoint}" -o nodev,nosuid,mode=0751
       mkdir -p "${cfg.secretsMountPoint}/$_agenix_generation"
-      chmod 0750 "${cfg.secretsMountPoint}/$_agenix_generation"
+      chmod 0751 "${cfg.secretsMountPoint}/$_agenix_generation"
       ln -sfn "${cfg.secretsMountPoint}/$_agenix_generation" /run/agenix
 
       (( _agenix_generation > 1 )) && {
