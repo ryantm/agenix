@@ -49,7 +49,7 @@ Then add the following to your configuration.nix in the `imports` list:
   As root run:
 
 ```ShellSession
-$ nix-channel --add https://github.com/ryantm/agenix/archive/master.tar.gz agenix
+$ nix-channel --add https://github.com/ryantm/agenix/archive/main.tar.gz agenix
 $ nix-channel --update
 ```
 
