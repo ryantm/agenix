@@ -77,7 +77,7 @@ $ nix-channel --update
 
 ```nix
 {
-  imports = [ "${builtins.fetchTarball "https://github.com/ryantm/agenix/archive/master.tar.gz"}/modules/age.nix" ];
+  imports = [ "${builtins.fetchTarball "https://github.com/ryantm/agenix/archive/main.tar.gz"}/modules/age.nix" ];
 }
 ```
 
