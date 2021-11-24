@@ -73,21 +73,21 @@ let
         type = types.str;
         default = "0400";
         description = ''
-          Permissions mode of the in octal.
+          Permissions mode of the decrypted secret in a format understood by chmod.
         '';
       };
       owner = mkOption {
         type = types.str;
         default = "0";
         description = ''
-          User of the file.
+          User of the decrypted secret.
         '';
       };
       group = mkOption {
         type = types.str;
         default = users.${config.owner}.group or "0";
         description = ''
-          Group of the file.
+          Group of the decrypted secret.
         '';
       };
       symlink = mkEnableOption "symlinking secrets to their destination" // { default = true; };
