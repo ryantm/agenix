@@ -40,7 +40,7 @@ Then add the following to your configuration.nix in the `imports` list:
 
 ```nix
 {
-  imports = [ "${(import ./nix/sources.nix).agenix}/modules/age" ];
+  imports = [ "${(import ./nix/sources.nix).agenix}/modules/age.nix" ];
 }
 ```
 
@@ -93,7 +93,7 @@ $ nix-channel --update
       url = "https://github.com/ryantm/agenix/archive/${commit}.tar.gz";
       # replace this with an actual hash
       sha256 = "0000000000000000000000000000000000000000000000000000";
-    }}/modules/age"
+    }}/modules/age.nix"
   ];
 }
 ```
