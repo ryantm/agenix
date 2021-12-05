@@ -8,13 +8,14 @@
   nix,
   mktemp,
   diffutils,
+  ageBin ? "${
+    # we need at least rage 0.5.0 to support ssh keys
+    if rage.version < "0.5.0"
+    then callPackage ./rage.nix {}
+    else rage
+  }/bin/rage"
 } :
 let
-  # we need at least rage 0.5.0 to support ssh keys
-  rageToUse = if rage.version < "0.5.0"
-         then callPackage ./rage.nix {}
-         else rage;
-  ageBin = "${rageToUse}/bin/rage";
   sedBin = "${gnused}/bin/sed";
   nixInstantiate = "${nix}/bin/nix-instantiate";
   mktempBin = "${mktemp}/bin/mktemp";

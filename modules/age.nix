@@ -10,7 +10,7 @@ let
     if lib.versionOlder pkgs.rage.version "0.5.0"
     then pkgs.callPackage ../pkgs/rage.nix { }
     else pkgs.rage;
-  ageBin = "${rage}/bin/rage";
+  ageBin = config.age.ageBin;
 
   users = config.users.users;
 
@@ -96,6 +96,13 @@ let
 in
 {
   options.age = {
+    ageBin = mkOption {
+      type = types.str;
+      default = "${rage}/bin/rage";
+      description = ''
+        The age executable to use.
+      '';
+    };
     secrets = mkOption {
       type = types.attrsOf secretType;
       default = { };
