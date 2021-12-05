@@ -209,6 +209,28 @@ If your secret cannot be a symlink, you should set the `symlink` option to `fals
 
 Instead of first decrypting the secret to `/run/agenix` and then symlinking to its `path`, the secret will instead be forcibly moved to its `path`. Please note that, currently, there are no cleanup mechanisms for secrets that are not symlinked by agenix.
 
+## Use other implementations
+
+This project uses the Rust implementation of age, [rage](https://github.com/str4d/rage), by default. You can change it to use the [official implementation](https://github.com/FiloSottile/age).
+
+### Module
+
+```nix
+{
+  age.ageBin = "${pkgs.age}/bin/age";
+}
+```
+
+### CLI
+
+```nix
+{
+  environment.systemPackages = [
+    (agenix.defaultPackage.x86_64-linux.override { ageBin = "${pkgs.age}/bin/age"; })
+  ];
+}
+```
+
 ## Threat model/Warnings
 
 This project has not be audited by a security professional.
