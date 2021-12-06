@@ -14,7 +14,7 @@ let
 
   users = config.users.users;
 
-  identities = builtins.concatStringsSep " " (map (path: "-i ${path}") cfg.sshKeyPaths);
+  identities = builtins.concatStringsSep " " (map (path: "-i ${path}") cfg.identityPaths);
   installSecret = secretType: ''
     ${if secretType.symlink then ''
       _truePath="${cfg.secretsMountPoint}/$_agenix_generation/${secretType.name}"
@@ -95,6 +95,11 @@ let
   });
 in
 {
+
+  imports = [
+    (mkRenamedOptionModule [ "age" "sshKeyPaths" ] [ "age" "identityPaths" ])
+  ];
+
   options.age = {
     ageBin = mkOption {
       type = types.str;
@@ -121,7 +126,7 @@ in
         Where secrets are created before they are symlinked to /run/agenix
       '';
     };
-    sshKeyPaths = mkOption {
+    identityPaths = mkOption {
       type = types.listOf types.path;
       default =
         if config.services.openssh.enable then
@@ -135,8 +140,8 @@ in
 
   config = mkIf (cfg.secrets != { }) {
     assertions = [{
-      assertion = cfg.sshKeyPaths != [ ];
-      message = "age.sshKeyPaths must be set.";
+      assertion = cfg.identityPaths != [ ];
+      message = "age.identityPaths must be set.";
     }];
 
     # Create a new directory full of secrets for symlinking (this helps
