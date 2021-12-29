@@ -78,7 +78,7 @@ To install the `agenix` binary:
 
 ```nix
 {
-  environment.systemPackages = [ (pkgs.callPackage "${(import ./nix/sources.nix).agenix}/pkgs/age.nix" {}) ];
+  environment.systemPackages = [ (pkgs.callPackage "${(import ./nix/sources.nix).agenix}/pkgs/agenix.nix" {}) ];
 }
 ```
 
