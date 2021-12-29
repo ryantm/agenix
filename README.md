@@ -2,6 +2,30 @@
 
 `agenix` is a commandline tool for managing secrets encrypted with your existing SSH keys. This project also includes the NixOS module `age` for adding encrypted secrets into the Nix store and decrypting them.
 
+## Contents
+
+* [Problem and solution](#problem-and-solution)
+* [Features](#features)
+* [Installation](#installation)
+  * [niv](#install-via-niv) (Current recommendation)
+    * [module](#install-module-via-niv)
+    * [CLI](#install-cli-via-niv)
+  * [nix-channel](#install-via-nix-channel)
+    * [module](#install-module-via-nix-channel)
+    * [CLI](#install-cli-via-nix-channel)
+  * [fetchTarball](#install-via-fetchtarball)
+    * [module](#install-module-via-fetchtarball)
+    * [CLI](#install-cli-via-fetchTarball)
+  * [flakes](#install-via-flakes)
+    * [module](#install-module-via-flakes)
+    * [CLI](#install-cli-via-flakes)
+* [Tutorial](#tutorial)
+* [Rekeying](#rekeying)
+* [Don't symlink secret](#dont-symlink-secret)
+* [Use other implementations](#use-other-implementations)
+* [Threat model/Warnings](#threat-modelwarnings)
+* [Acknowledgements](#acknowledgements)
+
 ## Problem and solution
 
 All files in the Nix store are readable by any system user, so it is not a suitable place for including cleartext secrets. Many existing tools (like NixOps deployment.keys) deploy secrets separately from `nixos-rebuild`, making deployment, caching, and auditing more difficult. Out-of-band secret management is also less reproducible.
@@ -26,7 +50,12 @@ All files in the Nix store are readable by any system user, so it is not a suita
 
 Choose one of the following methods:
 
-### [niv](https://github.com/nmattia/niv) (Current recommendation)
+* [niv](#install-via-niv) (Current recommendation)
+* [nix-channel](#install-via-nix-channel)
+* [fetchTarball](#install-via-fetchTarball)
+* [flakes](#install-via-flakes)
+
+### Install via [niv](https://github.com/nmattia/niv)
 
 First add it to niv:
 
@@ -34,9 +63,9 @@ First add it to niv:
 $ niv add ryantm/agenix
 ```
 
-#### Module
+#### Install module via niv
 
-Then add the following to your configuration.nix in the `imports` list:
+Then add the following to your `configuration.nix` in the `imports` list:
 
 ```nix
 {
@@ -44,16 +73,28 @@ Then add the following to your configuration.nix in the `imports` list:
 }
 ```
 
-### nix-channel
+#### Install CLI via niv
 
-  As root run:
+To install the `agenix` binary:
 
-```ShellSession
-$ nix-channel --add https://github.com/ryantm/agenix/archive/main.tar.gz agenix
-$ nix-channel --update
+```nix
+{
+  environment.systemPackages = [ (pkgs.callPackage "${(import ./nix/sources.nix).agenix}/pkgs/age.nix" {}) ];
+}
 ```
 
-  Then add the following to your configuration.nix in the `imports` list:
+### Install via nix-channel
+
+As root run:
+
+```ShellSession
+$ sudo nix-channel --add https://github.com/ryantm/agenix/archive/main.tar.gz agenix
+$ sudo nix-channel --update
+```
+
+#### Install module via nix-channel
+
+Then add the following to your `configuration.nix` in the `imports` list:
 
 ```nix
 {
@@ -61,19 +102,21 @@ $ nix-channel --update
 }
 ```
 
-#### CLI
+#### Install CLI via nix-channel
 
-  To install the `agenix` binary:
+To install the `agenix` binary:
 
 ```nix
 {
-  environment.systemPackages = [ import <agenix> {}.agenix ];
+  environment.systemPackages = [ (pkgs.callPackage <agenix/pkgs/agenix.nix> {}) ];
 }
 ```
 
-### fetchTarball
+### Install via fetchTarball
 
-  Add the following to your configuration.nix:
+#### Install module via fetchTarball
+
+Add the following to your configuration.nix:
 
 ```nix
 {
@@ -98,9 +141,19 @@ $ nix-channel --update
 }
 ```
 
-### Flakes
+#### Install CLI via fetchTarball
 
-#### Module
+To install the `agenix` binary:
+
+```nix
+{
+  environment.systemPackages = [ (pkgs.callPackage "${builtins.fetchTarball "https://github.com/ryantm/agenix/archive/main.tar.gz"}/pkgs/agenix.nix" {}) ];
+}
+```
+
+### Install via Flakes
+
+#### Install module via Flakes
 
 ```nix
 {
@@ -122,7 +175,7 @@ $ nix-channel --update
 }
 ```
 
-#### CLI
+#### Install CLI via Flakes
 
 You don't need to install it,
 
