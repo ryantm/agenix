@@ -43,7 +43,6 @@ All files in the Nix store are readable by any system user, so it is not a suita
 
 ## Notices
 
-* The `age` module will only work if you use NixOS with [commit e6b8587](https://github.com/NixOS/nixpkgs/commit/e6b8587b25a19528695c5c270e6ff1c209705c31) which is included in the latest `nixos-20.09` or `nixos-unstable` releases.
 * Password-protected ssh keys: since the underlying tool age/rage do not support ssh-agent, password-protected ssh keys do not work well. For example, if you need to rekey 20 secrets you will have to enter your password 20 times.
 
 ## Installation
