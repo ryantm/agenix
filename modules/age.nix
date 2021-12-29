@@ -90,6 +90,17 @@ let
           Group of the decrypted secret.
         '';
       };
+      action = mkOption {
+        type = types.str;
+        default = "";
+        description = "A script to run when secret is updated.";
+      };
+      service = mkOption {
+        type = types.str;
+        default = "";
+        description = "The systemd service that uses this secret. Will be restarted when the secret changes.";
+        example = "wireguard-wg0";
+      };
       symlink = mkEnableOption "symlinking secrets to their destination" // { default = true; };
     };
   });
@@ -201,6 +212,41 @@ in
         "agenixChownKeys"
       ];
     };
+
+    # services that watch for file changes and exectue the configured action
+    systemd.services = lib.mkMerge
+      (lib.mapAttrsToList
+        (name: {action, service, file, path, mode, owner, group, ...}:
+          let
+            fileHash = builtins.hashString "sha256" (builtins.readFile file);
+            restartTriggers = [ fileHash path mode owner group ];
+          in
+            lib.mkMerge [
+              (lib.mkIf (service != "") {
+                ${service} = { inherit restartTriggers; };
+              })
+              (lib.mkIf (action != "") {
+                "agenix-${name}-action" = {
+                  inherit restartTriggers;
+
+                  # We execute the action on reload so that it doesn't happen at
+                  # startup. The only disadvantage is that it won't trigger the
+                  # first time the service is created.
+                  reload = action;
+                  reloadIfChanged = true;
+
+                  serviceConfig = {
+                    Type = "oneshot";
+                    RemainAfterExit = true;
+                  };
+
+                  script = " "; # it complains if we only set ExecReload
+
+                  # Give it a reason for starting
+                  wantedBy = [ "multi-user.target" ];
+                };
+
+              })]) cfg.secrets);
   };
 
 }
