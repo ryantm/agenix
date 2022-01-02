@@ -18,6 +18,9 @@
 
     packages."x86_64-darwin".agenix = agenix "x86_64-darwin";
     defaultPackage."x86_64-darwin" = self.packages."x86_64-darwin".agenix;
+    
+    packages."aarch64-darwin".agenix = agenix "aarch64-darwin";
+    defaultPackage."aarch64-darwin" = self.packages."aarch64-darwin".agenix;
 
     packages."x86_64-linux".agenix = agenix "x86_64-linux";
     defaultPackage."x86_64-linux" = self.packages."x86_64-linux".agenix;
