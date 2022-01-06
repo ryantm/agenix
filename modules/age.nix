@@ -24,7 +24,7 @@ let
     echo "decrypting '${secretType.file}' to '$_truePath'..."
     TMP_FILE="$_truePath.tmp"
     mkdir -p "$(dirname "$_truePath")"
-    mkdir -p "$(dirname "${secretType.path}")"
+    [ "${secretType.path}" != "/run/agenix/${secretType.name}" ] && mkdir -p "$(dirname "${secretType.path}")"
     (
       umask u=r,g=,o=
       LANG=${config.i18n.defaultLocale} ${ageBin} --decrypt ${identities} -o "$TMP_FILE" "${secretType.file}"
