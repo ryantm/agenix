@@ -24,7 +24,7 @@ let
     echo "decrypting '${secretType.file}' to '$_truePath'..."
     TMP_FILE="$_truePath.tmp"
     mkdir -p "$(dirname "$_truePath")"
-    mkdir -p "$(dirname "${secretType.path}")"
+    [ "${secretType.path}" != "/run/agenix/${secretType.name}" ] && mkdir -p "$(dirname "${secretType.path}")"
     (
       umask u=r,g=,o=
       LANG=${config.i18n.defaultLocale} ${ageBin} --decrypt ${identities} -o "$TMP_FILE" "${secretType.file}"
@@ -147,22 +147,27 @@ in
     # Create a new directory full of secrets for symlinking (this helps
     # ensure removed secrets are actually removed, or at least become
     # invalid symlinks).
-    system.activationScripts.agenixMountSecrets = ''
-      _agenix_generation="$(basename "$(readlink /run/agenix)" || echo 0)"
-      (( ++_agenix_generation ))
-      echo "[agenix] symlinking new secrets to /run/agenix (generation $_agenix_generation)..."
-      mkdir -p "${cfg.secretsMountPoint}"
-      chmod 0751 "${cfg.secretsMountPoint}"
-      grep -q "${cfg.secretsMountPoint} ramfs" /proc/mounts || mount -t ramfs none "${cfg.secretsMountPoint}" -o nodev,nosuid,mode=0751
-      mkdir -p "${cfg.secretsMountPoint}/$_agenix_generation"
-      chmod 0751 "${cfg.secretsMountPoint}/$_agenix_generation"
-      ln -sfn "${cfg.secretsMountPoint}/$_agenix_generation" /run/agenix
+    system.activationScripts.agenixMountSecrets = {
+      text = ''
+        _agenix_generation="$(basename "$(readlink /run/agenix)" || echo 0)"
+        (( ++_agenix_generation ))
+        echo "[agenix] symlinking new secrets to /run/agenix (generation $_agenix_generation)..."
+        mkdir -p "${cfg.secretsMountPoint}"
+        chmod 0751 "${cfg.secretsMountPoint}"
+        grep -q "${cfg.secretsMountPoint} ramfs" /proc/mounts || mount -t ramfs none "${cfg.secretsMountPoint}" -o nodev,nosuid,mode=0751
+        mkdir -p "${cfg.secretsMountPoint}/$_agenix_generation"
+        chmod 0751 "${cfg.secretsMountPoint}/$_agenix_generation"
+        ln -sfn "${cfg.secretsMountPoint}/$_agenix_generation" /run/agenix
 
-      (( _agenix_generation > 1 )) && {
-        echo "[agenix] removing old secrets (generation $(( _agenix_generation - 1 )))..."
-        rm -rf "${cfg.secretsMountPoint}/$(( _agenix_generation - 1 ))"
-      }
-    '';
+        (( _agenix_generation > 1 )) && {
+          echo "[agenix] removing old secrets (generation $(( _agenix_generation - 1 )))..."
+          rm -rf "${cfg.secretsMountPoint}/$(( _agenix_generation - 1 ))"
+        }
+      '';
+      deps = [
+        "specialfs"
+      ];
+    };
 
     # Secrets with root owner and group can be installed before users
     # exist. This allows user password files to be encrypted.
