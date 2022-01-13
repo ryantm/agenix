@@ -232,7 +232,7 @@ in
       (lib.mapAttrsToList
         (name: {action, service, file, path, mode, owner, group, ...}:
           let
-            fileHash = builtins.hashString "sha256" (builtins.readFile file);
+            fileHash = builtins.hashFile "sha256" file;
             restartTriggers = [ fileHash path mode owner group ];
           in
             lib.mkMerge [
