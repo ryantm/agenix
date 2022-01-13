@@ -254,7 +254,7 @@ in
                     RemainAfterExit = true;
                   };
 
-                  script = " "; # it complains if we only set ExecReload
+                  script = " "; # systemd complains if we only set ExecReload
 
                   # Give it a reason for starting
                   wantedBy = [ "multi-user.target" ];
