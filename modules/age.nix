@@ -21,14 +21,31 @@ let
     '' else ''
       _truePath="${secretType.path}"
     ''}
-    echo "decrypting '${secretType.file}' to '$_truePath'..."
+
+    ${if secretType.file != null then ''
+      echo "decrypting '${secretType.file}' to '$_truePath'..."
+    '' else ''
+      echo "applying template ${secretType.template} to '$_truePath'..."
+    ''}
+
     TMP_FILE="$_truePath.tmp"
     mkdir -p "$(dirname "$_truePath")"
     [ "${secretType.path}" != "/run/agenix/${secretType.name}" ] && mkdir -p "$(dirname "${secretType.path}")"
-    (
-      umask u=r,g=,o=
-      LANG=${config.i18n.defaultLocale} ${ageBin} --decrypt ${identities} -o "$TMP_FILE" "${secretType.file}"
-    )
+
+    ${if secretType.file != null then ''
+      (
+        umask u=r,g=,o=
+        LANG=${config.i18n.defaultLocale} ${ageBin} --decrypt ${identities} -o "$TMP_FILE" "${secretType.file}"
+      )
+    '' else ''
+        ${pkgs.perl}/bin/perl -pe '${
+          lib.concatStringsSep "; "
+            (map (s:
+              ''$match=q[@${s.name}@];'' +
+              ''$replace=substr(qx[cat ${s.path}], 0, -1);'' +
+              ''s/$match/$replace/ge'') secretType.secrets)
+        }' ${secretType.template} > "$TMP_FILE"
+    ''}
     chmod ${secretType.mode} "$TMP_FILE"
     chown ${secretType.owner}:${secretType.group} "$TMP_FILE"
     mv -f "$TMP_FILE" "$_truePath"
@@ -57,7 +74,8 @@ let
         '';
       };
       file = mkOption {
-        type = types.path;
+        type = types.nullOr types.path;
+        default = null;
         description = ''
           Age file the secret is loaded from.
         '';
@@ -100,6 +118,18 @@ let
         default = [];
         description = "The systemd services that uses this secret. Will be restarted when the secret changes.";
         example = "[ wireguard-wg0 ]";
+      };
+      template = mkOption {
+        type = types.nullOr types.path;
+        default = null;
+        description = "A template to insert other secrets into.";
+        example = ''builtins.toFile "secret-template" "@secret1@ @secret2@"'';
+      };
+      secrets = mkOption {
+        type = types.listOf secretType;
+        default = [];
+        description = "A list of secrets available to the template.";
+        example = ''with config.age.secrets; [ secret1 secret2 ]'';
       };
       symlink = mkEnableOption "symlinking secrets to their destination" // { default = true; };
     };
@@ -153,7 +183,13 @@ in
     assertions = [{
       assertion = cfg.identityPaths != [ ];
       message = "age.identityPaths must be set.";
-    }];
+    }] ++ lib.mapAttrsToList (name: {template, file, ...}: {
+      assertion = (template == null && file != null) ||
+                  (template != null && file == null);
+      message = ''
+        You must specify either `file` or `template` for age.secrets.${name}, but not both.
+      '';
+    }) cfg.secrets;
 
     # Create a new directory full of secrets for symlinking (this helps
     # ensure removed secrets are actually removed, or at least become
@@ -215,10 +251,11 @@ in
 
     systemd.services = lib.mkMerge
       (lib.mapAttrsToList
-        (name: {action, services, file, path, mode, owner, group, ...}:
+        (name: {action, services, file, template, secrets, path, mode, owner, group, ...}:
           let
-            fileHash = builtins.hashFile "sha256" file;
-            restartTriggers = [ fileHash path mode owner group ];
+            hashedFiles = map (builtins.hashFile "sha256")
+              ([ file ] ++ (map ({ file, ... }: file) secrets));
+            restartTriggers = hashedFiles ++ [ template path mode owner group ];
           in
             lib.mkMerge [
               (lib.genAttrs services (_: { inherit restartTriggers; }))
