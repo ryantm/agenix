@@ -101,11 +101,11 @@ let
         default = "";
         description = "A script to run when secret is updated.";
       };
-      service = mkOption {
-        type = types.str;
-        default = "";
-        description = "The systemd service that uses this secret. Will be restarted when the secret changes.";
-        example = "wireguard-wg0";
+      services = mkOption {
+        type = types.listOf types.str;
+        default = [];
+        description = "The systemd services that uses this secret. Will be restarted when the secret changes.";
+        example = "[ wireguard-wg0 ]";
       };
       symlink = mkEnableOption "symlinking secrets to their destination" // { default = true; };
     };
@@ -227,18 +227,15 @@ in
       ];
     };
 
-    # services that watch for file changes and exectue the configured action
     systemd.services = lib.mkMerge
       (lib.mapAttrsToList
-        (name: {action, service, file, path, mode, owner, group, ...}:
+        (name: {action, services, file, path, mode, owner, group, ...}:
           let
             fileHash = builtins.hashFile "sha256" file;
             restartTriggers = [ fileHash path mode owner group ];
           in
             lib.mkMerge [
-              (lib.mkIf (service != "") {
-                ${service} = { inherit restartTriggers; };
-              })
+              (lib.genAttrs services (_: { inherit restartTriggers; }))
               (lib.mkIf (action != "") {
                 "agenix-${name}-action" = {
                   inherit restartTriggers;
@@ -260,7 +257,8 @@ in
                   wantedBy = [ "multi-user.target" ];
                 };
 
-              })]) cfg.secrets);
+              })
+            ]) cfg.secrets);
   };
 
 }
