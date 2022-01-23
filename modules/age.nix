@@ -15,43 +15,42 @@ let
   users = config.users.users;
 
   identities = builtins.concatStringsSep " " (map (path: "-i ${path}") cfg.identityPaths);
-  installSecret = secretType: ''
-    ${if secretType.symlink then ''
-      _truePath="${cfg.secretsMountPoint}/$_agenix_generation/${secretType.name}"
+  installSecret = secret: ''
+    ${if secret.symlink then ''
+      _truePath="${cfg.secretsMountPoint}/$_agenix_generation/${secret.name}"
     '' else ''
-      _truePath="${secretType.path}"
+      _truePath="${secret.path}"
     ''}
 
-    ${if secretType.file != null then ''
-      echo "decrypting '${secretType.file}' to '$_truePath'..."
+    ${if secret ? file then ''
+       echo "decrypting '${secret.file}' to '$_truePath'..."
     '' else ''
-      echo "applying template ${secretType.template} to '$_truePath'..."
+       echo "constructing template ${secret.template} at '$_truePath'..."
     ''}
 
     TMP_FILE="$_truePath.tmp"
     mkdir -p "$(dirname "$_truePath")"
-    [ "${secretType.path}" != "/run/agenix/${secretType.name}" ] && mkdir -p "$(dirname "${secretType.path}")"
-
-    ${if secretType.file != null then ''
-      (
-        umask u=r,g=,o=
-        LANG=${config.i18n.defaultLocale} ${ageBin} --decrypt ${identities} -o "$TMP_FILE" "${secretType.file}"
-      )
+    [ "${secret.path}" != "/run/agenix/${secret.name}" ] && mkdir -p "$(dirname "${secret.path}")"
+    ${if secret ? file then ''
+       (
+         umask u=r,g=,o=
+         LANG=${config.i18n.defaultLocale} ${ageBin} --decrypt ${identities} -o "$TMP_FILE" "${secret.file}"
+       )
     '' else ''
-        ${pkgs.perl}/bin/perl -pe '${
-          lib.concatStringsSep "; "
-            (map (s:
-              ''$match=q[@${s.name}@];'' +
-              ''$replace=substr(qx[cat ${s.path}], 0, -1);'' +
-              ''s/$match/$replace/ge'') secretType.secrets)
-        }' ${secretType.template} > "$TMP_FILE"
+       ${pkgs.perl}/bin/perl -pe '${
+         lib.concatStringsSep "; "
+           (map (s:
+             ''$match=q[@${s.name}@];'' +
+             ''$replace=substr(qx[cat ${s.path}], 0, -1);'' +
+             ''s/$match/$replace/ge'') secret.secrets)
+       }' ${secret.template} > "$TMP_FILE"
     ''}
-    chmod ${secretType.mode} "$TMP_FILE"
-    chown ${secretType.owner}:${secretType.group} "$TMP_FILE"
+    chmod ${secret.mode} "$TMP_FILE"
+    chown ${secret.owner}:${secret.group} "$TMP_FILE"
     mv -f "$TMP_FILE" "$_truePath"
 
-    ${optionalString secretType.symlink ''
-      [ "${secretType.path}" != "/run/agenix/${secretType.name}" ] && ln -sfn "/run/agenix/${secretType.name}" "${secretType.path}"
+    ${optionalString secret.symlink ''
+      [ "${secret.path}" != "/run/agenix/${secret.name}" ] && ln -sfn "/run/agenix/${secret.name}" "${secret.path}"
     ''}
   '';
 
@@ -64,20 +63,22 @@ let
   nonRootSecrets = builtins.filter isNotRootSecret (builtins.attrValues cfg.secrets);
   installNonRootSecrets = builtins.concatStringsSep "\n" ([ "echo '[agenix] decrypting non-root secrets...'" ] ++ (map installSecret nonRootSecrets));
 
-  secretType = types.submodule ({ config, ... }: {
+  isRootDerivedSecret = st: isRootSecret st && builtins.all isRootSecret st.secrets;
+  isNotRootDerivedSecret = st: !(isRootDerivedSecret st);
+
+  rootDerivedSecrets = builtins.filter isRootDerivedSecret (builtins.attrValues cfg.derivedSecrets);
+  installRootDerivedSecrets = builtins.concatStringsSep "\n" ([ "echo '[agenix] constructing root derived secrets...'" ] ++ (map installSecret rootDerivedSecrets));
+
+  nonRootDerivedSecrets = builtins.filter isNotRootDerivedSecret (builtins.attrValues cfg.derivedSecrets);
+  installNonRootDerivedSecrets = builtins.concatStringsSep "\n" ([ "echo '[agenix] constructing non-root derived secrets...'" ] ++ (map installSecret nonRootDerivedSecrets));
+
+  baseSecretType = types.submodule ({ config, ... }: {
     options = {
       name = mkOption {
         type = types.str;
         default = config._module.args.name;
         description = ''
           Name of the file used in /run/agenix
-        '';
-      };
-      file = mkOption {
-        type = types.nullOr types.path;
-        default = null;
-        description = ''
-          Age file the secret is loaded from.
         '';
       };
       path = mkOption {
@@ -119,21 +120,42 @@ let
         description = "The systemd services that uses this secret. Will be restarted when the secret changes.";
         example = "[ wireguard-wg0 ]";
       };
+      symlink = mkEnableOption "symlinking secrets to their destination" // { default = true; };
+    };
+  });
+
+  secretType = types.submodule {
+    imports = baseSecretType.getSubModules;
+    options = {
+      file = mkOption {
+        type = types.path;
+        description = ''
+          Age file the secret is loaded from.
+        '';
+      };
+    };
+  };
+
+  derivedSecretType = types.submodule {
+    imports = baseSecretType.getSubModules;
+    options = {
       template = mkOption {
-        type = types.nullOr types.path;
-        default = null;
-        description = "A template to insert other secrets into.";
+        type = types.path;
+        description = ''
+          A template to insert other secrets into.
+        '';
         example = ''builtins.toFile "secret-template" "@secret1@ @secret2@"'';
       };
       secrets = mkOption {
         type = types.listOf secretType;
         default = [];
-        description = "A list of secrets available to the template.";
+        description = ''
+          A list of secrets available to the template.
+        '';
         example = ''with config.age.secrets; [ secret1 secret2 ]'';
       };
-      symlink = mkEnableOption "symlinking secrets to their destination" // { default = true; };
     };
-  });
+  };
 in
 {
 
@@ -154,6 +176,13 @@ in
       default = { };
       description = ''
         Attrset of secrets.
+      '';
+    };
+    derivedSecrets = mkOption {
+      type = types.attrsOf derivedSecretType;
+      default = { };
+      description = ''
+        Attrset of secrets derived from a template applied to secrets from `age.secrets`.
       '';
     };
     secretsMountPoint = mkOption {
@@ -183,13 +212,7 @@ in
     assertions = [{
       assertion = cfg.identityPaths != [ ];
       message = "age.identityPaths must be set.";
-    }] ++ lib.mapAttrsToList (name: {template, file, ...}: {
-      assertion = (template == null && file != null) ||
-                  (template != null && file == null);
-      message = ''
-        You must specify either `file` or `template` for age.secrets.${name}, but not both.
-      '';
-    }) cfg.secrets;
+    }];
 
     # Create a new directory full of secrets for symlinking (this helps
     # ensure removed secrets are actually removed, or at least become
@@ -219,7 +242,7 @@ in
     # Secrets with root owner and group can be installed before users
     # exist. This allows user password files to be encrypted.
     system.activationScripts.agenixRoot = {
-      text = installRootOwnedSecrets;
+      text = installRootOwnedSecrets + "\n" + installRootDerivedSecrets;
       deps = [ "agenixMountSecrets" "specialfs" ];
     };
     system.activationScripts.users.deps = [ "agenixRoot" ];
@@ -239,7 +262,7 @@ in
 
     # Other secrets need to wait for users and groups to exist.
     system.activationScripts.agenix = {
-      text = installNonRootSecrets;
+      text = installNonRootSecrets + "\n" + installNonRootDerivedSecrets;
       deps = [
         "users"
         "groups"
@@ -249,39 +272,44 @@ in
       ];
     };
 
-    systemd.services = lib.mkMerge
-      (lib.mapAttrsToList
-        (name: {action, services, file, template, secrets, path, mode, owner, group, ...}:
-          let
-            hashedFiles = map (builtins.hashFile "sha256")
-              ([ file ] ++ (map ({ file, ... }: file) secrets));
-            restartTriggers = hashedFiles ++ [ template path mode owner group ];
-          in
-            lib.mkMerge [
-              (lib.genAttrs services (_: { inherit restartTriggers; }))
-              (lib.mkIf (action != "") {
-                "agenix-${name}-action" = {
-                  inherit restartTriggers;
+    systemd.services =
+      let
+        hashFile = builtins.hashFile "sha256";
+        secretServices = { name, action, services, restartTriggers }:
+          lib.mkMerge [
+            (genAttrs services (_: { inherit restartTriggers; }))
+            (mkIf (action != "") {
+              "agenix-${name}-action" = {
+                inherit restartTriggers;
 
-                  # We execute the action on reload so that it doesn't happen at
-                  # startup. The only disadvantage is that it won't trigger the
-                  # first time the service is created.
-                  reload = action;
-                  reloadIfChanged = true;
+                # We execute the action on reload so that it doesn't happen at
+                # startup. The only disadvantage is that it won't trigger the
+                # first time the service is created.
+                reload = action;
+                reloadIfChanged = true;
 
-                  serviceConfig = {
-                    Type = "oneshot";
-                    RemainAfterExit = true;
-                  };
-
-                  script = " "; # systemd complains if we only set ExecReload
-
-                  # Give it a reason for starting
-                  wantedBy = [ "multi-user.target" ];
+                serviceConfig = {
+                  Type = "oneshot";
+                  RemainAfterExit = true;
                 };
 
-              })
-            ]) cfg.secrets);
-  };
+                script = " "; # systemd complains if we only set ExecReload
 
+                # Give it a reason for starting
+                wantedBy = [ "multi-user.target" ];
+              };
+            })
+          ];
+      in
+        lib.mkMerge (map secretServices
+          ((mapAttrsToList (name: { file, action, services, path, mode, owner, group, ... }: {
+            inherit action services name;
+            restartTriggers = [ (hashFile file) path mode owner group ];
+          }) cfg.secrets)
+          ++
+          (mapAttrsToList (name: { secrets, template, action, services, path, mode, owner, group, ... }: {
+            inherit action services name;
+            restartTriggers = map ({ file, ... }: hashFile file) secrets ++ [ template path mode owner group ];
+          }) cfg.derivedSecrets)));
+  };
 }
