@@ -1,8 +1,8 @@
-args@{ pkgs ? <nixpkgs>, ... }:
+args@{ nixpkgs ? <nixpkgs>, ... }:
 
-with (import "${pkgs}/lib");
+with (import "${nixpkgs}/lib");
 
-import "${pkgs}/nixos/tests/make-test-python.nix"
+import "${nixpkgs}/nixos/tests/make-test-python.nix"
   (
     let
       sshdConf = {
@@ -82,7 +82,9 @@ import "${pkgs}/nixos/tests/make-test-python.nix"
 
           system2.wait_for_unit("multi-user.target")
           system2.wait_until_fails("grep bar /tmp/foo")
-          system2.wait_until_succeeds("${nodes.system2After.config.system.build.toplevel}/bin/switch-to-configuration test")
+          system2.wait_until_succeeds(
+              "${nodes.system2After.config.system.build.toplevel}/bin/switch-to-configuration test"
+          )
           system2.wait_until_succeeds("grep bar /tmp/foo")
         '';
     }
