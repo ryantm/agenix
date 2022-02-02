@@ -285,7 +285,7 @@ This project uses the Rust implementation of age, [rage](https://github.com/str4
 
 ## Threat model/Warnings
 
-This project has not be audited by a security professional.
+This project has not been audited by a security professional.
 
 People unfamiliar with `age` might be surprised that secrets are not
 authenticated. This means that every attacker that has write access to
