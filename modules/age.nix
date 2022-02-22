@@ -24,7 +24,7 @@ let
     echo "decrypting '${secretType.file}' to '$_truePath'..."
     TMP_FILE="$_truePath.tmp"
     mkdir -p "$(dirname "$_truePath")"
-    [ "${secretType.path}" != "/run/agenix/${secretType.name}" ] && mkdir -p "$(dirname "${secretType.path}")"
+    [ "${secretType.path}" != "${cfg.secretsDir}/${secretType.name}" ] && mkdir -p "$(dirname "${secretType.path}")"
     (
       umask u=r,g=,o=
       LANG=${config.i18n.defaultLocale} ${ageBin} --decrypt ${identities} -o "$TMP_FILE" "${secretType.file}"
@@ -34,7 +34,7 @@ let
     mv -f "$TMP_FILE" "$_truePath"
 
     ${optionalString secretType.symlink ''
-      [ "${secretType.path}" != "/run/agenix/${secretType.name}" ] && ln -sfn "/run/agenix/${secretType.name}" "${secretType.path}"
+      [ "${secretType.path}" != "${cfg.secretsDir}/${secretType.name}" ] && ln -sfn "${cfg.secretsDir}/${secretType.name}" "${secretType.path}"
     ''}
   '';
 
@@ -53,7 +53,7 @@ let
         type = types.str;
         default = config._module.args.name;
         description = ''
-          Name of the file used in /run/agenix
+          Name of the file used in ''${cfg.secretsDir}
         '';
       };
       file = mkOption {
@@ -64,7 +64,7 @@ let
       };
       path = mkOption {
         type = types.str;
-        default = "/run/agenix/${config.name}";
+        default = "${cfg.secretsDir}/${config.name}";
         description = ''
           Path where the decrypted secret is installed.
         '';
@@ -115,6 +115,13 @@ in
         Attrset of secrets.
       '';
     };
+    secretsDir = mkOption {
+      type = types.path;
+      default = "/run/agenix";
+      description = ''
+        Folder where secrets are symlinked to
+      '';
+    };
     secretsMountPoint = mkOption {
       type = types.addCheck types.str
         (s:
@@ -122,8 +129,9 @@ in
             && (builtins.match ".+/" s) == null) # without trailing slash
       // { description = "${types.str.description} (with check: non-empty without trailing slash)"; };
       default = "/run/agenix.d";
+      defaultText = "/run/agenix.d";
       description = ''
-        Where secrets are created before they are symlinked to /run/agenix
+        Where secrets are created before they are symlinked to ''${cfg.secretsDir}
       '';
     };
     identityPaths = mkOption {
@@ -149,15 +157,15 @@ in
     # invalid symlinks).
     system.activationScripts.agenixMountSecrets = {
       text = ''
-        _agenix_generation="$(basename "$(readlink /run/agenix)" || echo 0)"
+        _agenix_generation="$(basename "$(readlink ${cfg.secretsDir})" || echo 0)"
         (( ++_agenix_generation ))
-        echo "[agenix] symlinking new secrets to /run/agenix (generation $_agenix_generation)..."
+        echo "[agenix] symlinking new secrets to ${cfg.secretsDir} (generation $_agenix_generation)..."
         mkdir -p "${cfg.secretsMountPoint}"
         chmod 0751 "${cfg.secretsMountPoint}"
         grep -q "${cfg.secretsMountPoint} ramfs" /proc/mounts || mount -t ramfs none "${cfg.secretsMountPoint}" -o nodev,nosuid,mode=0751
         mkdir -p "${cfg.secretsMountPoint}/$_agenix_generation"
         chmod 0751 "${cfg.secretsMountPoint}/$_agenix_generation"
-        ln -sfn "${cfg.secretsMountPoint}/$_agenix_generation" /run/agenix
+        ln -sfn "${cfg.secretsMountPoint}/$_agenix_generation" ${cfg.secretsDir}
 
         (( _agenix_generation > 1 )) && {
           echo "[agenix] removing old secrets (generation $(( _agenix_generation - 1 )))..."
