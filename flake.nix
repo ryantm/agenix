@@ -7,6 +7,7 @@
   in {
 
     nixosModules.age = import ./modules/age.nix;
+    nixosModule = self.nixosModules.age;
 
     overlay = import ./overlay.nix;
 
