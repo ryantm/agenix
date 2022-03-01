@@ -20,6 +20,7 @@
     * [module](#install-module-via-flakes)
     * [CLI](#install-cli-via-flakes)
 * [Tutorial](#tutorial)
+* [Community and Support](#community-and-support)
 * [Rekeying](#rekeying)
 * [Don't symlink secret](#dont-symlink-secret)
 * [Use other implementations](#use-other-implementations)
@@ -230,6 +231,11 @@ but, if you want to (change the system based on your system):
 6. NixOS rebuild or use your deployment tool like usual.
 
    The secret will be decrypted to the value of `config.age.secrets.secret1.path` (`/run/agenix/secret1` by default). For per-secret options controlling ownership etc, see [modules/age.nix](modules/age.nix).
+
+## Community and Support
+
+Support and development discussion is available here on GitHub and
+also through [Matrix](https://matrix.to/#/#agenix:nixos.org).
 
 ## Rekeying
 
