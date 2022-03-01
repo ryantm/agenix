@@ -167,7 +167,7 @@ To install the `agenix` binary:
       system = "x86_64-linux";
       modules = [
         ./configuration.nix
-        agenix.nixosModules.age
+        agenix.nixosModule
       ];
     };
   };
