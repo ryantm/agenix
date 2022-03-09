@@ -27,6 +27,8 @@ let
     [ "${secretType.path}" != "${cfg.secretsDir}/${secretType.name}" ] && mkdir -p "$(dirname "${secretType.path}")"
     (
       umask u=r,g=,o=
+      test -f "${secretType.file}" || echo '[agenix] WARNING: encrypted file ${secretType.file} does not exist!'
+      test -d "$(dirname "$TMP_FILE")" || echo "[agenix] WARNING: $(dirname "$TMP_FILE") does not exist!"
       LANG=${config.i18n.defaultLocale} ${ageBin} --decrypt ${identities} -o "$TMP_FILE" "${secretType.file}"
     )
     chmod ${secretType.mode} "$TMP_FILE"
@@ -38,11 +40,15 @@ let
     ''}
   '';
 
+  testIdentities = map (path: ''
+    test -f ${path} || echo '[agenix] WARNING: config.age.identityPaths entry ${path} not present!'
+    '') cfg.identityPaths;
+
   isRootSecret = st: (st.owner == "root" || st.owner == "0") && (st.group == "root" || st.group == "0");
   isNotRootSecret = st: !(isRootSecret st);
 
   rootOwnedSecrets = builtins.filter isRootSecret (builtins.attrValues cfg.secrets);
-  installRootOwnedSecrets = builtins.concatStringsSep "\n" ([ "echo '[agenix] decrypting root secrets...'" ] ++ (map installSecret rootOwnedSecrets));
+  installRootOwnedSecrets = builtins.concatStringsSep "\n" ([ "echo '[agenix] decrypting root secrets...'" ] ++ testIdentities ++ (map installSecret rootOwnedSecrets));
 
   nonRootSecrets = builtins.filter isNotRootSecret (builtins.attrValues cfg.secrets);
   installNonRootSecrets = builtins.concatStringsSep "\n" ([ "echo '[agenix] decrypting non-root secrets...'" ] ++ (map installSecret nonRootSecrets));
