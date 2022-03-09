@@ -1,6 +1,10 @@
 {
   description = "Secret management with age";
 
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-21.11";
+  };
+
   outputs = { self, nixpkgs }:
   let
     agenix = system: nixpkgs.legacyPackages.${system}.callPackage ./pkgs/agenix.nix {};
@@ -19,6 +23,9 @@
 
     packages."x86_64-darwin".agenix = agenix "x86_64-darwin";
     defaultPackage."x86_64-darwin" = self.packages."x86_64-darwin".agenix;
+
+    packages."aarch64-darwin".agenix = agenix "aarch64-darwin";
+    defaultPackage."aarch64-darwin" = self.packages."aarch64-darwin".agenix;
 
     packages."x86_64-linux".agenix = agenix "x86_64-linux";
     defaultPackage."x86_64-linux" = self.packages."x86_64-linux".agenix;
