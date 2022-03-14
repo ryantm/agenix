@@ -47,8 +47,9 @@ let
     }
   '';
 
+  chownGroup = if isDarwin then "admin" else "keys";
   chownKeys = ''
-    chown :keys "${cfg.secretsMountPoint}" "${cfg.secretsMountPoint}/$_agenix_generation"
+    chown :${chownGroup} "${cfg.secretsMountPoint}" "${cfg.secretsMountPoint}/$_agenix_generation"
   '';
 
   identities = builtins.concatStringsSep " " (map (path: "-i ${path}") cfg.identityPaths);
