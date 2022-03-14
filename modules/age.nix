@@ -5,6 +5,9 @@ with lib;
 let
   cfg = config.age;
 
+  isDarwin = builtins.hasAttr "darwinConfig" options.environment;
+  hasSecrets = cfg.secrets != { };
+
   # we need at least rage 0.5.0 to support ssh keys
   rage =
     if lib.versionOlder pkgs.rage.version "0.5.0"
@@ -13,6 +16,27 @@ let
   ageBin = config.age.ageBin;
 
   users = config.users.users;
+
+  mountSecrets = ''
+    _agenix_generation="$(basename "$(readlink ${cfg.secretsDir})" || echo 0)"
+    (( ++_agenix_generation ))
+    echo "[agenix] symlinking new secrets to ${cfg.secretsDir} (generation $_agenix_generation)..."
+    mkdir -p "${cfg.secretsMountPoint}"
+    chmod 0751 "${cfg.secretsMountPoint}"
+    grep -q "${cfg.secretsMountPoint} ramfs" /proc/mounts || mount -t ramfs none "${cfg.secretsMountPoint}" -o nodev,nosuid,mode=0751
+    mkdir -p "${cfg.secretsMountPoint}/$_agenix_generation"
+    chmod 0751 "${cfg.secretsMountPoint}/$_agenix_generation"
+    ln -sfn "${cfg.secretsMountPoint}/$_agenix_generation" ${cfg.secretsDir}
+
+    (( _agenix_generation > 1 )) && {
+      echo "[agenix] removing old secrets (generation $(( _agenix_generation - 1 )))..."
+      rm -rf "${cfg.secretsMountPoint}/$(( _agenix_generation - 1 ))"
+    }
+  '';
+
+  chownKeys = ''
+    chown :keys "${cfg.secretsMountPoint}" "${cfg.secretsMountPoint}/$_agenix_generation"
+  '';
 
   identities = builtins.concatStringsSep " " (map (path: "-i ${path}") cfg.identityPaths);
   installSecret = secretType: ''
@@ -40,9 +64,11 @@ let
     ''}
   '';
 
-  testIdentities = map (path: ''
-    test -f ${path} || echo '[agenix] WARNING: config.age.identityPaths entry ${path} not present!'
-    '') cfg.identityPaths;
+  testIdentities = map
+    (path: ''
+      test -f ${path} || echo '[agenix] WARNING: config.age.identityPaths entry ${path} not present!'
+    '')
+    cfg.identityPaths;
 
   isRootSecret = st: (st.owner == "root" || st.owner == "0") && (st.group == "root" || st.group == "0");
   isNotRootSecret = st: !(isRootSecret st);
@@ -152,69 +178,74 @@ in
     };
   };
 
-  config = mkIf (cfg.secrets != { }) {
-    assertions = [{
-      assertion = cfg.identityPaths != [ ];
-      message = "age.identityPaths must be set.";
-    }];
-
-    # Create a new directory full of secrets for symlinking (this helps
-    # ensure removed secrets are actually removed, or at least become
-    # invalid symlinks).
-    system.activationScripts.agenixMountSecrets = {
-      text = ''
-        _agenix_generation="$(basename "$(readlink ${cfg.secretsDir})" || echo 0)"
-        (( ++_agenix_generation ))
-        echo "[agenix] symlinking new secrets to ${cfg.secretsDir} (generation $_agenix_generation)..."
-        mkdir -p "${cfg.secretsMountPoint}"
-        chmod 0751 "${cfg.secretsMountPoint}"
-        grep -q "${cfg.secretsMountPoint} ramfs" /proc/mounts || mount -t ramfs none "${cfg.secretsMountPoint}" -o nodev,nosuid,mode=0751
-        mkdir -p "${cfg.secretsMountPoint}/$_agenix_generation"
-        chmod 0751 "${cfg.secretsMountPoint}/$_agenix_generation"
-        ln -sfn "${cfg.secretsMountPoint}/$_agenix_generation" ${cfg.secretsDir}
-
-        (( _agenix_generation > 1 )) && {
-          echo "[agenix] removing old secrets (generation $(( _agenix_generation - 1 )))..."
-          rm -rf "${cfg.secretsMountPoint}/$(( _agenix_generation - 1 ))"
+  config = (mkIf hasSecrets (mkMerge [
+    {
+      assertions = [
+        {
+          assertion = cfg.identityPaths != [ ];
+          message = "age.identityPaths must be set.";
         }
-      '';
-      deps = [
-        "specialfs"
       ];
-    };
+    }
 
-    # Secrets with root owner and group can be installed before users
-    # exist. This allows user password files to be encrypted.
-    system.activationScripts.agenixRoot = {
-      text = installRootOwnedSecrets;
-      deps = [ "agenixMountSecrets" "specialfs" ];
-    };
-    system.activationScripts.users.deps = [ "agenixRoot" ];
+    (mkIf (!isDarwin) {
+      # Create a new directory full of secrets for symlinking (this helps
+      # ensure removed secrets are actually removed, or at least become
+      # invalid symlinks).
+      system.activationScripts.agenixMountSecrets = {
+        text = mountSecrets;
+        deps = [
+          "specialfs"
+        ];
+      };
 
-    # chown the secrets mountpoint and the current generation to the keys group
-    # instead of leaving it root:root.
-    system.activationScripts.agenixChownKeys = {
-      text = ''
-        chown :keys "${cfg.secretsMountPoint}" "${cfg.secretsMountPoint}/$_agenix_generation"
-      '';
-      deps = [
-        "users"
-        "groups"
-        "agenixMountSecrets"
-      ];
-    };
+      # Secrets with root owner and group can be installed before users
+      # exist. This allows user password files to be encrypted.
+      system.activationScripts.agenixRoot = {
+        text = installRootOwnedSecrets;
+        deps = [ "agenixMountSecrets" "specialfs" ];
+      };
+      system.activationScripts.users.deps = [ "agenixRoot" ];
 
-    # Other secrets need to wait for users and groups to exist.
-    system.activationScripts.agenix = {
-      text = installNonRootSecrets;
-      deps = [
-        "users"
-        "groups"
-        "specialfs"
-        "agenixMountSecrets"
-        "agenixChownKeys"
-      ];
-    };
-  };
+      # chown the secrets mountpoint and the current generation to the keys group
+      # instead of leaving it root:root.
+      system.activationScripts.agenixChownKeys = {
+        text = chownKeys;
+        deps = [
+          "users"
+          "groups"
+          "agenixMountSecrets"
+        ];
+      };
 
+      # Other secrets need to wait for users and groups to exist.
+      system.activationScripts.agenix = {
+        text = installNonRootSecrets;
+        deps = [
+          "users"
+          "groups"
+          "specialfs"
+          "agenixMountSecrets"
+          "agenixChownKeys"
+        ];
+      };
+    })
+
+    (mkIf isDarwin {
+      system.activationScripts = {
+        # Secrets with root owner and group can be installed before users
+        # exist. This allows user password files to be encrypted.
+        preActivation.text = builtins.concatStringsSep "\n" [
+          mountSecrets
+          installRootOwnedSecrets
+        ];
+
+        # Other secrets need to wait for users and groups to exist.
+        users.text = lib.mkAfter ''
+          ${chownKeys}
+          ${installNonRootSecrets}
+        '';
+      };
+    })
+  ]));
 }
