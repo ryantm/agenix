@@ -182,8 +182,12 @@ in
     identityPaths = mkOption {
       type = types.listOf types.path;
       default =
-        if config.services.openssh.enable then
-          map (e: e.path) (lib.filter (e: e.type == "rsa" || e.type == "ed25519") config.services.openssh.hostKeys)
+        if (config.services.openssh.enable or false) then
+          map (e: e.path)
+            (lib.filter (e: e.type == "rsa" || e.type == "ed25519")
+              config.services.openssh.hostKeys)
+        else if isDarwin then
+          [ "/etc/ssh/ssh_host_ed25519_key" "/etc/ssh/ssh_host_rsa_key" ]
         else [ ];
       description = ''
         Path to SSH keys to be used as identities in age decryption.
