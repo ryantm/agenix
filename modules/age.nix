@@ -17,13 +17,26 @@ let
 
   users = config.users.users;
 
+  mountCmd =
+    if isDarwin then ''
+      df -P | grep -qF "${cfg.secretsMountPoint}" || {
+        dev="$(hdiutil attach -nomount ram://1048576 | awk '{print $1}')"
+        newfs_hfs "$dev"
+        mount -t hfs -o nobrowse,nodev,nosuid,-m=0751 "$dev" "${cfg.secretsMountPoint}"
+      }
+    '' else ''
+      grep -q "${cfg.secretsMountPoint} ramfs" /proc/mounts || mount -t ramfs none "${cfg.secretsMountPoint}" -o nodev,nosuid,mode=0751
+    '';
+
   mountSecrets = ''
     _agenix_generation="$(basename "$(readlink ${cfg.secretsDir})" || echo 0)"
     (( ++_agenix_generation ))
     echo "[agenix] symlinking new secrets to ${cfg.secretsDir} (generation $_agenix_generation)..."
     mkdir -p "${cfg.secretsMountPoint}"
     chmod 0751 "${cfg.secretsMountPoint}"
-    grep -q "${cfg.secretsMountPoint} ramfs" /proc/mounts || mount -t ramfs none "${cfg.secretsMountPoint}" -o nodev,nosuid,mode=0751
+
+    ${mountCmd}
+
     mkdir -p "${cfg.secretsMountPoint}/$_agenix_generation"
     chmod 0751 "${cfg.secretsMountPoint}/$_agenix_generation"
     ln -sfn "${cfg.secretsMountPoint}/$_agenix_generation" ${cfg.secretsDir}
