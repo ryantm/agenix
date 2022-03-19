@@ -10,7 +10,10 @@
     agenix = system: nixpkgs.legacyPackages.${system}.callPackage ./pkgs/agenix.nix {};
   in {
 
-    nixosModules.age = import ./modules/age.nix;
+    nixosModules = {
+      age = import ./modules/age.nix;
+      hm-age = import ./modules/hm-age.nix;
+    };
     nixosModule = self.nixosModules.age;
 
     overlay = import ./overlay.nix;
