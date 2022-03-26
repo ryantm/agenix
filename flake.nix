@@ -13,6 +13,9 @@
     nixosModules.age = import ./modules/age.nix;
     nixosModule = self.nixosModules.age;
 
+    darwinModules.age = import ./modules/age.nix;
+    darwinModule = self.darwinModules.age;
+
     overlay = import ./overlay.nix;
 
     packages."aarch64-linux".agenix = agenix "aarch64-linux";
