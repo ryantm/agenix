@@ -304,6 +304,18 @@ authentication code (MAC) like other implementations like GPG or
 [sops](https://github.com/Mic92/sops-nix) have, however this was left
 out for simplicity in `age`.
 
+### builtins.readFile anti-pattern
+
+```nix
+{
+  # Do not do this!
+  config.password = builtins.readFile config.age.secrets.secret1.path;
+}
+```
+
+This can cause the cleartext to be placed into the world-readable Nix
+store. Instead, have your services read the cleartext path at runtime.
+
 ## Acknowledgements
 
 This project is based off of [sops-nix](https://github.com/Mic92/sops-nix) created Mic92. Thank you to Mic92 for inspiration and advice.
