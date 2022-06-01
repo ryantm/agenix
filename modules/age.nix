@@ -1,4 +1,4 @@
-{ config, options, lib, pkgs, ... }:
+{ config, options, lib, utils, pkgs, ... }:
 
 with lib;
 
@@ -18,8 +18,10 @@ let
   installSecret = secretType: ''
     ${if secretType.symlink then ''
       _truePath="${cfg.secretsMountPoint}/$_agenix_generation/${secretType.name}"
+      _oldPath="${cfg.secretsMountPoint}/$(( _agenix_generation - 1 ))/${secretType.name}"
     '' else ''
       _truePath="${secretType.path}"
+      _oldPath=_truePath
     ''}
     echo "decrypting '${secretType.file}' to '$_truePath'..."
     TMP_FILE="$_truePath.tmp"
@@ -33,7 +35,17 @@ let
     )
     chmod ${secretType.mode} "$TMP_FILE"
     chown ${secretType.owner}:${secretType.group} "$TMP_FILE"
+
+    # see if there's been any change from the last generation
+    changes=$(${pkgs.rsync}/bin/rsync --dry-run -aHAX -i "$TMP_FILE" "$_oldPath")
+
     mv -f "$TMP_FILE" "$_truePath"
+
+    [ "$changes" != "" ] && {
+      echo '${lib.concatStringsSep "\n" secretType.reloadUnits}' >> /run/nixos/activation-reload-list
+      echo '${lib.concatStringsSep "\n" secretType.restartUnits}' >> /run/nixos/activation-restart-list
+      ${secretType.onChange}
+    }
 
     ${optionalString secretType.symlink ''
       [ "${secretType.path}" != "${cfg.secretsDir}/${secretType.name}" ] && ln -sfn "${cfg.secretsDir}/${secretType.name}" "${secretType.path}"
@@ -96,16 +108,22 @@ let
           Group of the decrypted secret.
         '';
       };
-      action = mkOption {
+      onChange = mkOption {
         type = types.str;
         default = "";
         description = "A script to run when secret is updated.";
       };
-      services = mkOption {
-        type = types.listOf types.str;
+      reloadUnits = mkOption {
+        type = types.listOf utils.systemdUtils.lib.unitNameType;
         default = [];
-        description = "The systemd services that uses this secret. Will be restarted when the secret changes.";
-        example = "[ wireguard-wg0 ]";
+        description = "The systemd services to reload when the secret changes.";
+        example = literalExpression ''[ "wireguard-wg0.service" ]'';
+      };
+      restartUnits = mkOption {
+        type = types.listOf utils.systemdUtils.lib.unitNameType;
+        default = [];
+        description = "The systemd services to restart when the secret changes.";
+        example = literalExpression ''[ "wireguard-wg0.service" ]'';
       };
       symlink = mkEnableOption "symlinking secrets to their destination" // { default = true; };
     };
@@ -183,11 +201,6 @@ in
         mkdir -p "${cfg.secretsMountPoint}/$_agenix_generation"
         chmod 0751 "${cfg.secretsMountPoint}/$_agenix_generation"
         ln -sfn "${cfg.secretsMountPoint}/$_agenix_generation" ${cfg.secretsDir}
-
-        (( _agenix_generation > 1 )) && {
-          echo "[agenix] removing old secrets (generation $(( _agenix_generation - 1 )))..."
-          rm -rf "${cfg.secretsMountPoint}/$(( _agenix_generation - 1 ))"
-        }
       '';
       deps = [
         "specialfs"
@@ -216,7 +229,7 @@ in
     };
 
     # Other secrets need to wait for users and groups to exist.
-    system.activationScripts.agenix = {
+    system.activationScripts.agenixNonRoot = {
       text = installNonRootSecrets;
       deps = [
         "users"
@@ -227,38 +240,21 @@ in
       ];
     };
 
-    systemd.services = lib.mkMerge
-      (lib.mapAttrsToList
-        (name: {action, services, file, path, mode, owner, group, ...}:
-          let
-            fileHash = builtins.hashFile "sha256" file;
-            restartTriggers = [ fileHash path mode owner group ];
-          in
-            lib.mkMerge [
-              (lib.genAttrs services (_: { inherit restartTriggers; }))
-              (lib.mkIf (action != "") {
-                "agenix-${name}-action" = {
-                  inherit restartTriggers;
-
-                  # We execute the action on reload so that it doesn't happen at
-                  # startup. The only disadvantage is that it won't trigger the
-                  # first time the service is created.
-                  reload = action;
-                  reloadIfChanged = true;
-
-                  serviceConfig = {
-                    Type = "oneshot";
-                    RemainAfterExit = true;
-                  };
-
-                  script = " "; # systemd complains if we only set ExecReload
-
-                  # Give it a reason for starting
-                  wantedBy = [ "multi-user.target" ];
-                };
-
-              })
-            ]) cfg.secrets);
+    # named "agenix" for others to depend on the last activationScript (and thereby all the rest)
+    system.activationScripts.agenix = {
+      # cleanup old generation
+      text = ''
+        (( _agenix_generation > 1 )) && {
+          echo "[agenix] removing old secrets (generation $(( _agenix_generation - 1 )))..."
+          rm -rf "${cfg.secretsMountPoint}/$(( _agenix_generation - 1 ))"
+        }
+      '';
+      deps = [
+        "specialfs"
+        "agenixMountSecrets"
+        "agenixRoot"
+        "agenixNonRoot"
+      ];
+    };
   };
-
 }

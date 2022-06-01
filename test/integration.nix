@@ -45,7 +45,7 @@ import "${nixpkgs}/nixos/tests/make-test-python.nix"
 
         age.secrets.ex1 = {
           file = ../example/passwordfile-user1.age;
-          action = "echo bar > /tmp/foo";
+          onChange = "echo bar > /tmp/foo";
         };
       };
 
