@@ -35,7 +35,7 @@ import "${nixpkgs}/nixos/tests/make-test-python.nix"
         };
       };
 
-      nodes.system2 = {
+      nodes.system2 = { pkgs, ... }: {
         imports = [
           ../modules/age.nix
           ./install_ssh_host_keys.nix
@@ -45,12 +45,37 @@ import "${nixpkgs}/nixos/tests/make-test-python.nix"
 
         age.secrets.ex1 = {
           file = ../example/passwordfile-user1.age;
-          onChange = "echo bar > /tmp/foo";
+          onChange = "touch /tmp/onChange-executed";
+          reloadUnits = [ "reloadTest.service" ];
+          restartUnits = [ "restartTest.service" ];
+        };
+
+        systemd.services.reloadTest = {
+          wantedBy = [ "multi-user.target" ];
+          path = [ pkgs.coreutils ];
+          reload = "touch /tmp/reloadTest-reloaded";
+          preStop = "touch /tmp/reloadTest-stopped";
+          serviceConfig = {
+            Type = "oneshot";
+            RemainAfterExit = true;
+          };
+        };
+
+        systemd.services.restartTest = {
+          wantedBy = [ "multi-user.target" ];
+          path = [ pkgs.coreutils ];
+          reload = "touch /tmp/restartTest-reloaded";
+          preStop = "touch /tmp/restartTest-stopped";
+          serviceConfig = {
+            Type = "oneshot";
+            RemainAfterExit = true;
+          };
         };
       };
 
-      nodes.system2After = recursiveUpdate nodes.system2 {
-        age.secrets.ex1.file = ../example/secret1.age;
+      nodes.system2After = { lib, ... }: {
+        imports = [ nodes.system2 ];
+        age.secrets.ex1.file = lib.mkForce ../example/secret1.age;
       };
 
       testScript =
@@ -80,12 +105,25 @@ import "${nixpkgs}/nixos/tests/make-test-python.nix"
           system1.wait_for_file("/tmp/1")
           assert "${user}" in system1.succeed("cat /tmp/1")
 
+          # test changing secret
           system2.wait_for_unit("multi-user.target")
-          system2.wait_until_fails("grep bar /tmp/foo")
-          system2.wait_until_succeeds(
+          system2.wait_for_unit("reloadTest.service")
+          system2.wait_for_unit("restartTest.service")
+          # none of the files should exist yet. start blank
+          system2.fail("test -f /tmp/onChange-executed")
+          system2.fail("test -f /tmp/reloadTest-reloaded")
+          system2.fail("test -f /tmp/restartTest-stopped")
+          system2.fail("test -f /tmp/reloadTest-stopped")
+          # change the secret
+          system2.succeed(
               "${nodes.system2After.config.system.build.toplevel}/bin/switch-to-configuration test"
           )
-          system2.wait_until_succeeds("grep bar /tmp/foo")
+
+          system2.wait_for_file("/tmp/onChange-executed")
+          system2.wait_for_file("/tmp/reloadTest-reloaded")
+          system2.wait_for_file("/tmp/restartTest-stopped")
+          system2.fail("test -f /tmp/reloadTest-stopped")
+          system2.fail("test -f /tmp/restartTest-reloaded")
         '';
     }
   )
