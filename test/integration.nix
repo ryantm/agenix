@@ -9,6 +9,29 @@ import "${nixpkgs}/nixos/tests/make-test-python.nix"
         enable = true;
         hostKeys = [{ type = "ed25519"; path = "/etc/ssh/ssh_host_ed25519_key"; }];
       };
+
+      testService = name: {
+        systemd.services.${name} = {
+          wantedBy = [ "multi-user.target" ];
+          reload = "touch /tmp/${name}-reloaded";
+          # restarting a serivice stops it
+          preStop = "touch /tmp/${name}-stopped";
+          serviceConfig = {
+            Type = "oneshot";
+            RemainAfterExit = true;
+          };
+        };
+      };
+
+      testSecret = name: {
+        imports = map testService [ "${name}-reloadUnit" "${name}-restartUnit" ];
+        age.secrets.${name} = {
+          file = ../example/secret1.age;
+          onChange = "touch /tmp/${name}-onChange-executed";
+          reloadUnits = [ "${name}-reloadUnit.service" ];
+          restartUnits = [ "${name}-restartUnit.service" ];
+        };
+      };
     in
     rec {
       name = "agenix-integration";
@@ -39,43 +62,43 @@ import "${nixpkgs}/nixos/tests/make-test-python.nix"
         imports = [
           ../modules/age.nix
           ./install_ssh_host_keys.nix
-        ];
+        ]
+        ++ map testSecret [
+          "noChange"
+          "fileChange"
+          "secretChange"
+          "secretChangeWeirdPath"
+          "pathChange"
+          "pathChangeNoSymlink"
+          "modeChange"
+          "symlinkOn"
+          "symlinkOff"
+        ]
+        # add these services so they get started before the secret is added
+        ++ (testSecret "secretAdded").imports;
+
+
+        age.secrets.secretChangeWeirdPath.path = "/tmp/secretChangeWeirdPath";
+        age.secrets.pathChangeNoSymlink.symlink = false;
+        age.secrets.symlinkOn.symlink = false;
 
         services.openssh = sshdConf;
-
-        age.secrets.ex1 = {
-          file = ../example/passwordfile-user1.age;
-          onChange = "touch /tmp/onChange-executed";
-          reloadUnits = [ "reloadTest.service" ];
-          restartUnits = [ "restartTest.service" ];
-        };
-
-        systemd.services.reloadTest = {
-          wantedBy = [ "multi-user.target" ];
-          path = [ pkgs.coreutils ];
-          reload = "touch /tmp/reloadTest-reloaded";
-          preStop = "touch /tmp/reloadTest-stopped";
-          serviceConfig = {
-            Type = "oneshot";
-            RemainAfterExit = true;
-          };
-        };
-
-        systemd.services.restartTest = {
-          wantedBy = [ "multi-user.target" ];
-          path = [ pkgs.coreutils ];
-          reload = "touch /tmp/restartTest-reloaded";
-          preStop = "touch /tmp/restartTest-stopped";
-          serviceConfig = {
-            Type = "oneshot";
-            RemainAfterExit = true;
-          };
-        };
       };
 
       nodes.system2After = { lib, ... }: {
-        imports = [ nodes.system2 ];
-        age.secrets.ex1.file = lib.mkForce ../example/secret1.age;
+        imports = [
+          nodes.system2
+          # services have already been added
+          (builtins.removeAttrs (testSecret "secretAdded") [ "imports" ])
+        ];
+        age.secrets.fileChange.file = lib.mkForce ../example/secret1-copy.age;
+        age.secrets.secretChange.file = lib.mkForce ../example/passwordfile-user1.age;
+        age.secrets.secretChangeWeirdPath.file = lib.mkForce ../example/passwordfile-user1.age;
+        age.secrets.pathChange.path = lib.mkForce "/tmp/pathChange";
+        age.secrets.pathChangeNoSymlink.path = lib.mkForce "/tmp/pathChangeNoSymlink";
+        age.secrets.modeChange.mode = lib.mkForce "0777";
+        age.secrets.symlinkOn.symlink = lib.mkForce true;
+        age.secrets.symlinkOff.symlink = lib.mkForce false;
       };
 
       testScript =
@@ -107,23 +130,52 @@ import "${nixpkgs}/nixos/tests/make-test-python.nix"
 
           # test changing secret
           system2.wait_for_unit("multi-user.target")
-          system2.wait_for_unit("reloadTest.service")
-          system2.wait_for_unit("restartTest.service")
-          # none of the files should exist yet. start blank
-          system2.fail("test -f /tmp/onChange-executed")
-          system2.fail("test -f /tmp/reloadTest-reloaded")
-          system2.fail("test -f /tmp/restartTest-stopped")
-          system2.fail("test -f /tmp/reloadTest-stopped")
-          # change the secret
+          # for these secrets the content doesn't change at all
+          system2_noChange_secrets = [
+            "noChange",
+            "fileChange",
+            "symlinkOn",
+            "symlinkOff",
+          ]
+          system2_change_secrets = [
+            "secretChange",
+            "secretChangeWeirdPath",
+            "pathChange",
+            "pathChangeNoSymlink",
+            "modeChange",
+            "secretAdded",
+          ]
+          system2_secrets = system2_noChange_secrets + system2_change_secrets
+          system2.wait_for_unit("multi-user.target")
+          for secret in system2_secrets:
+            system2.wait_for_unit(secret + "-reloadUnit")
+            system2.wait_for_unit(secret + "-restartUnit")
+
+          def test_not_changed(secret):
+            system2.fail("test -f /tmp/" + secret + "-reloadUnit-reloaded")
+            system2.fail("test -f /tmp/" + secret + "-reloadUnit-restarted")
+            system2.fail("test -f /tmp/" + secret + "-restartUnit-reloaded")
+            system2.fail("test -f /tmp/" + secret + "-restartUnit-restarted")
+            system2.fail("test -f /tmp/" + secret + "-onChange-executed")
+          def test_changed(secret):
+            system2.wait_for_file("/tmp/" + secret + "-onChange-executed")
+            system2.wait_for_file("/tmp/" + secret + "-reloadUnit-reloaded")
+            system2.wait_for_file("/tmp/" + secret + "-restartUnit-stopped")
+            system2.fail("test -f /tmp/" + secret + "-reloadUnit-restarted")
+            system2.fail("test -f /tmp/" + secret + "-restartUnit-reloaded")
+
+          # nothing should happen at startup
+          for secret in system2_secrets:
+            test_not_changed(secret)
+
+          # apply changes
           system2.succeed(
               "${nodes.system2After.config.system.build.toplevel}/bin/switch-to-configuration test"
           )
-
-          system2.wait_for_file("/tmp/onChange-executed")
-          system2.wait_for_file("/tmp/reloadTest-reloaded")
-          system2.wait_for_file("/tmp/restartTest-stopped")
-          system2.fail("test -f /tmp/reloadTest-stopped")
-          system2.fail("test -f /tmp/restartTest-reloaded")
+          for secret in system2_noChange_secrets:
+            test_not_changed(secret)
+          for secret in system2_change_secrets:
+            test_changed(secret)
         '';
     }
   )

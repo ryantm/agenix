@@ -18,10 +18,8 @@ let
   installSecret = secretType: ''
     ${if secretType.symlink then ''
       _truePath="${cfg.secretsMountPoint}/$_agenix_generation/${secretType.name}"
-      _oldPath="${cfg.secretsMountPoint}/$(( _agenix_generation - 1 ))/${secretType.name}"
     '' else ''
       _truePath="${secretType.path}"
-      _oldPath=_truePath
     ''}
     echo "decrypting '${secretType.file}' to '$_truePath'..."
     TMP_FILE="$_truePath.tmp"
@@ -36,20 +34,37 @@ let
     chmod ${secretType.mode} "$TMP_FILE"
     chown ${secretType.owner}:${secretType.group} "$TMP_FILE"
 
-    # see if there's been any change from the last generation
-    changes=$(${pkgs.rsync}/bin/rsync --dry-run -aHAX -i "$TMP_FILE" "$_oldPath")
+    # path to the old version of the secret. cfg.secretsDir has already been
+    # updated to point at the latest generation, so we have to revert those
+    # paths.
+    outputPath="${cfg.secretsDir}/"
+    currentGenerationPath="${cfg.secretsMountPoint}/$_agenix_generation/"
+    previousGenerationPath="${cfg.secretsMountPoint}/$(( _agenix_generation - 1 ))/"
+    _oldPath=$(realpath ${secretType.path})
+    _oldPath=''${_oldPath/#$currentGenerationPath/$previousGenerationPath}
+    _oldPath=''${_oldPath/#$outputPath/$previousGenerationPath}
+    [ -f $_oldPath ] && {
+      changes=$(${lib.concatStringsSep " " [
+        "${pkgs.rsync}/bin/rsync"
+        "--dry-run -i" # just print what changed, don't do anything
+        "-aHAX"        # care about everything (e.g. file permissions)
+        "--no-t -c"    # but don't care about last modified timestamps
+        "$TMP_FILE" "$_oldPath"
+      ]})
+    } || changes=true # _oldPath doesn't exist, so count it as a change
 
     mv -f "$TMP_FILE" "$_truePath"
-
-    [ "$changes" != "" ] && {
-      echo '${lib.concatStringsSep "\n" secretType.reloadUnits}' >> /run/nixos/activation-reload-list
-      echo '${lib.concatStringsSep "\n" secretType.restartUnits}' >> /run/nixos/activation-restart-list
-      ${secretType.onChange}
-    }
 
     ${optionalString secretType.symlink ''
       [ "${secretType.path}" != "${cfg.secretsDir}/${secretType.name}" ] && ln -sfn "${cfg.secretsDir}/${secretType.name}" "${secretType.path}"
     ''}
+
+    # if /run/nixos doesn't exist, this is boot up and we don't need to activate the scripts.
+    [ "$changes" != "" ] && [ -d "/run/nixos" ] && {
+      echo '${lib.concatStringsSep "\n" secretType.reloadUnits}' >> /run/nixos/activation-reload-list
+      echo '${lib.concatStringsSep "\n" secretType.restartUnits}' >> /run/nixos/activation-restart-list
+      ${secretType.onChange}
+    }
   '';
 
   testIdentities = map (path: ''
