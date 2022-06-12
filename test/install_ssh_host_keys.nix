@@ -8,7 +8,6 @@
     (
       umask u=rw,g=,o=
       cp ${../example_keys/system1} /etc/ssh/ssh_host_ed25519_key
-      touch /etc/ssh/ssh_host_rsa_key
     )
 
   '';

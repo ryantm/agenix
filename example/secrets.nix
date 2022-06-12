@@ -4,6 +4,7 @@ let
 in
 {
   "secret1.age".publicKeys = [ user1 system1 ];
+  "secret1-copy.age".publicKeys = [ user1 system1 ];
   "secret2.age".publicKeys = [ user1 ];
   "passwordfile-user1.age".publicKeys = [ user1 system1 ];
 }

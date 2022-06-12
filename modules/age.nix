@@ -1,4 +1,4 @@
-{ config, options, lib, pkgs, ... }:
+{ config, options, lib, utils, pkgs, ... }:
 
 with lib;
 
@@ -33,11 +33,38 @@ let
     )
     chmod ${secretType.mode} "$TMP_FILE"
     chown ${secretType.owner}:${secretType.group} "$TMP_FILE"
+
+    # path to the old version of the secret. cfg.secretsDir has already been
+    # updated to point at the latest generation, so we have to revert those
+    # paths.
+    outputPath="${cfg.secretsDir}/"
+    currentGenerationPath="${cfg.secretsMountPoint}/$_agenix_generation/"
+    previousGenerationPath="${cfg.secretsMountPoint}/$(( _agenix_generation - 1 ))/"
+    _oldPath=$(realpath ${secretType.path})
+    _oldPath=''${_oldPath/#$currentGenerationPath/$previousGenerationPath}
+    _oldPath=''${_oldPath/#$outputPath/$previousGenerationPath}
+    [ -f $_oldPath ] && {
+      changes=$(${lib.concatStringsSep " " [
+        "${pkgs.rsync}/bin/rsync"
+        "--dry-run -i" # just print what changed, don't do anything
+        "-aHAX"        # care about everything (e.g. file permissions)
+        "--no-t -c"    # but don't care about last modified timestamps
+        "$TMP_FILE" "$_oldPath"
+      ]})
+    } || changes=true # _oldPath doesn't exist, so count it as a change
+
     mv -f "$TMP_FILE" "$_truePath"
 
     ${optionalString secretType.symlink ''
       [ "${secretType.path}" != "${cfg.secretsDir}/${secretType.name}" ] && ln -sfn "${cfg.secretsDir}/${secretType.name}" "${secretType.path}"
     ''}
+
+    # if /run/nixos doesn't exist, this is boot up and we don't need to activate the scripts.
+    [ "$changes" != "" ] && [ -d "/run/nixos" ] && {
+      echo '${lib.concatStringsSep "\n" secretType.reloadUnits}' >> /run/nixos/activation-reload-list
+      echo '${lib.concatStringsSep "\n" secretType.restartUnits}' >> /run/nixos/activation-restart-list
+      ${secretType.onChange}
+    }
   '';
 
   testIdentities = map (path: ''
@@ -95,6 +122,23 @@ let
         description = ''
           Group of the decrypted secret.
         '';
+      };
+      onChange = mkOption {
+        type = types.str;
+        default = "";
+        description = "A script to run when secret is updated.";
+      };
+      reloadUnits = mkOption {
+        type = types.listOf utils.systemdUtils.lib.unitNameType;
+        default = [];
+        description = "The systemd services to reload when the secret changes.";
+        example = literalExpression ''[ "wireguard-wg0.service" ]'';
+      };
+      restartUnits = mkOption {
+        type = types.listOf utils.systemdUtils.lib.unitNameType;
+        default = [];
+        description = "The systemd services to restart when the secret changes.";
+        example = literalExpression ''[ "wireguard-wg0.service" ]'';
       };
       symlink = mkEnableOption "symlinking secrets to their destination" // { default = true; };
     };
@@ -172,11 +216,6 @@ in
         mkdir -p "${cfg.secretsMountPoint}/$_agenix_generation"
         chmod 0751 "${cfg.secretsMountPoint}/$_agenix_generation"
         ln -sfn "${cfg.secretsMountPoint}/$_agenix_generation" ${cfg.secretsDir}
-
-        (( _agenix_generation > 1 )) && {
-          echo "[agenix] removing old secrets (generation $(( _agenix_generation - 1 )))..."
-          rm -rf "${cfg.secretsMountPoint}/$(( _agenix_generation - 1 ))"
-        }
       '';
       deps = [
         "specialfs"
@@ -205,7 +244,7 @@ in
     };
 
     # Other secrets need to wait for users and groups to exist.
-    system.activationScripts.agenix = {
+    system.activationScripts.agenixNonRoot = {
       text = installNonRootSecrets;
       deps = [
         "users"
@@ -215,6 +254,22 @@ in
         "agenixChownKeys"
       ];
     };
-  };
 
+    # named "agenix" for others to depend on the last activationScript (and thereby all the rest)
+    system.activationScripts.agenix = {
+      # cleanup old generation
+      text = ''
+        (( _agenix_generation > 1 )) && {
+          echo "[agenix] removing old secrets (generation $(( _agenix_generation - 1 )))..."
+          rm -rf "${cfg.secretsMountPoint}/$(( _agenix_generation - 1 ))"
+        }
+      '';
+      deps = [
+        "specialfs"
+        "agenixMountSecrets"
+        "agenixRoot"
+        "agenixNonRoot"
+      ];
+    };
+  };
 }
