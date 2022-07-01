@@ -4,7 +4,7 @@ with lib;
 
 let
   cfg = config.age;
-
+  hmConfig = config;
   # we need at least rage 0.5.0 to support ssh keys
   rage =
     if lib.versionOlder pkgs.rage.version "0.5.0"
@@ -71,15 +71,15 @@ let
           Permissions mode of the decrypted secret in a format understood by chmod.
         '';
       };
-      # Don't know how to make it find config.home.username becayse this "age" module is a "submodule"
-      #  owner = mkOption {
-      #    type = types.str;
-      #    readOnly = true;
-      #    default = "${config.home.username}";
-      #    description = ''
-      #      User of the decrypted secret.
-      #    '';
-      #  };
+      # Don't know how to make it find config.home.username because this "age" module is a "submodule"
+      owner = mkOption {
+        type = types.str;
+        readOnly = true;
+        default = "${hmConfig.home.username}";
+        description = ''
+          User of the decrypted secret.
+        '';
+      };
       group = mkOption {
         type = types.str;
         default = "$(id -gn)";
