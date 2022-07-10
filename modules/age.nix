@@ -161,16 +161,28 @@ in
     # Create a new directory full of secrets for symlinking (this helps
     # ensure removed secrets are actually removed, or at least become
     # invalid symlinks).
-    system.activationScripts.agenixMountSecrets = {
+    system.activationScripts.agenixNewGeneration = {
       text = ''
         _agenix_generation="$(basename "$(readlink ${cfg.secretsDir})" || echo 0)"
         (( ++_agenix_generation ))
-        echo "[agenix] symlinking new secrets to ${cfg.secretsDir} (generation $_agenix_generation)..."
+        echo "[agenix] creating new generation in ${cfg.secretsMountPoint}/$_agenix_generation"
         mkdir -p "${cfg.secretsMountPoint}"
         chmod 0751 "${cfg.secretsMountPoint}"
         grep -q "${cfg.secretsMountPoint} ramfs" /proc/mounts || mount -t ramfs none "${cfg.secretsMountPoint}" -o nodev,nosuid,mode=0751
         mkdir -p "${cfg.secretsMountPoint}/$_agenix_generation"
         chmod 0751 "${cfg.secretsMountPoint}/$_agenix_generation"
+      '';
+      deps = [
+        "specialfs"
+      ];
+    };
+
+    # Symlink new generation in place and cleanup old generation
+    system.activationScripts.agenixCleanupAndLink= {
+      text = ''
+        _agenix_generation="$(basename "$(readlink ${cfg.secretsDir})" || echo 0)"
+        (( ++_agenix_generation ))
+        echo "[agenix] symlinking new secrets to ${cfg.secretsDir} (generation $_agenix_generation)..."
         ln -sfn "${cfg.secretsMountPoint}/$_agenix_generation" ${cfg.secretsDir}
 
         (( _agenix_generation > 1 )) && {
@@ -179,7 +191,8 @@ in
         }
       '';
       deps = [
-        "specialfs"
+        "agenixRoot"
+        "agenixNonRoot"
       ];
     };
 
@@ -187,7 +200,7 @@ in
     # exist. This allows user password files to be encrypted.
     system.activationScripts.agenixRoot = {
       text = installRootOwnedSecrets;
-      deps = [ "agenixMountSecrets" "specialfs" ];
+      deps = [ "agenixNewGeneration" "specialfs" ];
     };
     system.activationScripts.users.deps = [ "agenixRoot" ];
 
@@ -200,20 +213,15 @@ in
       deps = [
         "users"
         "groups"
-        "agenixMountSecrets"
+        "agenixCleanupAndLink"
       ];
     };
 
+
     # Other secrets need to wait for users and groups to exist.
-    system.activationScripts.agenix = {
+    system.activationScripts.agenixNonRoot = {
       text = installNonRootSecrets;
-      deps = [
-        "users"
-        "groups"
-        "specialfs"
-        "agenixMountSecrets"
-        "agenixChownKeys"
-      ];
+      deps = [ "agenixNewGeneration" "specialfs" ];
     };
   };
 
