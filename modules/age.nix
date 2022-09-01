@@ -14,13 +14,29 @@ let
 
   users = config.users.users;
 
+  newGeneration = ''
+    _agenix_generation="$(basename "$(readlink ${cfg.secretsDir})" || echo 0)"
+    (( ++_agenix_generation ))
+    echo "[agenix] creating new generation in ${cfg.secretsMountPoint}/$_agenix_generation"
+    mkdir -p "${cfg.secretsMountPoint}"
+    chmod 0751 "${cfg.secretsMountPoint}"
+    grep -q "${cfg.secretsMountPoint} ramfs" /proc/mounts || mount -t ramfs none "${cfg.secretsMountPoint}" -o nodev,nosuid,mode=0751
+    mkdir -p "${cfg.secretsMountPoint}/$_agenix_generation"
+    chmod 0751 "${cfg.secretsMountPoint}/$_agenix_generation"
+  '';
+
   identities = builtins.concatStringsSep " " (map (path: "-i ${path}") cfg.identityPaths);
-  installSecret = secretType: ''
+
+  setTruePath = secretType: ''
     ${if secretType.symlink then ''
       _truePath="${cfg.secretsMountPoint}/$_agenix_generation/${secretType.name}"
     '' else ''
       _truePath="${secretType.path}"
     ''}
+  '';
+
+  installSecret = secretType: ''
+    ${setTruePath secretType}
     echo "decrypting '${secretType.file}' to '$_truePath'..."
     TMP_FILE="$_truePath.tmp"
     mkdir -p "$(dirname "$_truePath")"
@@ -32,7 +48,6 @@ let
       LANG=${config.i18n.defaultLocale} ${ageBin} --decrypt ${identities} -o "$TMP_FILE" "${secretType.file}"
     )
     chmod ${secretType.mode} "$TMP_FILE"
-    chown ${secretType.owner}:${secretType.group} "$TMP_FILE"
     mv -f "$TMP_FILE" "$_truePath"
 
     ${optionalString secretType.symlink ''
@@ -42,16 +57,42 @@ let
 
   testIdentities = map (path: ''
     test -f ${path} || echo '[agenix] WARNING: config.age.identityPaths entry ${path} not present!'
-    '') cfg.identityPaths;
+  '') cfg.identityPaths;
 
-  isRootSecret = st: (st.owner == "root" || st.owner == "0") && (st.group == "root" || st.group == "0");
-  isNotRootSecret = st: !(isRootSecret st);
+  cleanupAndLink = ''
+    _agenix_generation="$(basename "$(readlink ${cfg.secretsDir})" || echo 0)"
+    (( ++_agenix_generation ))
+    echo "[agenix] symlinking new secrets to ${cfg.secretsDir} (generation $_agenix_generation)..."
+    ln -sfn "${cfg.secretsMountPoint}/$_agenix_generation" ${cfg.secretsDir}
 
-  rootOwnedSecrets = builtins.filter isRootSecret (builtins.attrValues cfg.secrets);
-  installRootOwnedSecrets = builtins.concatStringsSep "\n" ([ "echo '[agenix] decrypting root secrets...'" ] ++ testIdentities ++ (map installSecret rootOwnedSecrets));
+    (( _agenix_generation > 1 )) && {
+    echo "[agenix] removing old secrets (generation $(( _agenix_generation - 1 )))..."
+    rm -rf "${cfg.secretsMountPoint}/$(( _agenix_generation - 1 ))"
+    }
+  '';
 
-  nonRootSecrets = builtins.filter isNotRootSecret (builtins.attrValues cfg.secrets);
-  installNonRootSecrets = builtins.concatStringsSep "\n" ([ "echo '[agenix] decrypting non-root secrets...'" ] ++ (map installSecret nonRootSecrets));
+  installSecrets = builtins.concatStringsSep "\n" (
+    [ "echo '[agenix] decrypting secrets...'" ]
+    ++ testIdentities
+    ++ (map installSecret (builtins.attrValues cfg.secrets))
+    ++ [ cleanupAndLink ]
+  );
+
+  chownSecret = secretType: ''
+    ${setTruePath secretType}
+    chown ${secretType.owner}:${secretType.group} "$_truePath"
+  '';
+
+  # chown the secrets mountpoint and the current generation to the keys group
+  # instead of leaving it root:root.
+  chownMountPoint = ''
+    chown :keys "${cfg.secretsMountPoint}" "${cfg.secretsMountPoint}/$_agenix_generation"
+  '';
+
+  chownSecrets = builtins.concatStringsSep "\n" (
+    [ "echo '[agenix] chowning...'" ]
+    ++ [ chownMountPoint ]
+    ++ (map chownSecret (builtins.attrValues cfg.secrets)));
 
   secretType = types.submodule ({ config, ... }: {
     options = {
@@ -161,59 +202,37 @@ in
     # Create a new directory full of secrets for symlinking (this helps
     # ensure removed secrets are actually removed, or at least become
     # invalid symlinks).
-    system.activationScripts.agenixMountSecrets = {
-      text = ''
-        _agenix_generation="$(basename "$(readlink ${cfg.secretsDir})" || echo 0)"
-        (( ++_agenix_generation ))
-        echo "[agenix] symlinking new secrets to ${cfg.secretsDir} (generation $_agenix_generation)..."
-        mkdir -p "${cfg.secretsMountPoint}"
-        chmod 0751 "${cfg.secretsMountPoint}"
-        grep -q "${cfg.secretsMountPoint} ramfs" /proc/mounts || mount -t ramfs none "${cfg.secretsMountPoint}" -o nodev,nosuid,mode=0751
-        mkdir -p "${cfg.secretsMountPoint}/$_agenix_generation"
-        chmod 0751 "${cfg.secretsMountPoint}/$_agenix_generation"
-        ln -sfn "${cfg.secretsMountPoint}/$_agenix_generation" ${cfg.secretsDir}
-
-        (( _agenix_generation > 1 )) && {
-          echo "[agenix] removing old secrets (generation $(( _agenix_generation - 1 )))..."
-          rm -rf "${cfg.secretsMountPoint}/$(( _agenix_generation - 1 ))"
-        }
-      '';
+    system.activationScripts.agenixNewGeneration = {
+      text = newGeneration;
       deps = [
         "specialfs"
       ];
     };
 
-    # Secrets with root owner and group can be installed before users
-    # exist. This allows user password files to be encrypted.
-    system.activationScripts.agenixRoot = {
-      text = installRootOwnedSecrets;
-      deps = [ "agenixMountSecrets" "specialfs" ];
-    };
-    system.activationScripts.users.deps = [ "agenixRoot" ];
-
-    # chown the secrets mountpoint and the current generation to the keys group
-    # instead of leaving it root:root.
-    system.activationScripts.agenixChownKeys = {
-      text = ''
-        chown :keys "${cfg.secretsMountPoint}" "${cfg.secretsMountPoint}/$_agenix_generation"
-      '';
+    system.activationScripts.agenixInstall = {
+      text = installSecrets;
       deps = [
-        "users"
-        "groups"
-        "agenixMountSecrets"
+        "agenixNewGeneration"
+        "specialfs"
       ];
     };
 
-    # Other secrets need to wait for users and groups to exist.
+    # So user passwords can be encrypted.
+    system.activationScripts.users.deps = [ "agenixInstall" ];
+
+    # Change ownership and group after users and groups are made.
+    system.activationScripts.agenixChown = {
+      text = chownSecrets;
+      deps = [
+        "users"
+        "groups"
+      ];
+    };
+
+    # So other activation scripts can depend on agenix being done.
     system.activationScripts.agenix = {
-      text = installNonRootSecrets;
-      deps = [
-        "users"
-        "groups"
-        "specialfs"
-        "agenixMountSecrets"
-        "agenixChownKeys"
-      ];
+      text = "";
+      deps = [ "agenixChown"];
     };
   };
 
