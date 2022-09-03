@@ -340,8 +340,6 @@ Example of a secret with a name different from its attrpath:
 
 `age.ageBin` the string of the path to the `age` binary. Usually, you don't need to change this. Defaults to `rage/bin/rage`.
 
-This project uses the Rust implementation of age, [rage](https://github.com/str4d/rage), by default. You can change it to use the [official implementation](https://github.com/FiloSottile/age).
-
 Overriding `age.ageBin` example:
 
 ```nix
@@ -421,6 +419,10 @@ If your secret cannot be a symlink, you should set the `symlink` option to `fals
 ```
 
 Instead of first decrypting the secret to `/run/agenix` and then symlinking to its `path`, the secret will instead be forcibly moved to its `path`. Please note that, currently, there are no cleanup mechanisms for secrets that are not symlinked by agenix.
+
+## Use other implementations
+
+This project uses the Rust implementation of age, [rage](https://github.com/str4d/rage), by default. You can change it to use the [official implementation](https://github.com/FiloSottile/age).
 
 ### Module
 
