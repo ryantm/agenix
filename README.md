@@ -343,7 +343,7 @@ Example of a secret with a name different from its attrpath:
 Overriding `age.ageBin` example:
 
 ```nix
-{
+{pkgs, ...}:{
     age.ageBin = "${pkgs.age}/bin/age";
 }
 ```
