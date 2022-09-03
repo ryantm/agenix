@@ -21,10 +21,9 @@
     * [CLI](#install-cli-via-flakes)
 * [Tutorial](#tutorial)
 * [Reference](#reference)
+  * [`age` module reference](#age-module-reference)
+  * [agenix CLI reference](#agenix-cli-reference)
 * [Community and Support](#community-and-support)
-* [Rekeying](#rekeying)
-* [Don't symlink secret](#dont-symlink-secret)
-* [Use other implementations](#use-other-implementations)
 * [Threat model/Warnings](#threat-modelwarnings)
 * [Acknowledgements](#acknowledgements)
 
@@ -239,11 +238,13 @@ but, if you want to (change the system based on your system):
 
 #### `age.secrets`
 
-`age.secrets` attrset of secrets. You always need to use this configuration option. Defaults to `{}`.
+`age.secrets` attrset of secrets. You always need to use this
+configuration option. Defaults to `{}`.
 
 #### `age.secrets.<name>.file`
 
-`age.secrets.<name>.file` is the path to the encrypted `.age` for this secret. This is the only required secret option.
+`age.secrets.<name>.file` is the path to the encrypted `.age` for this
+secret. This is the only required secret option.
 
 Example:
 
@@ -253,9 +254,55 @@ Example:
 }
 ```
 
+#### `age.secrets.<name>.path`
+
+`age.secrets.<name>.path` is the path where the secret is decrypted
+to. Defaults to `/run/agenix/<name>` (`config.age.secretsDir/<name>`).
+
+Example defining a different path:
+
+```nix
+{
+  age.secrets.monitrc = {
+    file = ../secrets/monitrc.age;
+    path = "/etc/monitrc";
+  };
+}
+```
+
+For many services, you do not need to set this. Instead, refer to the
+decryption path in your configuration with
+`config.age.secrets.<name>.path`.
+
+Example referring to path:
+
+```nix
+{
+  users.users.ryantm = {
+    isNormalUser = true;
+    passwordFile = config.age.secrets.passwordfile-ryantm.path;
+  };
+}
+```
+
+##### builtins.readFile anti-pattern
+
+```nix
+{
+  # Do not do this!
+  config.password = builtins.readFile config.age.secrets.secret1.path;
+}
+```
+
+This can cause the cleartext to be placed into the world-readable Nix
+store. Instead, have your services read the cleartext path at runtime.
+
 #### `age.secrets.<name>.mode`
 
-`age.secrets.<name>.mode` is permissions mode of the decrypted secret in a format understood by chmod. Usually, you only need to use this in combination with `age.secrets.<name>.owner` and `age.secrets.<name>.group`
+`age.secrets.<name>.mode` is permissions mode of the decrypted secret
+in a format understood by chmod. Usually, you only need to use this in
+combination with `age.secrets.<name>.owner` and
+`age.secrets.<name>.group`
 
 Example:
 
@@ -272,7 +319,9 @@ Example:
 
 #### `age.secrets.<name>.owner`
 
-`age.secrets.<name>.owner` is the username of the decrypted file's owner. Usually, you only need to use this in combination with `age.secrets.<name>.mode` and `age.secrets.<name>.group`
+`age.secrets.<name>.owner` is the username of the decrypted file's
+owner. Usually, you only need to use this in combination with
+`age.secrets.<name>.mode` and `age.secrets.<name>.group`
 
 Example:
 
@@ -289,7 +338,9 @@ Example:
 
 #### `age.secrets.<name>.group`
 
-`age.secrets.<name>.group` is the name of the decrypted file's group. Usually, you only need to use this in combination with `age.secrets.<name>.owner` and `age.secrets.<name>.mode`
+`age.secrets.<name>.group` is the name of the decrypted file's
+group. Usually, you only need to use this in combination with
+`age.secrets.<name>.owner` and `age.secrets.<name>.mode`
 
 Example:
 
@@ -306,9 +357,16 @@ Example:
 
 #### `age.secrets.<name>.symlink`
 
-`age.secrets.<name>.symlink` is a boolean. If true (the default), secrets are symlinked to `age.secrets.<name>.path`. If false, secerts are copied to `age.secrets.<name>.path`. Usually, you want to keep this as true, because it secure cleanup of secrets no longer used. (The symlink will still be there, but it will be broken.) If false, you are responsible for cleaning up your own secrets after you stop using them. 
+`age.secrets.<name>.symlink` is a boolean. If true (the default),
+secrets are symlinked to `age.secrets.<name>.path`. If false, secerts
+are copied to `age.secrets.<name>.path`. Usually, you want to keep
+this as true, because it secure cleanup of secrets no longer
+used. (The symlink will still be there, but it will be broken.) If
+false, you are responsible for cleaning up your own secrets after you
+stop using them.
 
-Some programs do not like following symlinks (for example Java programs like Elasticsearch).
+Some programs do not like following symlinks (for example Java
+programs like Elasticsearch).
 
 Example:
 
@@ -323,7 +381,10 @@ Example:
 
 #### `age.secrets.<name>.name`
 
-`age.secrets.<name>.name` is the string of the name of the file after it is decrypted. Defaults to the `<name>` in the attrpath, but can be set separately if you want the file name to be different from the attribute name part.
+`age.secrets.<name>.name` is the string of the name of the file after
+it is decrypted. Defaults to the `<name>` in the attrpath, but can be
+set separately if you want the file name to be different from the
+attribute name part.
 
 Example of a secret with a name different from its attrpath:
 
@@ -338,7 +399,8 @@ Example of a secret with a name different from its attrpath:
 
 #### `age.ageBin`
 
-`age.ageBin` the string of the path to the `age` binary. Usually, you don't need to change this. Defaults to `rage/bin/rage`.
+`age.ageBin` the string of the path to the `age` binary. Usually, you
+don't need to change this. Defaults to `rage/bin/rage`.
 
 Overriding `age.ageBin` example:
 
@@ -350,7 +412,11 @@ Overriding `age.ageBin` example:
 
 #### `age.identityPaths`
 
-`age.identityPaths` is a list of paths to recipient keys to try to use to decrypt the secrets. All of the file paths must be present, but only one needs to be able to decrypt the secret. Usually, you don't need to change this. By default, this is the `rsa` and `ed25519` keys in `config.services.openssh.hostKeys`.
+`age.identityPaths` is a list of paths to recipient keys to try to use
+to decrypt the secrets. All of the file paths must be present, but
+only one needs to be able to decrypt the secret. Usually, you don't
+need to change this. By default, this is the `rsa` and `ed25519` keys
+in `config.services.openssh.hostKeys`.
 
 Overriding `age.identityPaths` example:
 
@@ -362,7 +428,9 @@ Overriding `age.identityPaths` example:
 
 #### `age.secretsDir`
 
-`age.secretsDir` is the directory where secrets are symlinked to by default.Usually, you don't need to change this. Defaults to `/run/agenix`.
+`age.secretsDir` is the directory where secrets are symlinked to by
+default.Usually, you don't need to change this. Defaults to
+`/run/agenix`.
 
 Overriding `age.secretsDir` example:
 
@@ -374,7 +442,9 @@ Overriding `age.secretsDir` example:
 
 #### `age.secretsMountPoint`
 
-`age.secretsMountPoint` is the directory where the secret generations are created before they are symlinked. Usually, you don't need to change this. Defaults to `/run/agenix.d`.
+`age.secretsMountPoint` is the directory where the secret generations
+are created before they are symlinked. Usually, you don't need to
+change this. Defaults to `/run/agenix.d`.
 
 
 Overriding `age.secretsMountPoint` example:
@@ -385,12 +455,30 @@ Overriding `age.secretsMountPoint` example:
 }
 ```
 
-## Community and Support
+### agenix CLI reference
 
-Support and development discussion is available here on GitHub and
-also through [Matrix](https://matrix.to/#/#agenix:nixos.org).
+```
+agenix -e FILE [-i PRIVATE_KEY]
+agenix -r [-i PRIVATE_KEY]
 
-## Rekeying
+options:
+-h, --help                show help
+-e, --edit FILE           edits FILE using $EDITOR
+-r, --rekey               re-encrypts all secrets with specified recipients
+-i, --identity            identity to use when decrypting
+-v, --verbose             verbose output
+
+FILE an age-encrypted file
+
+PRIVATE_KEY a path to a private SSH key used to decrypt file
+
+EDITOR environment variable of editor to use when editing FILE
+
+RULES environment variable with path to Nix file specifying recipient public keys.
+Defaults to './secrets.nix'
+```
+
+#### Rekeying
 
 If you change the public keys in `secrets.nix`, you should rekey your
 secrets:
@@ -404,43 +492,23 @@ randomness in `age`'s encryption algorithms, the files always change
 when rekeyed, even if the identities do not. (This eventually could be
 improved upon by reading the identities from the age file.)
 
-## Don't symlink secret
+#### Overriding age binary
 
-If your secret cannot be a symlink, you should set the `symlink` option to `false`:
-
-```nix
-{
-  age.secrets.some-secret = {
-    file = ./secret;
-    path = "/var/lib/some-service/some-secret";
-    symlink = false;
-  };
-}
-```
-
-Instead of first decrypting the secret to `/run/agenix` and then symlinking to its `path`, the secret will instead be forcibly moved to its `path`. Please note that, currently, there are no cleanup mechanisms for secrets that are not symlinked by agenix.
-
-## Use other implementations
-
-This project uses the Rust implementation of age, [rage](https://github.com/str4d/rage), by default. You can change it to use the [official implementation](https://github.com/FiloSottile/age).
-
-### Module
+The agenix CLI uses `rage` by default as its age implemenation, you
+can use the reference implementation `age` with Flakes like this:
 
 ```nix
-{
-  age.ageBin = "${pkgs.age}/bin/age";
-}
-```
-
-### CLI
-
-```nix
-{
+{pkgs,agenix,..}:{
   environment.systemPackages = [
     (agenix.defaultPackage.x86_64-linux.override { ageBin = "${pkgs.age}/bin/age"; })
   ];
 }
 ```
+
+## Community and Support
+
+Support and development discussion is available here on GitHub and
+also through [Matrix](https://matrix.to/#/#agenix:nixos.org).
 
 ## Threat model/Warnings
 
@@ -456,18 +524,6 @@ example, 4096-bit rsa keys). This would be solved by having a message
 authentication code (MAC) like other implementations like GPG or
 [sops](https://github.com/Mic92/sops-nix) have, however this was left
 out for simplicity in `age`.
-
-### builtins.readFile anti-pattern
-
-```nix
-{
-  # Do not do this!
-  config.password = builtins.readFile config.age.secrets.secret1.path;
-}
-```
-
-This can cause the cleartext to be placed into the world-readable Nix
-store. Instead, have your services read the cleartext path at runtime.
 
 ## Acknowledgements
 
