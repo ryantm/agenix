@@ -232,10 +232,12 @@ but, if you want to (change the system based on your system):
    ```
 6. Use the secret in your config:
    ```nix
-   users.users.user1 = {
-     isNormalUser = true;
-     passwordFile = config.age.secrets.secret1.path;
-   };
+   {
+     users.users.user1 = {
+       isNormalUser = true;
+       passwordFile = config.age.secrets.secret1.path;
+     };
+   }
    ```
 7. NixOS rebuild or use your deployment tool like usual.
 
