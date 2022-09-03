@@ -20,6 +20,7 @@
     * [module](#install-module-via-flakes)
     * [CLI](#install-cli-via-flakes)
 * [Tutorial](#tutorial)
+* [Reference](#reference)
 * [Community and Support](#community-and-support)
 * [Rekeying](#rekeying)
 * [Don't symlink secret](#dont-symlink-secret)
@@ -231,6 +232,158 @@ but, if you want to (change the system based on your system):
 6. NixOS rebuild or use your deployment tool like usual.
 
    The secret will be decrypted to the value of `config.age.secrets.secret1.path` (`/run/agenix/secret1` by default). For per-secret options controlling ownership etc, see [modules/age.nix](modules/age.nix).
+
+## Reference
+
+### `age` module reference
+
+#### `age.secrets`
+
+`age.secrets` attrset of secrets. You always need to use this configuration option. Defaults to `{}`.
+
+#### `age.secrets.<name>.file`
+
+`age.secrets.<name>.file` is the path to the encrypted `.age` for this secret. This is the only required secret option.
+
+Example:
+
+```nix
+{
+  age.secrets.monitrc.file = ../secrets/monitrc.age;
+}
+```
+
+#### `age.secrets.<name>.mode`
+
+`age.secrets.<name>.mode` is permissions mode of the decrypted secret in a format understood by chmod. Usually, you only need to use this in combination with `age.secrets.<name>.owner` and `age.secrets.<name>.group`
+
+Example:
+
+```nix
+{
+  age.secrets.nginx-htpasswd = {
+    file = ../secrets/nginx.htpasswd.age;
+    mode = "770";
+    owner = "nginx";
+    group = "nginx";
+  };
+}
+```
+
+#### `age.secrets.<name>.owner`
+
+`age.secrets.<name>.owner` is the username of the decrypted file's owner. Usually, you only need to use this in combination with `age.secrets.<name>.mode` and `age.secrets.<name>.group`
+
+Example:
+
+```nix
+{
+  age.secrets.nginx-htpasswd = {
+    file = ../secrets/nginx.htpasswd.age;
+    mode = "770";
+    owner = "nginx";
+    group = "nginx";
+  };
+}
+```
+
+#### `age.secrets.<name>.group`
+
+`age.secrets.<name>.group` is the name of the decrypted file's group. Usually, you only need to use this in combination with `age.secrets.<name>.owner` and `age.secrets.<name>.mode`
+
+Example:
+
+```nix
+{
+  age.secrets.nginx-htpasswd = {
+    file = ../secrets/nginx.htpasswd.age;
+    mode = "770";
+    owner = "nginx";
+    group = "nginx";
+  };
+}
+```
+
+#### `age.secrets.<name>.symlink`
+
+`age.secrets.<name>.symlink` is a boolean. If true (the default), secrets are symlinked to `age.secrets.<name>.path`. If false, secerts are copied to `age.secrets.<name>.path`. Usually, you want to keep this as true, because it secure cleanup of secrets no longer used. (The symlink will still be there, but it will be broken.) If false, you are responsible for cleaning up your own secrets after you stop using them. 
+
+Some programs do not like following symlinks (for example Java programs like Elasticsearch).
+
+Example:
+
+```nix
+{
+  age.secrets."elasticsearch.conf" = {
+    file = ../secrets/elasticsearch.conf.age;
+    symlink = false;
+  };
+}
+```
+
+#### `age.secrets.<name>.name`
+
+`age.secrets.<name>.name` is the string of the name of the file after it is decrypted. Defaults to the `<name>` in the attrpath, but can be set separately if you want the file name to be different from the attribute name part.
+
+Example of a secret with a name different from its attrpath:
+
+```nix
+{
+  age.secrets.monit = {
+    name = "monitrc";
+    file = ../secrets/monitrc.age;
+  };
+}
+```
+
+#### `age.ageBin`
+
+`age.ageBin` the string of the path to the `age` binary. Usually, you don't need to change this. Defaults to `rage/bin/rage`.
+
+Overriding `age.ageBin` example:
+
+```nix
+{
+    age.ageBin = "${pkgs.age}/bin/age";
+}
+```
+
+#### `age.identityPaths`
+
+`age.identityPaths` is a list of paths to recipient keys to try to use to decrypt the secrets. All of the file paths must be present, but only one needs to be able to decrypt the secret. Usually, you don't need to change this. By default, this is the `rsa` and `ed25519` keys in `config.services.openssh.hostKeys`.
+
+Overriding `age.identityPaths` example:
+
+```nix
+{
+    age.identityPaths = [ "/var/lib/persistent/ssh_host_ed25519_key" ];
+}
+```
+
+#### `age.secretsDir`
+
+`age.secretsDir` is the directory where secrets are symlinked to by default.Usually, you don't need to change this. Defaults to `/run/agenix`.
+
+Overriding `age.secretsDir` example:
+
+```nix
+{
+    age.secretsDir = "/run/keys";
+}
+```
+
+#### `age.secretsMountPoint`
+
+`age.secretsMountPoint` is the directory where the secret generations are created before they are symlinked. Usually, you don't need to change this. Defaults to `/run/agenix.d`.
+
+
+Overriding `age.secretsMountPoint` example:
+
+```nix
+{
+    age.secretsMountPoint = "/run/secret-generations";
+}
+```
 
 ## Community and Support
 
