@@ -226,9 +226,18 @@ but, if you want to (change the system based on your system):
    ```
 5. Add secret to a NixOS module config:
    ```nix
-   age.secrets.secret1.file = ../secrets/secret1.age;
+   {
+     age.secrets.secret1.file = ../secrets/secret1.age;
+   }
    ```
-6. NixOS rebuild or use your deployment tool like usual.
+6. Use the secret in your config:
+   ```nix
+   users.users.user1 = {
+     isNormalUser = true;
+     passwordFile = config.age.secrets.secret1.path;
+   };
+   ```
+7. NixOS rebuild or use your deployment tool like usual.
 
    The secret will be decrypted to the value of `config.age.secrets.secret1.path` (`/run/agenix/secret1` by default). For per-secret options controlling ownership etc, see [modules/age.nix](modules/age.nix).
 
