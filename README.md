@@ -241,7 +241,7 @@ but, if you want to (change the system based on your system):
    ```
 7. NixOS rebuild or use your deployment tool like usual.
 
-   The secret will be decrypted to the value of `config.age.secrets.secret1.path` (`/run/agenix/secret1` by default). For per-secret options controlling ownership etc, see [modules/age.nix](modules/age.nix).
+   The secret will be decrypted to the value of `config.age.secrets.secret1.path` (`/run/agenix/secret1` by default).
 
 ## Reference
 
