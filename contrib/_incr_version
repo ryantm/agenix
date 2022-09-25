@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+grep -q "$1" pkgs/agenix.nix || (echo "Couldn't find version $1 in pkgs/agenix/nix" && exit 1)
+sed -i "s/$1/$2/g" pkgs/agenix.nix
+git add pkgs/agenix/nix
+git commit -m "version $2"
+exit 0
