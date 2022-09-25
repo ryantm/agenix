@@ -197,7 +197,7 @@ but, if you want to (change the system based on your system):
    have `sshd` running on it so that it has generated SSH host keys in
    `/etc/ssh/`.
 
-2. Make a directory to store secrets and `secrets.nix` file for listing secrets and their public keys:
+2. Make a directory to store secrets and `secrets.nix` file for listing secrets and their public keys (This file is **not** imported into your NixOS configuration. It is only used for the `agenix` CLI.):
 
    ```ShellSession
    $ mkdir secrets
