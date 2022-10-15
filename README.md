@@ -509,7 +509,11 @@ The agenix CLI uses `rage` by default as its age implemenation, you
 can use the reference implementation `age` with Flakes like this:
 
 ```nix
-{pkgs,agenix,...}:{
+{pkgs, self, ...}:
+let
+  inherit (self.inputs) agenix;
+in
+{
   environment.systemPackages = [
     (agenix.defaultPackage.x86_64-linux.override { ageBin = "${pkgs.age}/bin/age"; })
   ];
