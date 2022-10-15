@@ -3,36 +3,39 @@
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-21.11";
+    flake-parts.url = "github:hercules-ci/flake-parts";
   };
 
-  outputs = { self, nixpkgs }:
-  let
-    agenix = system: nixpkgs.legacyPackages.${system}.callPackage ./pkgs/agenix.nix {};
-  in {
-
-    nixosModules.age = import ./modules/age.nix;
-    nixosModule = self.nixosModules.age;
-
-    overlay = import ./overlay.nix;
-
-    packages."aarch64-linux".agenix = agenix "aarch64-linux";
-    defaultPackage."aarch64-linux" = self.packages."aarch64-linux".agenix;
-
-    packages."i686-linux".agenix = agenix "i686-linux";
-    defaultPackage."i686-linux" = self.packages."i686-linux".agenix;
-
-    packages."x86_64-darwin".agenix = agenix "x86_64-darwin";
-    defaultPackage."x86_64-darwin" = self.packages."x86_64-darwin".agenix;
-
-    packages."aarch64-darwin".agenix = agenix "aarch64-darwin";
-    defaultPackage."aarch64-darwin" = self.packages."aarch64-darwin".agenix;
-
-    packages."x86_64-linux".agenix = agenix "x86_64-linux";
-    defaultPackage."x86_64-linux" = self.packages."x86_64-linux".agenix;
-    checks."x86_64-linux".integration = import ./test/integration.nix {
-      inherit nixpkgs; pkgs = nixpkgs.legacyPackages."x86_64-linux"; system = "x86_64-linux";
+  outputs = {
+    self,
+    flake-parts,
+    nixpkgs,
+  }:
+    flake-parts.lib.mkFlake {inherit self;} {
+      systems = [
+        "aarch64-linux"
+        "i686-linux"
+        "x86_64-linux"
+        "x86_64-darwin"
+        "aarch64-darwin"
+      ];
+      perSystem = ctx @ {
+        system,
+        pkgs,
+        ...
+      }: {
+        packages.default = ctx.config.packages.agenix;
+        packages.agenix = pkgs.callPackage ./pkgs/agenix.nix {};
+        checks.integration = import ./test/integration.nix {
+          inherit system pkgs nixpkgs;
+        };
+      };
+      flake.nixosModules = {
+        default = self.nixosModules.age;
+        age = import ./modules/age.nix;
+      };
+      flake.overlays.default = final: prev: {
+        agenix = prev.callPackage ./pkgs/agenix.nix {};
+      };
     };
-
-  };
-
 }

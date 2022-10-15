@@ -168,7 +168,7 @@ To install the `agenix` binary:
       system = "x86_64-linux";
       modules = [
         ./configuration.nix
-        agenix.nixosModule
+        agenix.nixosModules.age
       ];
     };
   };
@@ -187,7 +187,7 @@ but, if you want to (change the system based on your system):
 
 ```nix
 {
-  environment.systemPackages = [ agenix.defaultPackage.x86_64-linux ];
+  environment.systemPackages = [ agenix.packages.x86_64-linux.default ];
 }
 ```
 
@@ -511,11 +511,12 @@ can use the reference implementation `age` with Flakes like this:
 ```nix
 {pkgs, self, ...}:
 let
-  inherit (self.inputs) agenix;
+  inherit (pkgs.stdenv.hostPlatform) system;
+  inherit (self.inputs.agenix.packages.${system}) agenix;
 in
 {
   environment.systemPackages = [
-    (agenix.defaultPackage.x86_64-linux.override { ageBin = "${pkgs.age}/bin/age"; })
+    (agenix.override { ageBin = "${pkgs.age}/bin/age"; })
   ];
 }
 ```
