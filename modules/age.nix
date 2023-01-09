@@ -15,14 +15,14 @@ let
   users = config.users.users;
 
   newGeneration = ''
-    _agenix_generation="$(basename "$(readlink ${cfg.secretsDir})" || echo 0)"
-    (( ++_agenix_generation ))
-    echo "[agenix] creating new generation in ${cfg.secretsMountPoint}/$_agenix_generation"
-    mkdir -p "${cfg.secretsMountPoint}"
-    chmod 0751 "${cfg.secretsMountPoint}"
-    grep -q "${cfg.secretsMountPoint} ramfs" /proc/mounts || mount -t ramfs none "${cfg.secretsMountPoint}" -o nodev,nosuid,mode=0751
-    mkdir -p "${cfg.secretsMountPoint}/$_agenix_generation"
-    chmod 0751 "${cfg.secretsMountPoint}/$_agenix_generation"
+      _agenix_generation="$(basename "$(readlink ${cfg.secretsDir})" || echo 0)"
+      (( ++_agenix_generation ))
+      echo "[agenix] creating new generation in ${cfg.secretsMountPoint}/$_agenix_generation"
+      mkdir -p "${cfg.secretsMountPoint}"
+      chmod 0751 "${cfg.secretsMountPoint}"
+      grep -q "${cfg.secretsMountPoint} ramfs" /proc/mounts || mount -t ramfs none "${cfg.secretsMountPoint}" -o nodev,nosuid,mode=0751
+      mkdir -p "${cfg.secretsMountPoint}/$_agenix_generation"
+      chmod 0751 "${cfg.secretsMountPoint}/$_agenix_generation"
   '';
 
   identities = builtins.concatStringsSep " " (map (path: "-i ${path}") cfg.identityPaths);
