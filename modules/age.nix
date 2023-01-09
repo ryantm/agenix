@@ -15,14 +15,21 @@ let
   users = config.users.users;
 
   newGeneration = ''
-      _agenix_generation="$(basename "$(readlink ${cfg.secretsDir})" || echo 0)"
-      (( ++_agenix_generation ))
+    _agenix_last_generation=$(basename "$(readlink ${cfg.secretsDir})" || true)
+    if [[ $_agenix_last_generation == ${secretsHash} ]]; then
+      _agenix_is_current=1
+    else
+      _agenix_is_current=
+    fi
+    if [[ ! $_agenix_is_current ]]; then
+      _agenix_generation="${secretsHash}"
       echo "[agenix] creating new generation in ${cfg.secretsMountPoint}/$_agenix_generation"
       mkdir -p "${cfg.secretsMountPoint}"
       chmod 0751 "${cfg.secretsMountPoint}"
       grep -q "${cfg.secretsMountPoint} ramfs" /proc/mounts || mount -t ramfs none "${cfg.secretsMountPoint}" -o nodev,nosuid,mode=0751
       mkdir -p "${cfg.secretsMountPoint}/$_agenix_generation"
       chmod 0751 "${cfg.secretsMountPoint}/$_agenix_generation"
+    fi
   '';
 
   identities = builtins.concatStringsSep " " (map (path: "-i ${path}") cfg.identityPaths);
@@ -59,23 +66,30 @@ let
     test -f ${path} || echo '[agenix] WARNING: config.age.identityPaths entry ${path} not present!'
   '') cfg.identityPaths;
 
+  # Add suffix `-incomplete` to the generation when creating some secrets has failed.
+  # This ensures that we can try to re-create the generation on subsequent runs.
+  renameOnFailure = ''
+    if (( _localstatus > 0 )); then
+      mv "${cfg.secretsMountPoint}/$_agenix_generation"{,-incomplete}
+      _agenix_generation+=-incomplete
+    fi
+  '';
+
   cleanupAndLink = ''
-    _agenix_generation="$(basename "$(readlink ${cfg.secretsDir})" || echo 0)"
-    (( ++_agenix_generation ))
     echo "[agenix] symlinking new secrets to ${cfg.secretsDir} (generation $_agenix_generation)..."
     ln -sfn "${cfg.secretsMountPoint}/$_agenix_generation" ${cfg.secretsDir}
 
-    (( _agenix_generation > 1 )) && {
-    echo "[agenix] removing old secrets (generation $(( _agenix_generation - 1 )))..."
-    rm -rf "${cfg.secretsMountPoint}/$(( _agenix_generation - 1 ))"
+    [[ $_agenix_last_generation ]] && {
+    echo "[agenix] removing old secrets (generation $_agenix_last_generation)..."
+    rm -rf "${cfg.secretsMountPoint}/$_agenix_last_generation"
     }
   '';
 
-  installSecrets = builtins.concatStringsSep "\n" (
+  installSecrets = mkInstallScript (
     [ "echo '[agenix] decrypting secrets...'" ]
     ++ testIdentities
     ++ (map installSecret (builtins.attrValues cfg.secrets))
-    ++ [ cleanupAndLink ]
+    ++ [ renameOnFailure cleanupAndLink ]
   );
 
   chownSecret = secretType: ''
@@ -89,10 +103,22 @@ let
     chown :keys "${cfg.secretsMountPoint}" "${cfg.secretsMountPoint}/$_agenix_generation"
   '';
 
-  chownSecrets = builtins.concatStringsSep "\n" (
+  chownSecrets = mkInstallScript (
     [ "echo '[agenix] chowning...'" ]
     ++ [ chownMountPoint ]
     ++ (map chownSecret (builtins.attrValues cfg.secrets)));
+
+  mkInstallScript = strings: ''
+    [[ $_agenix_is_current ]] || {
+    ${builtins.concatStringsSep "\n" strings}
+    }
+  '';
+
+  secretsHash = let
+    sha256-base16 = builtins.hashString "sha256" (builtins.toJSON cfg.secrets);
+  in
+    # Truncate to 128 bits to increase readability
+    substring 0 32 sha256-base16;
 
   secretType = types.submodule ({ config, ... }: {
     options = {
@@ -104,7 +130,13 @@ let
         '';
       };
       file = mkOption {
-        type = types.path;
+        type = mkOptionType {
+          name = "nix-path";
+          descriptionClass = "noun";
+          check = builtins.isPath;
+          merge = mergeEqualOption;
+        };
+
         description = ''
           Age file the secret is loaded from.
         '';
