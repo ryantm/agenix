@@ -521,6 +521,32 @@ can use the reference implementation `age` with Flakes like this:
 Support and development discussion is available here on GitHub and
 also through [Matrix](https://matrix.to/#/#agenix:nixos.org).
 
+## Plugin Support
+
+Agenix supports age plugins. If you want to use a specific plugin, add it to `age.plugins`.
+For example to enable YubiKey support, you have to enable the corresponding plugin:
+
+```nix
+{
+  age.plugins = [pkgs.age-plugin-yubikey];
+}
+```
+
+Note that this doesn't add the plugins to the agenix CLI. Here you will
+still only have access to the plugins that are installed on your system.
+
+## YubiKey Support
+
+YubiKeys are supported by using the age plugin `age-plugin-yubikey`.
+Be sure to setup your YubiKey as outlined in the official [instructions](https://github.com/str4d/age-plugin-yubikey#configuration),
+and add the plugin to your configuration:
+
+```nix
+{
+  age.plugins = [pkgs.age-plugin-yubikey];
+}
+```
+
 ## Threat model/Warnings
 
 This project has not been audited by a security professional.

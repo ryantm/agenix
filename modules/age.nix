@@ -5,6 +5,8 @@ with lib;
 let
   cfg = config.age;
 
+  pluginPaths = map (x: "${x}/bin") config.age.plugins;
+
   # we need at least rage 0.5.0 to support ssh keys
   rage =
     if lib.versionOlder pkgs.rage.version "0.5.0"
@@ -45,7 +47,7 @@ let
       umask u=r,g=,o=
       test -f "${secretType.file}" || echo '[agenix] WARNING: encrypted file ${secretType.file} does not exist!'
       test -d "$(dirname "$TMP_FILE")" || echo "[agenix] WARNING: $(dirname "$TMP_FILE") does not exist!"
-      LANG=${config.i18n.defaultLocale} ${ageBin} --decrypt ${identities} -o "$TMP_FILE" "${secretType.file}"
+      LANG=${config.i18n.defaultLocale} PATH="$PATH:${builtins.concatStringsSep ":" pluginPaths}" ${ageBin} --decrypt ${identities} -o "$TMP_FILE" "${secretType.file}"
     )
     chmod ${secretType.mode} "$TMP_FILE"
     mv -f "$TMP_FILE" "$_truePath"
@@ -154,6 +156,15 @@ in
       description = ''
         The age executable to use.
       '';
+    };
+	plugins = mkOption {
+      type = types.listOf types.package;
+      default = [];
+      description = ''
+        A list of plugins that should be available to age.
+		They will be added to the PATH before age is invoked.
+      '';
+      example = [pkgs.age-plugin-yubikey];
     };
     secrets = mkOption {
       type = types.attrsOf secretType;
