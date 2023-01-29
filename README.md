@@ -25,6 +25,7 @@
   * [agenix CLI reference](#agenix-cli-reference)
 * [Community and Support](#community-and-support)
 * [Threat model/Warnings](#threat-modelwarnings)
+* [Contributing](#contributing)
 * [Acknowledgements](#acknowledgements)
 
 ## Problem and solution
@@ -535,6 +536,19 @@ example, 4096-bit rsa keys). This would be solved by having a message
 authentication code (MAC) like other implementations like GPG or
 [sops](https://github.com/Mic92/sops-nix) have, however this was left
 out for simplicity in `age`.
+
+## Contributing
+
+* The main branch is protected against direct pushes
+* All changes must go through GitHub PR review and get at least one approval
+* PR titles and commit messages should be prefixed with at least one of these categories:
+  * contrib - things that make the project development better
+  * doc - documentation
+  * feature - new features
+  * fix - bug fixes
+* Please update or make integration tests for new features
+* Use `nix fmt` to format nix code
+
 
 ## Acknowledgements
 
