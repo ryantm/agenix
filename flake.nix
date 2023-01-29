@@ -22,6 +22,11 @@
 
     packages.x86_64-darwin.agenix = agenix "x86_64-darwin";
     packages.x86_64-darwin.default = self.packages.x86_64-darwin.agenix;
+    checks.x86_64-darwin.integration = import ./test/integration.nix {
+      inherit nixpkgs;
+      pkgs = nixpkgs.legacyPackages.x86_64-darwin;
+      system = "x86_64-darwin";
+    };
 
     packages.aarch64-darwin.agenix = agenix "aarch64-darwin";
     packages.aarch64-darwin.default = self.packages.aarch64-darwin.agenix;
