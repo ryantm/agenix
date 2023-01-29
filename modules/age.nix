@@ -8,6 +8,8 @@
 with lib; let
   cfg = config.age;
 
+  isDarwin = builtins.hasAttr "darwinConfig" options.environment;
+
   # we need at least rage 0.5.0 to support ssh keys
   rage =
     if lib.versionOlder pkgs.rage.version "0.5.0"
@@ -17,15 +19,38 @@ with lib; let
 
   users = config.users.users;
 
+  mountCommand =
+    if isDarwin
+    then ''
+      if ! diskutil info "${cfg.secretsMountPoint}"; then
+          dev="$(hdiutil attach -nomount ram://1048576 | awk '{print $1}')"
+          newfs_hfs "$dev"
+          mount -t hfs -o nobrowse,nodev,nosuid,-m=0751 "$dev" "${cfg.secretsMountPoint}"
+      fi
+    ''
+    else ''
+      grep -q "${cfg.secretsMountPoint} ramfs" /proc/mounts ||
+        mount -t ramfs none "${cfg.secretsMountPoint}" -o nodev,nosuid,mode=0751
+    '';
   newGeneration = ''
     _agenix_generation="$(basename "$(readlink ${cfg.secretsDir})" || echo 0)"
     (( ++_agenix_generation ))
     echo "[agenix] creating new generation in ${cfg.secretsMountPoint}/$_agenix_generation"
     mkdir -p "${cfg.secretsMountPoint}"
     chmod 0751 "${cfg.secretsMountPoint}"
-    grep -q "${cfg.secretsMountPoint} ramfs" /proc/mounts || mount -t ramfs none "${cfg.secretsMountPoint}" -o nodev,nosuid,mode=0751
+    ${mountCommand}
     mkdir -p "${cfg.secretsMountPoint}/$_agenix_generation"
     chmod 0751 "${cfg.secretsMountPoint}/$_agenix_generation"
+  '';
+
+  chownGroup =
+    if isDarwin
+    then "admin"
+    else "keys";
+  # chown the secrets mountpoint and the current generation to the keys group
+  # instead of leaving it root:root.
+  chownMountPoint = ''
+    chown :${chownGroup} "${cfg.secretsMountPoint}" "${cfg.secretsMountPoint}/$_agenix_generation"
   '';
 
   identities = builtins.concatStringsSep " " (map (path: "-i ${path}") cfg.identityPaths);
@@ -52,7 +77,7 @@ with lib; let
       umask u=r,g=,o=
       test -f "${secretType.file}" || echo '[agenix] WARNING: encrypted file ${secretType.file} does not exist!'
       test -d "$(dirname "$TMP_FILE")" || echo "[agenix] WARNING: $(dirname "$TMP_FILE") does not exist!"
-      LANG=${config.i18n.defaultLocale} ${ageBin} --decrypt ${identities} -o "$TMP_FILE" "${secretType.file}"
+      LANG=${config.i18n.defaultLocale or "C"} ${ageBin} --decrypt ${identities} -o "$TMP_FILE" "${secretType.file}"
     )
     chmod ${secretType.mode} "$TMP_FILE"
     mv -f "$TMP_FILE" "$_truePath"
@@ -90,12 +115,6 @@ with lib; let
   chownSecret = secretType: ''
     ${setTruePath secretType}
     chown ${secretType.owner}:${secretType.group} "$_truePath"
-  '';
-
-  # chown the secrets mountpoint and the current generation to the keys group
-  # instead of leaving it root:root.
-  chownMountPoint = ''
-    chown :keys "${cfg.secretsMountPoint}" "${cfg.secretsMountPoint}/$_agenix_generation"
   '';
 
   chownSecrets = builtins.concatStringsSep "\n" (
@@ -194,8 +213,13 @@ in {
     identityPaths = mkOption {
       type = types.listOf types.path;
       default =
-        if config.services.openssh.enable
+        if (config.services.openssh.enable or false)
         then map (e: e.path) (lib.filter (e: e.type == "rsa" || e.type == "ed25519") config.services.openssh.hostKeys)
+        else if isDarwin
+        then [
+          "/etc/ssh/ssh_host_ed25519_key"
+          "/etc/ssh/ssh_host_rsa_key"
+        ]
         else [];
       description = ''
         Path to SSH keys to be used as identities in age decryption.
@@ -203,48 +227,81 @@ in {
     };
   };
 
-  config = mkIf (cfg.secrets != {}) {
-    assertions = [
-      {
-        assertion = cfg.identityPaths != [];
-        message = "age.identityPaths must be set.";
-      }
-    ];
-
-    # Create a new directory full of secrets for symlinking (this helps
-    # ensure removed secrets are actually removed, or at least become
-    # invalid symlinks).
-    system.activationScripts.agenixNewGeneration = {
-      text = newGeneration;
-      deps = [
-        "specialfs"
+  config = mkIf (cfg.secrets != {}) (mkMerge [
+    {
+      assertions = [
+        {
+          assertion = cfg.identityPaths != [];
+          message = "age.identityPaths must be set.";
+        }
       ];
-    };
+    }
 
-    system.activationScripts.agenixInstall = {
-      text = installSecrets;
-      deps = [
-        "agenixNewGeneration"
-        "specialfs"
-      ];
-    };
+    (optionalAttrs (!isDarwin) {
+      # Create a new directory full of secrets for symlinking (this helps
+      # ensure removed secrets are actually removed, or at least become
+      # invalid symlinks).
+      system.activationScripts.agenixNewGeneration = {
+        text = newGeneration;
+        deps = [
+          "specialfs"
+        ];
+      };
 
-    # So user passwords can be encrypted.
-    system.activationScripts.users.deps = ["agenixInstall"];
+      system.activationScripts.agenixInstall = {
+        text = installSecrets;
+        deps = [
+          "agenixNewGeneration"
+          "specialfs"
+        ];
+      };
 
-    # Change ownership and group after users and groups are made.
-    system.activationScripts.agenixChown = {
-      text = chownSecrets;
-      deps = [
-        "users"
-        "groups"
-      ];
-    };
+      # So user passwords can be encrypted.
+      system.activationScripts.users.deps = ["agenixInstall"];
 
-    # So other activation scripts can depend on agenix being done.
-    system.activationScripts.agenix = {
-      text = "";
-      deps = ["agenixChown"];
-    };
-  };
+      # Change ownership and group after users and groups are made.
+      system.activationScripts.agenixChown = {
+        text = chownSecrets;
+        deps = [
+          "users"
+          "groups"
+        ];
+      };
+
+      # So other activation scripts can depend on agenix being done.
+      system.activationScripts.agenix = {
+        text = "";
+        deps = ["agenixChown"];
+      };
+    })
+    (optionalAttrs isDarwin {
+      system.activationScripts = {
+        # Secrets with root owner and group can be installed before users
+        # exist. This allows user password files to be encrypted.
+        preActivation.text = builtins.concatStringsSep "\n" [
+          newGeneration
+          installSecrets
+        ];
+
+        # Other secrets need to wait for users and groups to exist.
+        users.text = lib.mkAfter ''
+          ${chownSecrets}
+        '';
+      };
+
+      launchd.daemons.activate-agenix = {
+        script = ''
+          set -e
+          set -o pipefail
+          export PATH="${pkgs.gnugrep}/bin:${pkgs.coreutils}/bin:@out@/sw/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+          ${newGeneration}
+          ${installSecrets}
+          ${chownSecrets}
+          exit 0
+        '';
+        serviceConfig.RunAtLoad = true;
+        serviceConfig.KeepAlive.SuccessfulExit = false;
+      };
+    })
+  ]);
 }

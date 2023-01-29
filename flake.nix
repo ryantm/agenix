@@ -1,16 +1,26 @@
 {
   description = "Secret management with age";
 
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    darwin = {
+      url = "github:lnl7/nix-darwin/master";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+  };
 
   outputs = {
     self,
     nixpkgs,
+    darwin,
   }: let
     agenix = system: nixpkgs.legacyPackages.${system}.callPackage ./pkgs/agenix.nix {};
   in {
     nixosModules.age = import ./modules/age.nix;
     nixosModules.default = self.nixosModules.age;
+
+    darwinModules.age = import ./modules/age.nix;
+    darwinModules.default = self.darwinModules.age;
 
     overlays.default = import ./overlay.nix;
 
@@ -38,5 +48,19 @@
       pkgs = nixpkgs.legacyPackages.x86_64-linux;
       system = "x86_64-linux";
     };
+    checks."aarch64-darwin".integration =
+      (darwin.lib.darwinSystem {
+        system = "aarch64-darwin";
+        modules = [./test/integration_darwin.nix "${darwin.outPath}/pkgs/darwin-installer/installer.nix"];
+      })
+      .system;
+    checks."x86_64-darwin".integration =
+      (darwin.lib.darwinSystem {
+        system = "x86_64-darwin";
+        modules = [./test/integration_darwin.nix "${darwin.outPath}/pkgs/darwin-installer/installer.nix"];
+      })
+      .system;
+
+    darwinConfigurations.integration.system = self.checks."x86_64-darwin".integration;
   };
 }
