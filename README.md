@@ -7,18 +7,10 @@
 * [Problem and solution](#problem-and-solution)
 * [Features](#features)
 * [Installation](#installation)
-  * [niv](#install-via-niv) (Current recommendation)
-    * [module](#install-module-via-niv)
-    * [CLI](#install-cli-via-niv)
+  * [niv](#install-via-niv)
   * [nix-channel](#install-via-nix-channel)
-    * [module](#install-module-via-nix-channel)
-    * [CLI](#install-cli-via-nix-channel)
   * [fetchTarball](#install-via-fetchtarball)
-    * [module](#install-module-via-fetchtarball)
-    * [CLI](#install-cli-via-fetchTarball)
   * [flakes](#install-via-flakes)
-    * [module](#install-module-via-flakes)
-    * [CLI](#install-cli-via-flakes)
 * [Tutorial](#tutorial)
 * [Reference](#reference)
   * [`age` module reference](#age-module-reference)
@@ -49,14 +41,12 @@ All files in the Nix store are readable by any system user, so it is not a suita
 
 ## Installation
 
-Choose one of the following methods:
-
-* [niv](#install-via-niv)
-* [nix-channel](#install-via-nix-channel)
-* [fetchTarball](#install-via-fetchTarball)
-* [flakes](#install-via-flakes)
+<details>
+<summary>
 
 ### Install via [niv](https://github.com/nmattia/niv)
+
+</summary>
 
 First add it to niv:
 
@@ -84,7 +74,14 @@ To install the `agenix` binary:
 }
 ```
 
+</details>
+
+<details>
+<summary>
+
 ### Install via nix-channel
+
+</summary>
 
 As root run:
 
@@ -113,7 +110,14 @@ To install the `agenix` binary:
 }
 ```
 
+</details>
+
+<details>
+<summary>
+
 ### Install via fetchTarball
+
+</summary>
 
 #### Install module via fetchTarball
 
@@ -152,7 +156,14 @@ To install the `agenix` binary:
 }
 ```
 
+</details>
+
+<details>
+<summary>
+
 ### Install via Flakes
+
+</summary>
 
 #### Install module via Flakes
 
@@ -191,6 +202,8 @@ but, if you want to (change the system based on your system):
   environment.systemPackages = [ agenix.packages.x86_64-linux.default ];
 }
 ```
+
+</details>
 
 ## Tutorial
 
