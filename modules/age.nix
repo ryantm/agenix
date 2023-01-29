@@ -1,14 +1,17 @@
-{ config, options, lib, pkgs, ... }:
-
-with lib;
-
-let
+{
+  config,
+  options,
+  lib,
+  pkgs,
+  ...
+}:
+with lib; let
   cfg = config.age;
 
   # we need at least rage 0.5.0 to support ssh keys
   rage =
     if lib.versionOlder pkgs.rage.version "0.5.0"
-    then pkgs.callPackage ../pkgs/rage.nix { }
+    then pkgs.callPackage ../pkgs/rage.nix {}
     else pkgs.rage;
   ageBin = config.age.ageBin;
 
@@ -28,11 +31,15 @@ let
   identities = builtins.concatStringsSep " " (map (path: "-i ${path}") cfg.identityPaths);
 
   setTruePath = secretType: ''
-    ${if secretType.symlink then ''
-      _truePath="${cfg.secretsMountPoint}/$_agenix_generation/${secretType.name}"
-    '' else ''
-      _truePath="${secretType.path}"
-    ''}
+    ${
+      if secretType.symlink
+      then ''
+        _truePath="${cfg.secretsMountPoint}/$_agenix_generation/${secretType.name}"
+      ''
+      else ''
+        _truePath="${secretType.path}"
+      ''
+    }
   '';
 
   installSecret = secretType: ''
@@ -55,9 +62,11 @@ let
     ''}
   '';
 
-  testIdentities = map (path: ''
-    test -f ${path} || echo '[agenix] WARNING: config.age.identityPaths entry ${path} not present!'
-  '') cfg.identityPaths;
+  testIdentities =
+    map (path: ''
+      test -f ${path} || echo '[agenix] WARNING: config.age.identityPaths entry ${path} not present!'
+    '')
+    cfg.identityPaths;
 
   cleanupAndLink = ''
     _agenix_generation="$(basename "$(readlink ${cfg.secretsDir})" || echo 0)"
@@ -72,10 +81,10 @@ let
   '';
 
   installSecrets = builtins.concatStringsSep "\n" (
-    [ "echo '[agenix] decrypting secrets...'" ]
+    ["echo '[agenix] decrypting secrets...'"]
     ++ testIdentities
     ++ (map installSecret (builtins.attrValues cfg.secrets))
-    ++ [ cleanupAndLink ]
+    ++ [cleanupAndLink]
   );
 
   chownSecret = secretType: ''
@@ -90,11 +99,12 @@ let
   '';
 
   chownSecrets = builtins.concatStringsSep "\n" (
-    [ "echo '[agenix] chowning...'" ]
-    ++ [ chownMountPoint ]
-    ++ (map chownSecret (builtins.attrValues cfg.secrets)));
+    ["echo '[agenix] chowning...'"]
+    ++ [chownMountPoint]
+    ++ (map chownSecret (builtins.attrValues cfg.secrets))
+  );
 
-  secretType = types.submodule ({ config, ... }: {
+  secretType = types.submodule ({config, ...}: {
     options = {
       name = mkOption {
         type = types.str;
@@ -137,14 +147,12 @@ let
           Group of the decrypted secret.
         '';
       };
-      symlink = mkEnableOption "symlinking secrets to their destination" // { default = true; };
+      symlink = mkEnableOption "symlinking secrets to their destination" // {default = true;};
     };
   });
-in
-{
-
+in {
   imports = [
-    (mkRenamedOptionModule [ "age" "sshKeyPaths" ] [ "age" "identityPaths" ])
+    (mkRenamedOptionModule ["age" "sshKeyPaths"] ["age" "identityPaths"])
   ];
 
   options.age = {
@@ -157,7 +165,7 @@ in
     };
     secrets = mkOption {
       type = types.attrsOf secretType;
-      default = { };
+      default = {};
       description = ''
         Attrset of secrets.
       '';
@@ -170,11 +178,13 @@ in
       '';
     };
     secretsMountPoint = mkOption {
-      type = types.addCheck types.str
+      type =
+        types.addCheck types.str
         (s:
-          (builtins.match "[ \t\n]*" s) == null # non-empty
-            && (builtins.match ".+/" s) == null) # without trailing slash
-      // { description = "${types.str.description} (with check: non-empty without trailing slash)"; };
+          (builtins.match "[ \t\n]*" s)
+          == null # non-empty
+          && (builtins.match ".+/" s) == null) # without trailing slash
+        // {description = "${types.str.description} (with check: non-empty without trailing slash)";};
       default = "/run/agenix.d";
       defaultText = "/run/agenix.d";
       description = ''
@@ -184,20 +194,22 @@ in
     identityPaths = mkOption {
       type = types.listOf types.path;
       default =
-        if config.services.openssh.enable then
-          map (e: e.path) (lib.filter (e: e.type == "rsa" || e.type == "ed25519") config.services.openssh.hostKeys)
-        else [ ];
+        if config.services.openssh.enable
+        then map (e: e.path) (lib.filter (e: e.type == "rsa" || e.type == "ed25519") config.services.openssh.hostKeys)
+        else [];
       description = ''
         Path to SSH keys to be used as identities in age decryption.
       '';
     };
   };
 
-  config = mkIf (cfg.secrets != { }) {
-    assertions = [{
-      assertion = cfg.identityPaths != [ ];
-      message = "age.identityPaths must be set.";
-    }];
+  config = mkIf (cfg.secrets != {}) {
+    assertions = [
+      {
+        assertion = cfg.identityPaths != [];
+        message = "age.identityPaths must be set.";
+      }
+    ];
 
     # Create a new directory full of secrets for symlinking (this helps
     # ensure removed secrets are actually removed, or at least become
@@ -218,7 +230,7 @@ in
     };
 
     # So user passwords can be encrypted.
-    system.activationScripts.users.deps = [ "agenixInstall" ];
+    system.activationScripts.users.deps = ["agenixInstall"];
 
     # Change ownership and group after users and groups are made.
     system.activationScripts.agenixChown = {
@@ -232,8 +244,7 @@ in
     # So other activation scripts can depend on agenix being done.
     system.activationScripts.agenix = {
       text = "";
-      deps = [ "agenixChown"];
+      deps = ["agenixChown"];
     };
   };
-
 }

@@ -1,14 +1,20 @@
 {
-nixpkgs ? <nixpkgs>,
-pkgs ? import <nixpkgs> { inherit system; config = {}; },
-system ? builtins.currentSystem
-} @args:
-
-import "${nixpkgs}/nixos/tests/make-test-python.nix" ({ pkgs, ...}: {
+  nixpkgs ? <nixpkgs>,
+  pkgs ?
+    import <nixpkgs> {
+      inherit system;
+      config = {};
+    },
+  system ? builtins.currentSystem,
+} @ args:
+import "${nixpkgs}/nixos/tests/make-test-python.nix" ({pkgs, ...}: {
   name = "agenix-integration";
 
-  nodes.system1 = { config, lib, ... }: {
-
+  nodes.system1 = {
+    config,
+    lib,
+    ...
+  }: {
     imports = [
       ../modules/age.nix
       ./install_ssh_host_keys.nix
@@ -30,11 +36,9 @@ import "${nixpkgs}/nixos/tests/make-test-python.nix" ({ pkgs, ...}: {
         };
       };
     };
-
   };
 
-  testScript =
-  let
+  testScript = let
     user = "user1";
     password = "password1234";
   in ''
@@ -55,4 +59,5 @@ import "${nixpkgs}/nixos/tests/make-test-python.nix" ({ pkgs, ...}: {
     system1.wait_for_file("/tmp/1")
     assert "${user}" in system1.succeed("cat /tmp/1")
   '';
-}) args
+})
+args

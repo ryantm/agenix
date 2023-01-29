@@ -1,6 +1,6 @@
 # Do not copy this! It is insecure. This is only okay because we are testing.
 {
-  system.activationScripts.agenixInstall.deps = [ "installSSHHostKeys" ];
+  system.activationScripts.agenixInstall.deps = ["installSSHHostKeys"];
 
   system.activationScripts.installSSHHostKeys.text = ''
     mkdir -p /etc/ssh
