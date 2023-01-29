@@ -50,7 +50,7 @@ All files in the Nix store are readable by any system user, so it is not a suita
 
 Choose one of the following methods:
 
-* [niv](#install-via-niv) (Current recommendation)
+* [niv](#install-via-niv)
 * [nix-channel](#install-via-nix-channel)
 * [fetchTarball](#install-via-fetchTarball)
 * [flakes](#install-via-flakes)
@@ -134,8 +134,8 @@ Add the following to your configuration.nix:
   in [
     "${builtins.fetchTarball {
       url = "https://github.com/ryantm/agenix/archive/${commit}.tar.gz";
-      # replace this with an actual hash
-      sha256 = "0000000000000000000000000000000000000000000000000000";
+      # update hash from nix build output
+      sha256 = "";
     }}/modules/age.nix"
   ];
 }
@@ -168,7 +168,7 @@ To install the `agenix` binary:
       system = "x86_64-linux";
       modules = [
         ./configuration.nix
-        agenix.nixosModule
+        agenix.nixosModules.default
       ];
     };
   };
@@ -187,7 +187,7 @@ but, if you want to (change the system based on your system):
 
 ```nix
 {
-  environment.systemPackages = [ agenix.defaultPackage.x86_64-linux ];
+  environment.systemPackages = [ agenix.packages.x86_64-linux.default ];
 }
 ```
 
@@ -511,7 +511,7 @@ can use the reference implementation `age` with Flakes like this:
 ```nix
 {pkgs,agenix,...}:{
   environment.systemPackages = [
-    (agenix.defaultPackage.x86_64-linux.override { ageBin = "${pkgs.age}/bin/age"; })
+    (agenix.packages.x86_64-linux.default.override { ageBin = "${pkgs.age}/bin/age"; })
   ];
 }
 ```
