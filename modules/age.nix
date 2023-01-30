@@ -22,9 +22,9 @@ with lib; let
   mountCommand =
     if isDarwin
     then ''
-      if ! diskutil info "${cfg.secretsMountPoint}"; then
           dev="$(hdiutil attach -nomount ram://1048576 | awk '{print $1}')"
           newfs_hfs "$dev"
+      if ! diskutil info "${cfg.secretsMountPoint}" &> /dev/null; then
           mount -t hfs -o nobrowse,nodev,nosuid,-m=0751 "$dev" "${cfg.secretsMountPoint}"
       fi
     ''
