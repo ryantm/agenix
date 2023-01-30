@@ -276,6 +276,20 @@ in {
       };
     })
     (optionalAttrs isDarwin {
+      system.activationScripts = {
+        # Secrets with root owner and group can be installed before users
+        # exist. This allows user password files to be encrypted.
+        preActivation.text = builtins.concatStringsSep "\n" [
+          newGeneration
+          installSecrets
+        ];
+
+        # Other secrets need to wait for users and groups to exist.
+        users.text = lib.mkAfter ''
+          ${chownSecrets}
+        '';
+      };
+
       launchd.daemons.activate-agenix = {
         script = ''
           set -e
