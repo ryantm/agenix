@@ -3,7 +3,7 @@
   pkgs,
   ...
 }: let
-  secret = "hello";
+  secret = "hella";
   testScript = pkgs.writeShellApplication {
     name = "agenix-integration";
     text = ''
