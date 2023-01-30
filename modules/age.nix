@@ -20,7 +20,8 @@ with lib; let
   users = config.users.users;
 
   mountCommand =
-    if isDarwin then ''
+    if isDarwin
+    then ''
       if ! diskutil info "${cfg.secretsMountPoint}" &> /dev/null; then
           dev=$(hdiutil attach -nomount ram://1MiB)
           newfs_hfs -v agenix "$dev"
