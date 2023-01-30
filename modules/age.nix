@@ -20,11 +20,9 @@ with lib; let
   users = config.users.users;
 
   mountCommand =
-    if isDarwin
-    then ''
-          dev="$(hdiutil attach -nomount ram://1048576 | awk '{print $1}')"
-          newfs_hfs "$dev"
+    if isDarwin then ''
       if ! diskutil info "${cfg.secretsMountPoint}" &> /dev/null; then
+          dev=$(hdiutil attach -nomount ram://1MiB)
           mount -t hfs -o nobrowse,nodev,nosuid,-m=0751 "$dev" "${cfg.secretsMountPoint}"
       fi
     ''
