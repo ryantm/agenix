@@ -23,7 +23,8 @@ with lib; let
     if isDarwin
     then ''
       if ! diskutil info "${cfg.secretsMountPoint}" &> /dev/null; then
-          dev=$(diskutil image attach -mountPolicy=noMount ram://1MiB | sed 's/[[:space:]]*$//')
+          num_sectors=1048576
+          dev=$(hdiutil attach -nomount ram://"$num_sectors" | sed 's/[[:space:]]*$//')
           newfs_hfs -v agenix "$dev"
           mount -t hfs -o nobrowse,nodev,nosuid,-m=0751 "$dev" "${cfg.secretsMountPoint}"
       fi
