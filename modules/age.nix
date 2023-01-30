@@ -90,7 +90,8 @@ with lib; let
   '';
 
   testIdentities =
-    map (path: ''
+    map
+    (path: ''
       test -f ${path} || echo '[agenix] WARNING: config.age.identityPaths entry ${path} not present!'
     '')
     cfg.identityPaths;
@@ -301,8 +302,10 @@ in {
           ${chownSecrets}
           exit 0
         '';
-        serviceConfig.RunAtLoad = true;
-        serviceConfig.KeepAlive.SuccessfulExit = false;
+        serviceConfig = {
+          RunAtLoad = true;
+          KeepAlive.SuccessfulExit = false;
+        };
       };
     })
   ]);
