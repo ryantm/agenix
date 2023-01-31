@@ -23,3 +23,8 @@ jobs:
     - run: nix build
     - run: nix fmt . -- --check
     - run: nix flake check
+    - run: |
+        system=$(nix build --no-link --print-out-paths .#checks.x86_64-darwin.integration)
+        ${system}/activate-user
+        sudo ${system}/activate
+    - run: sudo /run/current-system/sw/bin/agenix-integration
