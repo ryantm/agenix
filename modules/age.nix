@@ -54,8 +54,6 @@ with lib; let
     chown :${chownGroup} "${cfg.secretsMountPoint}" "${cfg.secretsMountPoint}/$_agenix_generation"
   '';
 
-  identities = builtins.concatStringsSep " " (map (path: "-i ${path}") cfg.identityPaths);
-
   setTruePath = secretType: ''
     ${
       if secretType.symlink
@@ -72,13 +70,23 @@ with lib; let
     ${setTruePath secretType}
     echo "decrypting '${secretType.file}' to '$_truePath'..."
     TMP_FILE="$_truePath.tmp"
+
+    IDENTITIES=()
+    for identity in ${toString cfg.identityPaths}; do
+      test -r "$identity" || continue
+      IDENTITIES+=(-i)
+      IDENTITIES+=("$identity")
+    done
+
+    test "''${#IDENTITIES[@]}" -eq 0 && echo "[agenix] WARNING: no readable identities found!"
+
     mkdir -p "$(dirname "$_truePath")"
     [ "${secretType.path}" != "${cfg.secretsDir}/${secretType.name}" ] && mkdir -p "$(dirname "${secretType.path}")"
     (
       umask u=r,g=,o=
       test -f "${secretType.file}" || echo '[agenix] WARNING: encrypted file ${secretType.file} does not exist!'
       test -d "$(dirname "$TMP_FILE")" || echo "[agenix] WARNING: $(dirname "$TMP_FILE") does not exist!"
-      LANG=${config.i18n.defaultLocale or "C"} ${ageBin} --decrypt ${identities} -o "$TMP_FILE" "${secretType.file}"
+      LANG=${config.i18n.defaultLocale or "C"} ${ageBin} --decrypt "''${IDENTITIES[@]}" -o "$TMP_FILE" "${secretType.file}"
     )
     chmod ${secretType.mode} "$TMP_FILE"
     mv -f "$TMP_FILE" "$_truePath"
