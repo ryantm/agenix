@@ -1,6 +1,7 @@
 {
   config,
   pkgs,
+  options,
   ...
 }: let
   secret = "hello";
@@ -17,6 +18,8 @@ in {
   ];
 
   services.nix-daemon.enable = true;
+
+  age.identityPaths = options.age.identityPaths.default ++ ["/etc/ssh/this_key_wont_exist"];
 
   age.secrets.secret1.file = ../example/secret1.age;
 

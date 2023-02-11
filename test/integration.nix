@@ -13,6 +13,7 @@ import "${nixpkgs}/nixos/tests/make-test-python.nix" ({pkgs, ...}: {
   nodes.system1 = {
     config,
     lib,
+    options,
     ...
   }: {
     imports = [
@@ -25,6 +26,8 @@ import "${nixpkgs}/nixos/tests/make-test-python.nix" ({pkgs, ...}: {
     age.secrets.passwordfile-user1 = {
       file = ../example/passwordfile-user1.age;
     };
+
+    age.identityPaths = options.age.identityPaths.default ++ ["/etc/ssh/this_key_wont_exist"];
 
     users = {
       mutableUsers = false;
