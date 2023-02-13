@@ -6,13 +6,12 @@
       config = {};
     },
   system ? builtins.currentSystem,
-} @ args:
-import "${nixpkgs}/nixos/tests/make-test-python.nix" ({pkgs, ...}: {
+}:
+pkgs.nixosTest {
   name = "agenix-integration";
-
   nodes.system1 = {
     config,
-    lib,
+    pkgs,
     options,
     ...
   }: {
@@ -62,5 +61,4 @@ import "${nixpkgs}/nixos/tests/make-test-python.nix" ({pkgs, ...}: {
     system1.wait_for_file("/tmp/1")
     assert "${user}" in system1.succeed("cat /tmp/1")
   '';
-})
-args
+}
