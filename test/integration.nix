@@ -28,6 +28,10 @@ pkgs.nixosTest {
 
     age.identityPaths = options.age.identityPaths.default ++ ["/etc/ssh/this_key_wont_exist"];
 
+    environment.systemPackages = [
+      (pkgs.callPackage ../pkgs/agenix.nix {})
+    ];
+
     users = {
       mutableUsers = false;
 
