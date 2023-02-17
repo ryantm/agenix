@@ -6,13 +6,12 @@
       config = {};
     },
   system ? builtins.currentSystem,
-} @ args:
-import "${nixpkgs}/nixos/tests/make-test-python.nix" ({pkgs, ...}: {
+}:
+pkgs.nixosTest {
   name = "agenix-integration";
-
   nodes.system1 = {
     config,
-    lib,
+    pkgs,
     options,
     ...
   }: {
@@ -28,6 +27,10 @@ import "${nixpkgs}/nixos/tests/make-test-python.nix" ({pkgs, ...}: {
     };
 
     age.identityPaths = options.age.identityPaths.default ++ ["/etc/ssh/this_key_wont_exist"];
+
+    environment.systemPackages = [
+      (pkgs.callPackage ../pkgs/agenix.nix {})
+    ];
 
     users = {
       mutableUsers = false;
@@ -61,6 +64,19 @@ import "${nixpkgs}/nixos/tests/make-test-python.nix" ({pkgs, ...}: {
     system1.send_chars("whoami > /tmp/1\n")
     system1.wait_for_file("/tmp/1")
     assert "${user}" in system1.succeed("cat /tmp/1")
+
+    system1.succeed('cp -a "${../example}/." /tmp/secrets')
+    system1.succeed('chmod u+w /tmp/secrets/*.age')
+
+    before_hash = system1.succeed('sha256sum /tmp/secrets/passwordfile-user1.age').split()
+    print(system1.succeed('cd /tmp/secrets; agenix -r -i /home/user1/.ssh/id_ed25519'))
+    after_hash = system1.succeed('sha256sum /tmp/secrets/passwordfile-user1.age').split()
+
+    # Ensure we actually have hashes
+    for h in [before_hash, after_hash]:
+        assert len(h) == 2, "hash should be [hash, filename]"
+        assert h[1] == "/tmp/secrets/passwordfile-user1.age", "filename is incorrect"
+        assert len(h[0].strip()) == 64, "hash length is incorrect"
+    assert before_hash[0] != after_hash[0], "hash did not change with rekeying"
   '';
-})
-args
+}
