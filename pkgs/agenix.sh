@@ -107,11 +107,13 @@ function edit {
     if [ -f "$FILE" ]
     then
         DECRYPT=("${DEFAULT_DECRYPT[@]}")
-        if [ -f "$HOME/.ssh/id_rsa" ]; then
-            DECRYPT+=(--identity "$HOME/.ssh/id_rsa")
-        fi
-        if [ -f "$HOME/.ssh/id_ed25519" ]; then
-            DECRYPT+=(--identity "$HOME/.ssh/id_ed25519")
+        if [[ "${DECRYPT[*]}" != *"--identity"* ]]; then
+            if [ -f "$HOME/.ssh/id_rsa" ]; then
+                DECRYPT+=(--identity "$HOME/.ssh/id_rsa")
+            fi
+            if [ -f "$HOME/.ssh/id_ed25519" ]; then
+                DECRYPT+=(--identity "$HOME/.ssh/id_ed25519")
+            fi
         fi
         if [[ "${DECRYPT[*]}" != *"--identity"* ]]; then
           echo "No identity found to decrypt $FILE. Try adding an SSH key at $HOME/.ssh/id_rsa or $HOME/.ssh/id_ed25519 or using the --identity flag to specify a file."

@@ -39,6 +39,7 @@ pkgs.nixosTest {
         user1 = {
           isNormalUser = true;
           passwordFile = config.age.secrets.passwordfile-user1.path;
+          uid = 1000;
         };
       };
     };
@@ -78,5 +79,15 @@ pkgs.nixosTest {
         assert h[1] == "/tmp/secrets/passwordfile-user1.age", "filename is incorrect"
         assert len(h[0].strip()) == 64, "hash length is incorrect"
     assert before_hash[0] != after_hash[0], "hash did not change with rekeying"
+
+    userDo = lambda input : f"sudo -u user1 -- bash -c 'set -eou pipefail; cd /tmp/secrets; {input}'"
+
+    # user1 can edit passwordfile-user1.age
+    system1.succeed(userDo("EDITOR=cat agenix -e passwordfile-user1.age"))
+
+    # user1 can edit even if bogus id_rsa present
+    system1.succeed(userDo("echo bogus > ~/.ssh/id_rsa"))
+    system1.fail(userDo("EDITOR=cat agenix -e passwordfile-user1.age"))
+    system1.succeed(userDo("EDITOR=cat agenix -e passwordfile-user1.age -i /home/user1/.ssh/id_ed25519"))
   '';
 }
