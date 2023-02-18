@@ -39,6 +39,7 @@ pkgs.nixosTest {
         user1 = {
           isNormalUser = true;
           passwordFile = config.age.secrets.passwordfile-user1.path;
+          uid = 1000;
         };
       };
     };
@@ -78,5 +79,21 @@ pkgs.nixosTest {
         assert h[1] == "/tmp/secrets/passwordfile-user1.age", "filename is incorrect"
         assert len(h[0].strip()) == 64, "hash length is incorrect"
     assert before_hash[0] != after_hash[0], "hash did not change with rekeying"
+
+    # user1 can edit passwordfile-user1.age
+    system1.wait_for_file("/tmp/")
+    system1.send_chars("cd /tmp/secrets; EDITOR=cat agenix -e passwordfile-user1.age\n")
+    system1.send_chars("echo $? >/tmp/exit_code\n")
+    system1.wait_for_file("/tmp/exit_code")
+    assert "0" in system1.succeed("cat /tmp/exit_code")
+    system1.send_chars("rm /tmp/exit_code\n")
+
+    # user1 can edit even if bogus id_rsa present
+    system1.send_chars("echo bogus > ~/.ssh/id_rsa\n")
+    system1.send_chars("cd /tmp/secrets; EDITOR=cat agenix -e passwordfile-user1.age -i /home/user1/.ssh/id_ed25519\n")
+    system1.send_chars("echo $? >/tmp/exit_code\n")
+    system1.wait_for_file("/tmp/exit_code")
+    assert "0" in system1.succeed("cat /tmp/exit_code")
+    system1.send_chars("rm /tmp/exit_code\n")
   '';
 }
