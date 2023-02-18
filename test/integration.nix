@@ -80,20 +80,14 @@ pkgs.nixosTest {
         assert len(h[0].strip()) == 64, "hash length is incorrect"
     assert before_hash[0] != after_hash[0], "hash did not change with rekeying"
 
+    userDo = lambda input : f"sudo -u user1 -- bash -c 'set -eou pipefail; cd /tmp/secrets; {input}'"
+
     # user1 can edit passwordfile-user1.age
-    system1.wait_for_file("/tmp/")
-    system1.send_chars("cd /tmp/secrets; EDITOR=cat agenix -e passwordfile-user1.age\n")
-    system1.send_chars("echo $? >/tmp/exit_code\n")
-    system1.wait_for_file("/tmp/exit_code")
-    assert "0" in system1.succeed("cat /tmp/exit_code")
-    system1.send_chars("rm /tmp/exit_code\n")
+    system1.succeed(userDo("EDITOR=cat agenix -e passwordfile-user1.age"))
 
     # user1 can edit even if bogus id_rsa present
-    system1.send_chars("echo bogus > ~/.ssh/id_rsa\n")
-    system1.send_chars("cd /tmp/secrets; EDITOR=cat agenix -e passwordfile-user1.age -i /home/user1/.ssh/id_ed25519\n")
-    system1.send_chars("echo $? >/tmp/exit_code\n")
-    system1.wait_for_file("/tmp/exit_code")
-    assert "0" in system1.succeed("cat /tmp/exit_code")
-    system1.send_chars("rm /tmp/exit_code\n")
+    system1.succeed(userDo("echo bogus > ~/.ssh/id_rsa"))
+    system1.fail(userDo("EDITOR=cat agenix -e passwordfile-user1.age"))
+    system1.succeed(userDo("EDITOR=cat agenix -e passwordfile-user1.age -i /home/user1/.ssh/id_ed25519"))
   '';
 }
