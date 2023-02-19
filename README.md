@@ -563,6 +563,22 @@ out for simplicity in `age`.
 * Use `nix fmt` to format nix code
 
 
+### Tests
+
+You can run the tests with
+
+```ShellSession
+nix flake check
+```
+
+You can run the integration tests in interactive mode like this:
+
+```ShellSession
+nix run .#checks.x86_64-linux.integration.driverInteractive
+```
+
+After it starts, enter `run_tests()` to run the tests.
+
 ## Acknowledgements
 
 This project is based off of [sops-nix](https://github.com/Mic92/sops-nix) created Mic92. Thank you to Mic92 for inspiration and advice.
