@@ -66,21 +66,18 @@ pkgs.nixosTest {
     system1.wait_for_file("/tmp/1")
     assert "${user}" in system1.succeed("cat /tmp/1")
 
-    system1.succeed('cp -a "${../example}/." /tmp/secrets')
-    system1.succeed('chmod u+w /tmp/secrets/*.age')
+    userDo = lambda input : f"sudo -u user1 -- bash -c 'set -eou pipefail; cd /tmp/secrets; {input}'"
 
-    before_hash = system1.succeed('sha256sum /tmp/secrets/passwordfile-user1.age').split()
-    print(system1.succeed('cd /tmp/secrets; agenix -r -i /home/user1/.ssh/id_ed25519'))
-    after_hash = system1.succeed('sha256sum /tmp/secrets/passwordfile-user1.age').split()
+    before_hash = system1.succeed(userDo('sha256sum passwordfile-user1.age')).split()
+    print(system1.succeed(userDo('agenix -r -i /home/user1/.ssh/id_ed25519')))
+    after_hash = system1.succeed(userDo('sha256sum passwordfile-user1.age')).split()
 
     # Ensure we actually have hashes
     for h in [before_hash, after_hash]:
         assert len(h) == 2, "hash should be [hash, filename]"
-        assert h[1] == "/tmp/secrets/passwordfile-user1.age", "filename is incorrect"
+        assert h[1] == "passwordfile-user1.age", "filename is incorrect"
         assert len(h[0].strip()) == 64, "hash length is incorrect"
     assert before_hash[0] != after_hash[0], "hash did not change with rekeying"
-
-    userDo = lambda input : f"sudo -u user1 -- bash -c 'set -eou pipefail; cd /tmp/secrets; {input}'"
 
     # user1 can edit passwordfile-user1.age
     system1.succeed(userDo("EDITOR=cat agenix -e passwordfile-user1.age"))
@@ -89,5 +86,10 @@ pkgs.nixosTest {
     system1.succeed(userDo("echo bogus > ~/.ssh/id_rsa"))
     system1.fail(userDo("EDITOR=cat agenix -e passwordfile-user1.age"))
     system1.succeed(userDo("EDITOR=cat agenix -e passwordfile-user1.age -i /home/user1/.ssh/id_ed25519"))
+    system1.succeed(userDo("rm ~/.ssh/id_rsa"))
+
+    # user1 can edit a secret by piping in contents
+    system1.succeed(userDo("echo 'secret1234' | agenix -e passwordfile-user1.age"))
+    assert "secret1234" in system1.succeed(userDo("EDITOR=cat agenix -e passwordfile-user1.age"))
   '';
 }
