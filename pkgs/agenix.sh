@@ -23,6 +23,8 @@ function show_help () {
   echo ' '
   echo 'EDITOR environment variable of editor to use when editing FILE'
   echo ' '
+  echo 'If STDIN is not interactive, EDITOR will be set to "cp /dev/stdin"'
+  echo ' '
   echo 'RULES environment variable with path to Nix file specifying recipient public keys.'
   echo "Defaults to './secrets.nix'"
   echo ' '
@@ -123,6 +125,8 @@ function edit {
         @ageBin@ "${DECRYPT[@]}" || exit 1
         cp "$CLEARTEXT_FILE" "$CLEARTEXT_FILE.before"
     fi
+
+    [ -t 0 ] || EDITOR='cp /dev/stdin'
 
     $EDITOR "$CLEARTEXT_FILE"
 
