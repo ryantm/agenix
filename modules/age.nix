@@ -8,7 +8,7 @@
 with lib; let
   cfg = config.age;
 
-  isDarwin = builtins.hasAttr "darwinConfig" options.environment;
+  isDarwin = lib.attrsets.hasAttrByPath ["environment" "darwinConfig"] options;
 
   # we need at least rage 0.5.0 to support ssh keys
   rage =
