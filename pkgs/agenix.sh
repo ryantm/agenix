@@ -223,7 +223,11 @@ function edit {
     CLEARTEXT_FILE="${CLEARTEXT_DIR}/$(basename -- "${FILE}")"
     DEFAULT_DECRYPT+=(-o "${CLEARTEXT_FILE}")
 
-    decrypt "${FILE}" "${KEYS}" || exit 1
+    # Piped input replaces the cleartext without needing a decryption identity.
+    # Rekeying still needs the old cleartext, even when stdin is not a terminal.
+    if [[ -t 0 || "${EDITOR:-}" == ":" ]]; then
+      decrypt "${FILE}" "${KEYS}" || exit 1
+    fi
 
     [[ ! -f "${CLEARTEXT_FILE}" ]] || cp -- "${CLEARTEXT_FILE}" "${CLEARTEXT_FILE}.before"
 
@@ -239,7 +243,7 @@ function edit {
       warn "${FILE} wasn't created."
       return
     fi
-    [[ -f "${FILE}" ]] && [[ "${EDITOR:-}" != ":" ]] && @diffBin@ -q -- "${CLEARTEXT_FILE}.before" "${CLEARTEXT_FILE}" && warn "${FILE} wasn't changed, skipping re-encryption." && return
+    [[ -f "${CLEARTEXT_FILE}.before" ]] && [[ "${EDITOR:-}" != ":" ]] && @diffBin@ -q -- "${CLEARTEXT_FILE}.before" "${CLEARTEXT_FILE}" && warn "${FILE} wasn't changed, skipping re-encryption." && return
 
     ENCRYPT=()
     if [[ "${ARMOR}" == "true" ]]; then
