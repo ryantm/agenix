@@ -14,6 +14,7 @@ function show_help () {
   # shellcheck disable=SC2016
   echo '-e, --edit FILE           edits FILE using $EDITOR'
   echo '-r, --rekey               re-encrypts all secrets with specified recipients'
+  echo '-d, --decrypt FILE        decrypts FILE to STDOUT'
   echo '-i, --identity            identity to use when decrypting'
   echo '-v, --verbose             verbose output'
   echo ' '
@@ -45,6 +46,7 @@ function err() {
 test $# -eq 0 && (show_help && exit 1)
 
 REKEY=0
+DECRYPT_ONLY=0
 DEFAULT_DECRYPT=(--decrypt)
 
 while test $# -gt 0; do
@@ -77,6 +79,17 @@ while test $# -gt 0; do
       shift
       REKEY=1
       ;;
+    -d|--decrypt)
+      shift
+      DECRYPT_ONLY=1
+      if test $# -gt 0; then
+        export FILE=$1
+      else
+        echo "no FILE specified"
+        exit 1
+      fi
+      shift
+      ;;
     -v|--verbose)
       shift
       set -x
@@ -89,7 +102,6 @@ while test $# -gt 0; do
 done
 
 RULES=${RULES:-./secrets.nix}
-
 function cleanup {
     if [ -n "${CLEARTEXT_DIR+x}" ]
     then
@@ -102,10 +114,13 @@ function cleanup {
 }
 trap "cleanup" 0 2 3 15
 
-function edit {
-    FILE=$1
-    KEYS=$( (@nixInstantiate@ --eval -E "(let rules = import $RULES; in builtins.concatStringsSep \"\n\" rules.\"$FILE\".publicKeys)" | @sedBin@ 's/"//g' | @sedBin@ 's/\\n/\n/g') | @sedBin@ '/^$/d' || exit 1)
+function keys {
+    (@nixInstantiate@ --eval -E "(let rules = import $RULES; in builtins.concatStringsSep \"\n\" rules.\"$1\".publicKeys)" | @sedBin@ 's/"//g' | @sedBin@ 's/\\n/\n/g') | @sedBin@ '/^$/d' || exit 1
+}
 
+function decrypt {
+    FILE=$1
+    KEYS=$2
     if [ -z "$KEYS" ]
     then
         err "There is no rule for $FILE in $RULES."
@@ -132,6 +147,12 @@ function edit {
         @ageBin@ "${DECRYPT[@]}" || exit 1
         cp "$CLEARTEXT_FILE" "$CLEARTEXT_FILE.before"
     fi
+}
+
+function edit {
+    FILE=$1
+    KEYS=$(keys "$FILE") || exit 1
+    decrypt "$FILE" "$KEYS" || exit 1
 
     [ -t 0 ] || EDITOR='cp /dev/stdin'
 
@@ -160,6 +181,14 @@ function edit {
     mv -f "$REENCRYPTED_FILE" "$1"
 }
 
+function decrypt_only {
+    FILE=$1
+    KEYS=$(keys "$FILE") || exit 1
+    decrypt "$FILE" "$KEYS"
+    printf "%s" "$(<"${CLEARTEXT_FILE}")"
+    cleanup
+}
+
 function rekey {
     FILES=$( (@nixInstantiate@ --eval -E "(let rules = import $RULES; in builtins.concatStringsSep \"\n\" (builtins.attrNames rules))"  | @sedBin@ 's/"//g' | @sedBin@ 's/\\n/\n/g') || exit 1)
 
@@ -172,4 +201,5 @@ function rekey {
 }
 
 [ $REKEY -eq 1 ] && rekey && exit 0
+[ $DECRYPT_ONLY -eq 1 ] && decrypt_only "${FILE}" && exit 0
 edit "$FILE" && cleanup && exit 0

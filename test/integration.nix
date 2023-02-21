@@ -90,6 +90,11 @@ pkgs.nixosTest {
 
     # user1 can edit a secret by piping in contents
     system1.succeed(userDo("echo 'secret1234' | agenix -e passwordfile-user1.age"))
-    assert "secret1234" in system1.succeed(userDo("EDITOR=cat agenix -e passwordfile-user1.age"))
+
+    # and get it back out via --decrypt
+    assert "secret1234" in system1.succeed(userDo("agenix -d passwordfile-user1.age"))
+
+    # finally, the plain text should not linger around anywhere in the filesystem.
+    system1.fail("grep -r secret1234 /tmp")
   '';
 }

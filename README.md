@@ -483,6 +483,8 @@ Overriding `age.secretsMountPoint` example:
 ### agenix CLI reference
 
 ```
+agenix - edit and rekey age secret files
+
 agenix -e FILE [-i PRIVATE_KEY]
 agenix -r [-i PRIVATE_KEY]
 
@@ -490,6 +492,7 @@ options:
 -h, --help                show help
 -e, --edit FILE           edits FILE using $EDITOR
 -r, --rekey               re-encrypts all secrets with specified recipients
+-d, --decrypt FILE        decrypts FILE to STDOUT
 -i, --identity            identity to use when decrypting
 -v, --verbose             verbose output
 
@@ -498,6 +501,8 @@ FILE an age-encrypted file
 PRIVATE_KEY a path to a private SSH key used to decrypt file
 
 EDITOR environment variable of editor to use when editing FILE
+
+If STDIN is not interactive, EDITOR will be set to "cp /dev/stdin"
 
 RULES environment variable with path to Nix file specifying recipient public keys.
 Defaults to './secrets.nix'
