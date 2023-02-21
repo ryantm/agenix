@@ -118,7 +118,7 @@ function edit {
             fi
         fi
         if [[ "${DECRYPT[*]}" != *"--identity"* ]]; then
-          echo "No identity found to decrypt $FILE. Try adding an SSH key at $HOME/.ssh/id_rsa or $HOME/.ssh/id_ed25519 or using the --identity flag to specify a file."
+          >&2 echo "No identity found to decrypt $FILE. Try adding an SSH key at $HOME/.ssh/id_rsa or $HOME/.ssh/id_ed25519 or using the --identity flag to specify a file."
           exit 1
         fi
         DECRYPT+=(-o "$CLEARTEXT_FILE" "$FILE")
@@ -132,10 +132,10 @@ function edit {
 
     if [ ! -f "$CLEARTEXT_FILE" ]
     then
-      echo "$FILE wasn't created."
+      >&2 echo "$FILE wasn't created."
       return
     fi
-    [ -f "$FILE" ] && [ "$EDITOR" != ":" ] && @diffBin@ "$CLEARTEXT_FILE.before" "$CLEARTEXT_FILE" 1>/dev/null && echo "$FILE wasn't changed, skipping re-encryption." && return
+    [ -f "$FILE" ] && [ "$EDITOR" != ":" ] && @diffBin@ "$CLEARTEXT_FILE.before" "$CLEARTEXT_FILE" 1>/dev/null && >&2 echo "$FILE wasn't changed, skipping re-encryption." && return
 
     ENCRYPT=()
     while IFS= read -r key
@@ -158,7 +158,7 @@ function rekey {
 
     for FILE in $FILES
     do
-        echo "rekeying $FILE..."
+        >&2 echo "rekeying $FILE..."
         EDITOR=: edit "$FILE"
         cleanup
     done
