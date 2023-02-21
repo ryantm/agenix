@@ -9,6 +9,24 @@
 }:
 pkgs.nixosTest {
   name = "agenix-integration";
+  extraPythonPackages = ps: let
+    agenixTesting = let
+      version = (pkgs.callPackage ../pkgs/agenix.nix {}).version;
+    in
+      ps.buildPythonPackage rec {
+        inherit version;
+        pname = "agenix_testing";
+        src = ./.;
+        format = "pyproject";
+        propagatedBuildInputs = [ps.setuptools];
+        postPatch = ''
+          # Keep a default version makes for easy installation outside of
+          # nix for debugging
+          substituteInPlace pyproject.toml \
+            --replace 'version = "0.1.0"' 'version = "${version}"'
+        '';
+      };
+  in [agenixTesting];
   nodes.system1 = {
     config,
     pkgs,
@@ -49,47 +67,17 @@ pkgs.nixosTest {
     user = "user1";
     password = "password1234";
   in ''
-    system1.wait_for_unit("multi-user.target")
-    system1.wait_until_succeeds("pgrep -f 'agetty.*tty1'")
-    system1.sleep(2)
-    system1.send_key("alt-f2")
-    system1.wait_until_succeeds("[ $(fgconsole) = 2 ]")
-    system1.wait_for_unit("getty@tty2.service")
-    system1.wait_until_succeeds("pgrep -f 'agetty.*tty2'")
-    system1.wait_until_tty_matches("2", "login: ")
-    system1.send_chars("${user}\n")
-    system1.wait_until_tty_matches("2", "login: ${user}")
-    system1.wait_until_succeeds("pgrep login")
-    system1.sleep(2)
-    system1.send_chars("${password}\n")
+    # Skipping analyzing "agenix_testing": module is installed, but missing
+    # library stubs or py.typed marker
+    from agenix_testing import AgenixTester  # type: ignore
+    tester = AgenixTester(system=system1, user="${user}", password="${password}")
+
+    # Can still be used as before
     system1.send_chars("whoami > /tmp/1\n")
-    system1.wait_for_file("/tmp/1")
-    assert "${user}" in system1.succeed("cat /tmp/1")
+    # Or from `tester.system`
+    tester.system.wait_for_file("/tmp/1")
+    assert "${user}" in tester.system.succeed("cat /tmp/1")
 
-    userDo = lambda input : f"sudo -u user1 -- bash -c 'set -eou pipefail; cd /tmp/secrets; {input}'"
-
-    before_hash = system1.succeed(userDo('sha256sum passwordfile-user1.age')).split()
-    print(system1.succeed(userDo('agenix -r -i /home/user1/.ssh/id_ed25519')))
-    after_hash = system1.succeed(userDo('sha256sum passwordfile-user1.age')).split()
-
-    # Ensure we actually have hashes
-    for h in [before_hash, after_hash]:
-        assert len(h) == 2, "hash should be [hash, filename]"
-        assert h[1] == "passwordfile-user1.age", "filename is incorrect"
-        assert len(h[0].strip()) == 64, "hash length is incorrect"
-    assert before_hash[0] != after_hash[0], "hash did not change with rekeying"
-
-    # user1 can edit passwordfile-user1.age
-    system1.succeed(userDo("EDITOR=cat agenix -e passwordfile-user1.age"))
-
-    # user1 can edit even if bogus id_rsa present
-    system1.succeed(userDo("echo bogus > ~/.ssh/id_rsa"))
-    system1.fail(userDo("EDITOR=cat agenix -e passwordfile-user1.age"))
-    system1.succeed(userDo("EDITOR=cat agenix -e passwordfile-user1.age -i /home/user1/.ssh/id_ed25519"))
-    system1.succeed(userDo("rm ~/.ssh/id_rsa"))
-
-    # user1 can edit a secret by piping in contents
-    system1.succeed(userDo("echo 'secret1234' | agenix -e passwordfile-user1.age"))
-    assert "secret1234" in system1.succeed(userDo("EDITOR=cat agenix -e passwordfile-user1.age"))
+    tester.run_all()
   '';
 }
