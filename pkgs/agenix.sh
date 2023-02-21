@@ -33,6 +33,15 @@ function show_help () {
   echo "age version: $(@ageBin@ --version)"
 }
 
+function warn() {
+  printf '%s\n' "$*" >&2
+}
+
+function err() {
+  warn "$*"
+  exit 1
+}
+
 test $# -eq 0 && (show_help && exit 1)
 
 REKEY=0
@@ -99,8 +108,7 @@ function edit {
 
     if [ -z "$KEYS" ]
     then
-        >&2 echo "There is no rule for $FILE in $RULES."
-        exit 1
+        err "There is no rule for $FILE in $RULES."
     fi
 
     CLEARTEXT_DIR=$(@mktempBin@ -d)
@@ -118,8 +126,7 @@ function edit {
             fi
         fi
         if [[ "${DECRYPT[*]}" != *"--identity"* ]]; then
-          echo "No identity found to decrypt $FILE. Try adding an SSH key at $HOME/.ssh/id_rsa or $HOME/.ssh/id_ed25519 or using the --identity flag to specify a file."
-          exit 1
+          err "No identity found to decrypt $FILE. Try adding an SSH key at $HOME/.ssh/id_rsa or $HOME/.ssh/id_ed25519 or using the --identity flag to specify a file."
         fi
         DECRYPT+=(-o "$CLEARTEXT_FILE" "$FILE")
         @ageBin@ "${DECRYPT[@]}" || exit 1
@@ -132,10 +139,10 @@ function edit {
 
     if [ ! -f "$CLEARTEXT_FILE" ]
     then
-      echo "$FILE wasn't created."
+      warn "$FILE wasn't created."
       return
     fi
-    [ -f "$FILE" ] && [ "$EDITOR" != ":" ] && @diffBin@ "$CLEARTEXT_FILE.before" "$CLEARTEXT_FILE" 1>/dev/null && echo "$FILE wasn't changed, skipping re-encryption." && return
+    [ -f "$FILE" ] && [ "$EDITOR" != ":" ] && @diffBin@ -q "$CLEARTEXT_FILE.before" "$CLEARTEXT_FILE" && warn "$FILE wasn't changed, skipping re-encryption." && return
 
     ENCRYPT=()
     while IFS= read -r key
@@ -158,7 +165,7 @@ function rekey {
 
     for FILE in $FILES
     do
-        echo "rekeying $FILE..."
+        warn "rekeying $FILE..."
         EDITOR=: edit "$FILE"
         cleanup
     done
