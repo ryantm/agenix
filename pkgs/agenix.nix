@@ -26,7 +26,7 @@ stdenv.mkDerivation rec {
   doCheck = true;
   checkInputs = [shellcheck];
   postCheck = ''
-    shellcheck --enable=all "''${src}"
+    shellcheck --norc --enable=all "''${src}"
   '';
 
   installPhase = ''
