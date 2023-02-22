@@ -10,11 +10,6 @@ with lib; let
 
   isDarwin = lib.attrsets.hasAttrByPath ["environment" "darwinConfig"] options;
 
-  # we need at least rage 0.5.0 to support ssh keys
-  rage =
-    if lib.versionOlder pkgs.rage.version "0.5.0"
-    then pkgs.callPackage ../pkgs/rage.nix {}
-    else pkgs.rage;
   ageBin = config.age.ageBin;
 
   users = config.users.users;
@@ -187,7 +182,7 @@ in {
   options.age = {
     ageBin = mkOption {
       type = types.str;
-      default = "${rage}/bin/rage";
+      default = "${pkgs.rage}/bin/rage";
       description = ''
         The age executable to use.
       '';
