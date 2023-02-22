@@ -30,7 +30,7 @@ function show_help () {
   echo ' '
   echo "agenix version: @version@"
   echo "age binary path: @ageBin@"
-  echo "age version: $(@ageBin@ --version)"
+  echo "age version: $(@ageBin@ --version || true)"
 }
 
 function warn() {
