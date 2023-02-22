@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-PACKAGE="agenix"
+PACKAGE=agenix
 
 function show_help () {
-  echo "$PACKAGE - edit and rekey age secret files"
+  echo "${PACKAGE} - edit and rekey age secret files"
   echo " "
-  echo "$PACKAGE -e FILE [-i PRIVATE_KEY]"
-  echo "$PACKAGE -r [-i PRIVATE_KEY]"
+  echo "${PACKAGE} -e FILE [-i PRIVATE_KEY]"
+  echo "${PACKAGE} -r [-i PRIVATE_KEY]"
   echo ' '
   echo 'options:'
   echo '-h, --help                show help'
@@ -91,85 +91,85 @@ done
 RULES=${RULES:-./secrets.nix}
 
 function cleanup {
-    if [ -n "${CLEARTEXT_DIR+x}" ]
+    if [[ -n "${CLEARTEXT_DIR+x}" ]]
     then
-        rm -rf "$CLEARTEXT_DIR"
+        rm -rf "${CLEARTEXT_DIR}"
     fi
-    if [ -n "${REENCRYPTED_DIR+x}" ]
+    if [[ -n "${REENCRYPTED_DIR+x}" ]]
     then
-        rm -rf "$REENCRYPTED_DIR"
+        rm -rf "${REENCRYPTED_DIR}"
     fi
 }
 trap "cleanup" 0 2 3 15
 
 function edit {
     FILE=$1
-    KEYS=$( (@nixInstantiate@ --eval -E "(let rules = import $RULES; in builtins.concatStringsSep \"\n\" rules.\"$FILE\".publicKeys)" | @sedBin@ 's/"//g' | @sedBin@ 's/\\n/\n/g') | @sedBin@ '/^$/d' || exit 1)
+    KEYS=$( (@nixInstantiate@ --eval -E "(let rules = import ${RULES}; in builtins.concatStringsSep \"\n\" rules.\"${FILE}\".publicKeys)" | @sedBin@ 's/"//g' | @sedBin@ 's/\\n/\n/g') | @sedBin@ '/^$/d' || exit 1)
 
-    if [ -z "$KEYS" ]
+    if [[ -z "${KEYS}" ]]
     then
-        err "There is no rule for $FILE in $RULES."
+        err "There is no rule for ${FILE} in ${RULES}."
     fi
 
     CLEARTEXT_DIR=$(@mktempBin@ -d)
-    CLEARTEXT_FILE="$CLEARTEXT_DIR/$(basename "$FILE")"
+    CLEARTEXT_FILE=${CLEARTEXT_DIR}/$(basename "${FILE}")
 
-    if [ -f "$FILE" ]
+    if [[ -f "${FILE}" ]]
     then
         DECRYPT=("${DEFAULT_DECRYPT[@]}")
         if [[ "${DECRYPT[*]}" != *"--identity"* ]]; then
-            if [ -f "$HOME/.ssh/id_rsa" ]; then
-                DECRYPT+=(--identity "$HOME/.ssh/id_rsa")
+            if [[ -f "${HOME}/.ssh/id_rsa" ]]; then
+                DECRYPT+=(--identity "${HOME}/.ssh/id_rsa")
             fi
-            if [ -f "$HOME/.ssh/id_ed25519" ]; then
-                DECRYPT+=(--identity "$HOME/.ssh/id_ed25519")
+            if [[ -f "${HOME}/.ssh/id_ed25519" ]]; then
+                DECRYPT+=(--identity "${HOME}/.ssh/id_ed25519")
             fi
         fi
         if [[ "${DECRYPT[*]}" != *"--identity"* ]]; then
-          err "No identity found to decrypt $FILE. Try adding an SSH key at $HOME/.ssh/id_rsa or $HOME/.ssh/id_ed25519 or using the --identity flag to specify a file."
+          err "No identity found to decrypt ${FILE}. Try adding an SSH key at ${HOME}/.ssh/id_rsa or ${HOME}/.ssh/id_ed25519 or using the --identity flag to specify a file."
         fi
-        DECRYPT+=(-o "$CLEARTEXT_FILE" "$FILE")
+        DECRYPT+=(-o "${CLEARTEXT_FILE}" "${FILE}")
         @ageBin@ "${DECRYPT[@]}" || exit 1
-        cp "$CLEARTEXT_FILE" "$CLEARTEXT_FILE.before"
+        cp "${CLEARTEXT_FILE}" "${CLEARTEXT_FILE}.before"
     fi
 
-    [ -t 0 ] || EDITOR='cp /dev/stdin'
+    [[ -t 0 ]] || EDITOR='cp /dev/stdin'
 
-    $EDITOR "$CLEARTEXT_FILE"
+    "${EDITOR}" "${CLEARTEXT_FILE}"
 
-    if [ ! -f "$CLEARTEXT_FILE" ]
+    if [[ ! -f "${CLEARTEXT_FILE}" ]]
     then
-      warn "$FILE wasn't created."
+      warn "${FILE} wasn't created."
       return
     fi
-    [ -f "$FILE" ] && [ "$EDITOR" != ":" ] && @diffBin@ -q "$CLEARTEXT_FILE.before" "$CLEARTEXT_FILE" && warn "$FILE wasn't changed, skipping re-encryption." && return
+    [[ -f "${FILE}" ]] && [[ "${EDITOR}" != ":" ]] && @diffBin@ -q "${CLEARTEXT_FILE}.before" "${CLEARTEXT_FILE}" && warn "${FILE} wasn't changed, skipping re-encryption." && return
 
     ENCRYPT=()
     while IFS= read -r key
     do
-        ENCRYPT+=(--recipient "$key")
-    done <<< "$KEYS"
+        ENCRYPT+=(--recipient "${key}")
+    done <<< "${KEYS}"
 
     REENCRYPTED_DIR=$(@mktempBin@ -d)
-    REENCRYPTED_FILE="$REENCRYPTED_DIR/$(basename "$FILE")"
+    REENCRYPTED_FILE=${REENCRYPTED_DIR}/$(basename "${FILE}")
 
-    ENCRYPT+=(-o "$REENCRYPTED_FILE")
+    ENCRYPT+=(-o "${REENCRYPTED_FILE}")
 
-    @ageBin@ "${ENCRYPT[@]}" <"$CLEARTEXT_FILE" || exit 1
+    @ageBin@ "${ENCRYPT[@]}" <"${CLEARTEXT_FILE}" || exit 1
 
-    mv -f "$REENCRYPTED_FILE" "$1"
+    mv -f "${REENCRYPTED_FILE}" "$1"
 }
 
 function rekey {
-    FILES=$( (@nixInstantiate@ --eval -E "(let rules = import $RULES; in builtins.concatStringsSep \"\n\" (builtins.attrNames rules))"  | @sedBin@ 's/"//g' | @sedBin@ 's/\\n/\n/g') || exit 1)
+    FILES=$( (@nixInstantiate@ --eval -E "(let rules = import ${RULES}; in builtins.concatStringsSep \"\n\" (builtins.attrNames rules))"  | @sedBin@ 's/"//g' | @sedBin@ 's/\\n/\n/g') || exit 1)
 
-    for FILE in $FILES
+    for FILE in ${FILES}
     do
-        warn "rekeying $FILE..."
-        EDITOR=: edit "$FILE"
+        warn "rekeying ${FILE}..."
+        EDITOR=: edit "${FILE}"
         cleanup
     done
 }
 
-[ $REKEY -eq 1 ] && rekey && exit 0
-edit "$FILE" && cleanup && exit 0
+[[ ${REKEY} -eq 1 ]] && rekey && exit 0
+edit "${FILE}" && cleanup && exit 0
