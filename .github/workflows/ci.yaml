@@ -9,7 +9,9 @@ jobs:
     - uses: actions/checkout@v3
     - uses: cachix/install-nix-action@v22
       with:
-        extra_nix_config: "system-features = nixos-test benchmark big-parallel kvm"
+        extra_nix_config: |
+          system-features = nixos-test recursive-nix benchmark big-parallel kvm
+          extra-experimental-features = recursive-nix nix-command flakes
     - run: nix build
     - run: nix build .#doc
     - run: nix fmt . -- --check
@@ -20,7 +22,9 @@ jobs:
     - uses: actions/checkout@v3
     - uses: cachix/install-nix-action@v22
       with:
-        extra_nix_config: "system-features = nixos-test benchmark big-parallel kvm"
+        extra_nix_config: |
+          system-features = nixos-test recursive-nix benchmark big-parallel kvm
+          extra-experimental-features = recursive-nix nix-command flakes
     - run: nix build
     - run: nix build .#doc
     - run: nix fmt . -- --check
