@@ -114,7 +114,7 @@ function edit {
     CLEARTEXT_DIR=$(@mktempBin@ -d)
     CLEARTEXT_FILE="$CLEARTEXT_DIR/$(basename "$FILE")"
 
-    if [ -f "$FILE" ]
+    if [ -f "$FILE" ] && [ -t 0 ]
     then
         DECRYPT=("${DEFAULT_DECRYPT[@]}")
         if [[ "${DECRYPT[*]}" != *"--identity"* ]]; then
@@ -142,7 +142,7 @@ function edit {
       warn "$FILE wasn't created."
       return
     fi
-    [ -f "$FILE" ] && [ "$EDITOR" != ":" ] && @diffBin@ -q "$CLEARTEXT_FILE.before" "$CLEARTEXT_FILE" && warn "$FILE wasn't changed, skipping re-encryption." && return
+    [ -f "$FILE" ] && [ "$EDITOR" != ":" ]  && [ -f "$CLEARTEXT_FILE.before" ] && @diffBin@ -q "$CLEARTEXT_FILE.before" "$CLEARTEXT_FILE" && warn "$FILE wasn't changed, skipping re-encryption." && return
 
     ENCRYPT=()
     while IFS= read -r key

@@ -66,7 +66,8 @@ pkgs.nixosTest {
     system1.wait_for_file("/tmp/1")
     assert "${user}" in system1.succeed("cat /tmp/1")
 
-    userDo = lambda input : f"sudo -u user1 -- bash -c 'set -eou pipefail; cd /tmp/secrets; {input}'"
+    userDir = "/tmp/secrets"
+    userDo = lambda input : f"sudo -u user1 -- bash -c 'set -eou pipefail; cd {userDir}; {input}'"
 
     before_hash = system1.succeed(userDo('sha256sum passwordfile-user1.age')).split()
     print(system1.succeed(userDo('agenix -r -i /home/user1/.ssh/id_ed25519')))
@@ -89,7 +90,15 @@ pkgs.nixosTest {
     system1.succeed(userDo("rm ~/.ssh/id_rsa"))
 
     # user1 can edit a secret by piping in contents
-    system1.succeed(userDo("echo 'secret1234' | agenix -e passwordfile-user1.age"))
+    system1.succeed(userDo("echo secret1234 | agenix -e passwordfile-user1.age"))
     assert "secret1234" in system1.succeed(userDo("EDITOR=cat agenix -e passwordfile-user1.age"))
+
+    # user1 can make a one-way secret, but cannot see the contents, and host can decrypt
+    userDir = "/tmp/secrets-one-way"
+    system1.succeed(userDo("echo eye1234 | agenix -e one-way.age"))
+    system1.fail(userDo("EDITOR=cat agenix -e one-way.age"))
+    assert "eye1234" in system1.succeed(f"cd {userDir};EDITOR=cat agenix -e one-way.age -i /etc/ssh/ssh_host_ed25519_key")
+    system1.succeed(userDo("echo nose1234 | agenix -e one-way.age"))
+    assert "nose1234" in system1.succeed(f"cd {userDir};EDITOR=cat agenix -e one-way.age -i /etc/ssh/ssh_host_ed25519_key")
   '';
 }

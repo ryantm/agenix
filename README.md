@@ -499,6 +499,8 @@ PRIVATE_KEY a path to a private SSH key used to decrypt file
 
 EDITOR environment variable of editor to use when editing FILE
 
+If STDIN is not interactive, EDITOR will be set to "cp /dev/stdin"
+
 RULES environment variable with path to Nix file specifying recipient public keys.
 Defaults to './secrets.nix'
 ```
