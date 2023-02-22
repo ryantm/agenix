@@ -26,11 +26,11 @@ stdenv.mkDerivation rec {
   doCheck = true;
   checkInputs = [shellcheck];
   postCheck = ''
-    shellcheck $src
+    shellcheck --enable=all "''${src}"
   '';
 
   installPhase = ''
-    install -D $src ${placeholder "out"}/bin/agenix
+    install -D "''${src}" "${placeholder "out"}/bin/agenix"
   '';
 
   meta.description = "age-encrypted secrets for NixOS";
