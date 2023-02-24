@@ -126,9 +126,6 @@ function decrypt {
         err "There is no rule for $FILE in $RULES."
     fi
 
-    CLEARTEXT_DIR=$(@mktempBin@ -d)
-    CLEARTEXT_FILE="$CLEARTEXT_DIR/$(basename "$FILE")"
-
     if [ -f "$FILE" ]
     then
         DECRYPT=("${DEFAULT_DECRYPT[@]}")
@@ -143,16 +140,22 @@ function decrypt {
         if [[ "${DECRYPT[*]}" != *"--identity"* ]]; then
           err "No identity found to decrypt $FILE. Try adding an SSH key at $HOME/.ssh/id_rsa or $HOME/.ssh/id_ed25519 or using the --identity flag to specify a file."
         fi
-        DECRYPT+=(-o "$CLEARTEXT_FILE" "$FILE")
-        @ageBin@ "${DECRYPT[@]}" || exit 1
-        cp "$CLEARTEXT_FILE" "$CLEARTEXT_FILE.before"
+
+        @ageBin@ "${DECRYPT[@]}" "$FILE" || exit 1
     fi
 }
 
 function edit {
     FILE=$1
     KEYS=$(keys "$FILE") || exit 1
+
+    CLEARTEXT_DIR=$(@mktempBin@ -d)
+    CLEARTEXT_FILE="$CLEARTEXT_DIR/$(basename "$FILE")"
+    DEFAULT_DECRYPT+=(-o "$CLEARTEXT_FILE")
+
     decrypt "$FILE" "$KEYS" || exit 1
+
+    cp "$CLEARTEXT_FILE" "$CLEARTEXT_FILE.before"
 
     [ -t 0 ] || EDITOR='cp /dev/stdin'
 
@@ -181,14 +184,6 @@ function edit {
     mv -f "$REENCRYPTED_FILE" "$1"
 }
 
-function decrypt_only {
-    FILE=$1
-    KEYS=$(keys "$FILE") || exit 1
-    decrypt "$FILE" "$KEYS"
-    printf "%s" "$(<"${CLEARTEXT_FILE}")"
-    cleanup
-}
-
 function rekey {
     FILES=$( (@nixInstantiate@ --eval -E "(let rules = import $RULES; in builtins.concatStringsSep \"\n\" (builtins.attrNames rules))"  | @sedBin@ 's/"//g' | @sedBin@ 's/\\n/\n/g') || exit 1)
 
@@ -201,5 +196,5 @@ function rekey {
 }
 
 [ $REKEY -eq 1 ] && rekey && exit 0
-[ $DECRYPT_ONLY -eq 1 ] && decrypt_only "${FILE}" && exit 0
+[ $DECRYPT_ONLY -eq 1 ] && decrypt "${FILE}" "$(keys "$FILE")" && exit 0
 edit "$FILE" && cleanup && exit 0
