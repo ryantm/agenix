@@ -142,6 +142,10 @@ class AgenixTester:
 
     def test_user_piping_data(self):
         """User can edit secrets by piping in data."""
+        # Make sure we're not starting with a correct result
+        assert "secret1234" != self.user_succeed(
+            "agenix -d passwordfile-user1.age"
+        )
 
         self.user_succeed(
             "echo 'secret1234' | agenix -e passwordfile-user1.age"
