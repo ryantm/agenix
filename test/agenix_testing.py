@@ -17,6 +17,7 @@ class AgenixTester:
         self.setup()
 
     def login(self) -> None:
+        """Start with the common login function."""
         self.system.wait_for_unit("multi-user.target")
         self.system.wait_until_succeeds("pgrep -f 'agetty.*tty1'")
         self.system.sleep(2)
@@ -47,7 +48,6 @@ class AgenixTester:
         outputs corresponding with each line in cmds. if cmds is a string,
         returns output as a string.
         """
-
         context: list[str] = [
             "set -Eeu -o pipefail",
             "shopt -s inherit_errexit",
