@@ -11,6 +11,7 @@ jobs:
       with:
         extra_nix_config: "system-features = nixos-test benchmark big-parallel kvm"
     - run: nix build
+    - run: nix build .#doc
     - run: nix fmt . -- --check
     - run: nix flake check
   tests-darwin:
@@ -21,6 +22,7 @@ jobs:
       with:
         extra_nix_config: "system-features = nixos-test benchmark big-parallel kvm"
     - run: nix build
+    - run: nix build .#doc
     - run: nix fmt . -- --check
     - run: nix flake check
     - run: |
