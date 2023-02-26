@@ -174,15 +174,6 @@ with lib; let
       symlink = mkEnableOption "symlinking secrets to their destination" // {default = true;};
     };
   });
-
-  identity = with types;
-    mkOptionType {
-      name = "identity";
-      description = "Path to the identity for age decryption. Usually a path to an SSH key. Must not be a store path, because we do not want private keys to end up in the nix store.";
-      descriptionClass = "noun";
-      check = x: isStringLike x && !isStorePath x;
-      merge = mergeEqualOption;
-    };
 in {
   imports = [
     (mkRenamedOptionModule ["age" "sshKeyPaths"] ["age" "identityPaths"])
@@ -225,7 +216,7 @@ in {
       '';
     };
     identityPaths = mkOption {
-      type = types.listOf identity;
+      type = types.listOf types.path;
       default =
         if (config.services.openssh.enable or false)
         then map (e: e.path) (lib.filter (e: e.type == "rsa" || e.type == "ed25519") config.services.openssh.hostKeys)
@@ -235,7 +226,9 @@ in {
           "/etc/ssh/ssh_host_rsa_key"
         ]
         else [];
-      description = "List of identities: ${identity.description}";
+      description = ''
+        Path to SSH keys to be used as identities in age decryption.
+      '';
     };
   };
 
