@@ -437,13 +437,14 @@ Overriding `age.ageBin` example:
 
 #### `age.identityPaths`
 
-`age.identityPaths` is a list of paths to recipient keys to try to use
-to decrypt the secrets. All of the file paths must be present, but
-only one needs to be able to decrypt the secret. Usually, you don't
-need to change this. By default, this is the `rsa` and `ed25519` keys
-in `config.services.openssh.hostKeys`.
-
-Overriding `age.identityPaths` example:
+`age.identityPaths` is a list of paths to recipient keys to try to use to
+decrypt the secrets. By default, it is the `rsa` and `ed25519` keys in
+`config.services.openssh.hostKeys`, and on NixOS you usually don't need to
+change this. The list items should be strings (`"/path/to/id_rsa"`), not
+nix paths (`../path/to/id_rsa`), as the latter would copy your private key to
+the nix store, which is the exact situation `agenix` is designed to avoid. At
+least one of the file paths must be present at runtime and able to decrypt the
+secret in question. Overriding `age.identityPaths` example:
 
 ```nix
 {
