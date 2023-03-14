@@ -196,5 +196,5 @@ function rekey {
 }
 
 [ $REKEY -eq 1 ] && rekey && exit 0
-[ $DECRYPT_ONLY -eq 1 ] && decrypt "${FILE}" "$(keys "$FILE")" && exit 0
+[ $DECRYPT_ONLY -eq 1 ] && DEFAULT_DECRYPT+=("-o" "-") && decrypt "${FILE}" "$(keys "$FILE")" && exit 0
 edit "$FILE" && cleanup && exit 0
