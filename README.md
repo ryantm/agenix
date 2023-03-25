@@ -253,7 +253,52 @@ but, if you want to (change the system based on your system):
      };
    }
    ```
-7. NixOS rebuild or use your deployment tool like usual.
+7. (Optional) Setup git to decrypt `*.age` files when showing diffs
+    between versions:
+
+    - Add a script that decrypts `*.age` files using the configured
+      `age.identityPaths` to your `configuration.nix`:
+
+      ```nix
+      { pkgs, ... }:
+
+      {
+        environment.systemPackages = let
+          rage-textconv = with pkgs;
+            writeShellApplication {
+              name = "rage-textconv";
+              runtimeInputs = [ rage ];
+              text = ''
+                rage --decrypt "$1" ${
+                  lib.strings.concatMapStringsSep " "
+                  (path: "-i ${lib.strings.escapeShellArg path}")
+                  config.age.identityPaths
+                }
+              '';
+            };
+        in [ rage-textconv ];
+      }
+      ```
+
+    - Create a `.gitattributes` file at the root of your repository that
+      sets a `diff` driver for `*.age` files:
+
+      ```text
+      *.age diff=rage
+      ```
+
+    - Map the `rage` driver to the previously defined `rage-textconv` script:
+
+        ```ShellSession
+        $ git config diff.rage.textconv rage-textconv
+        ```
+
+    With this in place, calls to `git diff` will decrypt both previous
+    and current versions of the target file prior to displaying the diff.
+    And it even works with git client interfaces, because they call git
+    diff under the hood!
+
+8. NixOS rebuild or use your deployment tool like usual.
 
    The secret will be decrypted to the value of `config.age.secrets.secret1.path` (`/run/agenix/secret1` by default).
 
