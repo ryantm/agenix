@@ -457,7 +457,7 @@ secret in question. Overriding `age.identityPaths` example:
 #### `age.secretsDir`
 
 `age.secretsDir` is the directory where secrets are symlinked to by
-default.Usually, you don't need to change this. Defaults to
+default. Usually, you don't need to change this. Defaults to
 `/run/agenix`.
 
 Overriding `age.secretsDir` example:
