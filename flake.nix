@@ -58,7 +58,7 @@
     packages.x86_64-linux.default = self.packages.x86_64-linux.agenix;
     packages.x86_64-linux.doc = doc "x86_64-linux";
     checks.x86_64-linux.integration = import ./test/integration.nix {
-      inherit nixpkgs;
+      inherit nixpkgs home-manager;
       pkgs = nixpkgs.legacyPackages.x86_64-linux;
       system = "x86_64-linux";
     };

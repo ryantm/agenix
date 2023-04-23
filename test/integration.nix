@@ -6,6 +6,7 @@
       config = {};
     },
   system ? builtins.currentSystem,
+  home-manager ? <home-manager>,
 }:
 pkgs.nixosTest {
   name = "agenix-integration";
@@ -18,6 +19,7 @@ pkgs.nixosTest {
     imports = [
       ../modules/age.nix
       ./install_ssh_host_keys.nix
+      "${home-manager}/nixos"
     ];
 
     services.openssh.enable = true;
@@ -43,11 +45,28 @@ pkgs.nixosTest {
         };
       };
     };
+
+    home-manager.users.user1 = {options, ...}: {
+      imports = [
+        ../modules/age-home.nix
+      ];
+
+      home.stateVersion = pkgs.lib.trivial.release;
+
+      age = {
+        identityPaths = options.age.identityPaths.default ++ ["/home/user1/.ssh/this_key_wont_exist"];
+        secrets.secret2 = {
+          # Only decryptable by user1's key
+          file = ../example/secret2.age;
+        };
+      };
+    };
   };
 
   testScript = let
     user = "user1";
     password = "password1234";
+    secret2 = "world!";
   in ''
     system1.wait_for_unit("multi-user.target")
     system1.wait_until_succeeds("pgrep -f 'agetty.*tty1'")
@@ -65,6 +84,9 @@ pkgs.nixosTest {
     system1.send_chars("whoami > /tmp/1\n")
     system1.wait_for_file("/tmp/1")
     assert "${user}" in system1.succeed("cat /tmp/1")
+    system1.send_chars("cat /run/user/$(id -u)/agenix/secret2 > /tmp/2\n")
+    system1.wait_for_file("/tmp/2")
+    assert "${secret2}" in system1.succeed("cat /tmp/2")
 
     userDo = lambda input : f"sudo -u user1 -- bash -c 'set -eou pipefail; cd /tmp/secrets; {input}'"
 
