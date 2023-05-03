@@ -25,8 +25,17 @@ jobs:
     - run: nix build .#doc
     - run: nix fmt . -- --check
     - run: nix flake check
-    - run: |
+    - name: "Install nix-darwin module"
+      run: |
         system=$(nix build --no-link --print-out-paths .#checks.x86_64-darwin.integration)
         ${system}/activate-user
         sudo ${system}/activate
-    - run: sudo /run/current-system/sw/bin/agenix-integration
+    - name: "Test nix-darwin module"
+      run: |
+        sudo /run/current-system/sw/bin/agenix-integration
+    - name: "Test home-manager module"
+      run: |
+        # Do the job of `home-manager switch` in-line to avoid rate limiting
+        nix build .#homeConfigurations.integration-darwin.activationPackage
+        ./result/activate
+        ~/agenix-home-integration/bin/agenix-home-integration
