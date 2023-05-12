@@ -59,6 +59,10 @@ pkgs.nixosTest {
           # Only decryptable by user1's key
           file = ../example/secret2.age;
         };
+        secrets.secret2Path = {
+          file = ../example/secret2.age;
+          path = "/home/user1/secret2";
+        };
       };
     };
   };
