@@ -48,6 +48,7 @@ with lib; let
     test "''${#IDENTITIES[@]}" -eq 0 && echo "[agenix] WARNING: no readable identities found!"
 
     mkdir -p "$(dirname "$_truePath")"
+    # shellcheck disable=SC2193
     [ "${secretType.path}" != "${cfg.secretsDir}/${secretType.name}" ] && mkdir -p "$(dirname "${secretType.path}")"
     (
       umask u=r,g=,o=
@@ -59,6 +60,7 @@ with lib; let
     mv -f "$TMP_FILE" "$_truePath"
 
     ${optionalString secretType.symlink ''
+      # shellcheck disable=SC2193
       [ "${secretType.path}" != "${cfg.secretsDir}/${secretType.name}" ] && ln -sfn "${cfg.secretsDir}/${secretType.name}" "${secretType.path}"
     ''}
   '';
