@@ -61,7 +61,7 @@ with lib; let
 
     ${optionalString secretType.symlink ''
       # shellcheck disable=SC2193,SC2050
-      [ "${secretType.path}" != "${cfg.secretsDir}/${secretType.name}" ] && ln -sfn "${cfg.secretsDir}/${secretType.name}" "${secretType.path}"
+      [ "${secretType.path}" != "${cfg.secretsDir}/${secretType.name}" ] && ln -sfT "${cfg.secretsDir}/${secretType.name}" "${secretType.path}"
     ''}
   '';
 
@@ -76,7 +76,7 @@ with lib; let
     _agenix_generation="$(basename "$(readlink "${cfg.secretsDir}")" || echo 0)"
     (( ++_agenix_generation ))
     echo "[agenix] symlinking new secrets to ${cfg.secretsDir} (generation $_agenix_generation)..."
-    ln -sfn "${cfg.secretsMountPoint}/$_agenix_generation" "${cfg.secretsDir}"
+    ln -sfT "${cfg.secretsMountPoint}/$_agenix_generation" "${cfg.secretsDir}"
 
     (( _agenix_generation > 1 )) && {
     echo "[agenix] removing old secrets (generation $(( _agenix_generation - 1 )))..."
