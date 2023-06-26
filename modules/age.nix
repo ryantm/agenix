@@ -135,7 +135,7 @@ with lib; let
         default = config._module.args.name;
         defaultText = literalExpression "config._module.args.name";
         description = ''
-          Name of the file used in ''${cfg.secretsDir}
+          Name of the file used in {option}`age.secretsDir`
         '';
       };
       file = mkOption {
@@ -221,7 +221,7 @@ in {
         // {description = "${types.str.description} (with check: non-empty without trailing slash)";};
       default = "/run/agenix.d";
       description = ''
-        Where secrets are created before they are symlinked to ''${cfg.secretsDir}
+        Where secrets are created before they are symlinked to {option}`age.secretsDir`
       '';
     };
     identityPaths = mkOption {
