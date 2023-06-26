@@ -149,9 +149,10 @@ with lib; let
       else "$XDG_RUNTIME_DIR";
   in "${baseDir}/${dir}";
 
-  userDirectoryDescription = dir: ''
-    "$XDG_RUNTIME_DIR"/${dir} on linux or "$(getconf DARWIN_USER_TEMP_DIR)"/${dir} on darwin.
-  '';
+  userDirectoryDescription = dir:
+    literalExpression ''
+      "$XDG_RUNTIME_DIR"/${dir} on linux or "$(getconf DARWIN_USER_TEMP_DIR)"/${dir} on darwin.
+    '';
 in {
   options.age = {
     package = mkPackageOption pkgs "rage" {};
@@ -170,7 +171,7 @@ in {
         "${config.home.homeDirectory}/.ssh/id_ed25519"
         "${config.home.homeDirectory}/.ssh/id_rsa"
       ];
-      defaultText = litteralExpression ''
+      defaultText = literalExpression ''
         [
           "''${config.home.homeDirectory}/.ssh/id_ed25519"
           "''${config.home.homeDirectory}/.ssh/id_rsa"
