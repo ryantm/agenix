@@ -133,8 +133,9 @@ with lib; let
       name = mkOption {
         type = types.str;
         default = config._module.args.name;
+        defaultText = literalExpression "config._module.args.name";
         description = ''
-          Name of the file used in ''${cfg.secretsDir}
+          Name of the file used in {option}`age.secretsDir`
         '';
       };
       file = mkOption {
@@ -146,6 +147,9 @@ with lib; let
       path = mkOption {
         type = types.str;
         default = "${cfg.secretsDir}/${config.name}";
+        defaultText = literalExpression ''
+          "''${cfg.secretsDir}/''${config.name}"
+        '';
         description = ''
           Path where the decrypted secret is installed.
         '';
@@ -167,6 +171,9 @@ with lib; let
       group = mkOption {
         type = types.str;
         default = users.${config.owner}.group or "0";
+        defaultText = literalExpression ''
+          users.''${config.owner}.group or "0"
+        '';
         description = ''
           Group of the decrypted secret.
         '';
@@ -183,6 +190,9 @@ in {
     ageBin = mkOption {
       type = types.str;
       default = "${pkgs.rage}/bin/rage";
+      defaultText = literalExpression ''
+        "''${pkgs.rage}/bin/rage"
+      '';
       description = ''
         The age executable to use.
       '';
@@ -210,9 +220,8 @@ in {
           && (builtins.match ".+/" s) == null) # without trailing slash
         // {description = "${types.str.description} (with check: non-empty without trailing slash)";};
       default = "/run/agenix.d";
-      defaultText = "/run/agenix.d";
       description = ''
-        Where secrets are created before they are symlinked to ''${cfg.secretsDir}
+        Where secrets are created before they are symlinked to {option}`age.secretsDir`
       '';
     };
     identityPaths = mkOption {
@@ -226,6 +235,16 @@ in {
           "/etc/ssh/ssh_host_rsa_key"
         ]
         else [];
+      defaultText = literalExpression ''
+        if (config.services.openssh.enable or false)
+        then map (e: e.path) (lib.filter (e: e.type == "rsa" || e.type == "ed25519") config.services.openssh.hostKeys)
+        else if isDarwin
+        then [
+          "/etc/ssh/ssh_host_ed25519_key"
+          "/etc/ssh/ssh_host_rsa_key"
+        ]
+        else [];
+      '';
       description = ''
         Path to SSH keys to be used as identities in age decryption.
       '';
