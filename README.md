@@ -244,14 +244,15 @@ e.g. inside your `flake.nix` file:
    have `sshd` running on it so that it has generated SSH host keys in
    `/etc/ssh/`.
 
-2. Make a directory to store secrets and `secrets.nix` file for listing secrets and their public keys (This file is **not** imported into your NixOS configuration. It is only used for the `agenix` CLI.):
-
+2. Make a directory to store secrets and `secrets.nix` file for listing secrets and their public keys:
    ```ShellSession
    $ mkdir secrets
    $ cd secrets
    $ touch secrets.nix
    ```
-3. Add public keys to `secrets.nix` file (hint: use `ssh-keyscan` or GitHub (for example, https://github.com/ryantm.keys)):
+   This `secrets.nix` file is **not** imported into your NixOS configuration. 
+   It's only used for the `agenix` CLI tool (example below) to know which public keys to use for encryption.
+3. Add public keys to your `secrets.nix` file:
    ```nix
    let
      user1 = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIL0idNvgGiucWgup/mP78zyC23uFjYq0evcWdjGQUaBH";
@@ -267,17 +268,32 @@ e.g. inside your `flake.nix` file:
      "secret2.age".publicKeys = users ++ systems;
    }
    ```
-4. Edit secret files (these instructions assume your SSH private key is in ~/.ssh/):
+   These are the users and systems that will be able to decrypt the `.age` files later with their corresponding private keys.
+   You can obtain the public keys from 
+   * your local computer usually in `~/.ssh`, e.g. `~/.ssh/id_ed25519.pub`.
+   * from a running target machine with `ssh-keyscan`:
+     ```ShellSession
+     $ ssh-keyscan <user>@<ip-address>
+     ... ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKzxQgondgEYcLpcPdJLrTdNgZ2gznOHCAxMdaceTUT1
+     ...
+     ```
+   * from GitHub like https://github.com/ryantm.keys.
+4. Create a secret file:
    ```ShellSession
    $ agenix -e secret1.age
    ```
+   It will open a temporary file in the app configured in your $EDITOR environment variable.
+   When you save that file its content will be encrypted with all the public keys mentioned in the `secrets.nix` file.
 5. Add secret to a NixOS module config:
    ```nix
    {
      age.secrets.secret1.file = ../secrets/secret1.age;
    }
    ```
-6. Use the secret in your config:
+   When the `age.secrets` attribute set contains a secret, the `agenix` NixOS module will later automatically decrypt and mount that secret under the default path `/run/agenix/secret1`. 
+   Here the `secret1.age` file becomes part of your NixOS deployment, i.e. moves into the Nix store.
+
+6. Reference the secrets' mount path in your config:
    ```nix
    {
      users.users.user1 = {
@@ -286,9 +302,22 @@ e.g. inside your `flake.nix` file:
      };
    }
    ```
-7. NixOS rebuild or use your deployment tool like usual.
+   You can reference the mount path to the (later) unencrypted secret already in your other configuration.
+   So `config.age.secrets.secret1.path` will contain the path `/run/agenix/secret1` by default.
+7. Use `nixos-rebuild` or [another deployment tool](https://nixos.wiki/wiki/Applications#Deployment") of choice as usual.
 
-   The secret will be decrypted to the value of `config.age.secrets.secret1.path` (`/run/agenix/secret1` by default).
+   The `secret1.age` file will be copied over to the target machine like any other Nix package. 
+   Then it will be decrypted and mounted as described before.
+8. Edit secret files:
+   ```ShellSession
+   $ agenix -e secret1.age
+   ```
+   It assumes your SSH private key is in `~/.ssh/`. 
+   In order to decrypt and open a `.age` file for editing you need the private key of one of the public keys 
+   it was encrypted with. You can pass the private key you want to use explicitly with `-i`, e.g.
+   ```ShellSession
+   $ agenix -e secret1.age -i ~/.ssh/id_ed25519
+   ```
 
 ## Reference
 
