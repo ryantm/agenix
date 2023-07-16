@@ -199,17 +199,40 @@ To install the `agenix` binary:
 
 #### Install CLI via Flakes
 
-You don't need to install it,
+You can run the CLI tool ad-hoc without installing it:
 
 ```ShellSession
 nix run github:ryantm/agenix -- --help
 ```
 
-but, if you want to (change the system based on your system):
+But you can also add it permanently into a [NixOS module](https://nixos.wiki/wiki/NixOS_modules) 
+(replace system "x86_64-linux" with your system):
 
 ```nix
 {
   environment.systemPackages = [ agenix.packages.x86_64-linux.default ];
+}
+```
+
+e.g. inside your `flake.nix` file:
+
+```nix
+{
+  inputs.agenix.url = "github:ryantm/agenix";
+  # ...
+
+  outputs = { self, nixpkgs, agenix }: {
+    # change `yourhostname` to your actual hostname
+    nixosConfigurations.yourhostname = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      modules = [
+        # ...
+        {
+          environment.systemPackages = [ agenix.packages.${system}.default ];
+        }
+      ];
+    };
+  };
 }
 ```
 
