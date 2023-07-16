@@ -1,6 +1,14 @@
 # agenix - [age](https://github.com/FiloSottile/age)-encrypted secrets for NixOS
 
-`agenix` is a commandline tool for managing secrets encrypted with your existing SSH keys. This project also includes the NixOS module `age` for adding encrypted secrets into the Nix store and decrypting them.
+`agenix` is a small and convenient Nix library for securely managing and deploying secrets using common public-private SSH key pairs:
+You can encrypt a secret (password, access-token, etc.) on a source machine using a number of public SSH keys,
+and deploy that encrypted secret to any another target machine that has the corresponding private SSH key of one of those public keys.  
+This project contains two parts: 
+1. An `agenix` commandline app (CLI) to encrypt secrets into secured `.age` files that can be openly shared on Github, Nix store, etc.
+2. An `agenix` NixOS module to conveniently
+  - add those encrypted secrets (`.age` files) into the Nix store so that they can be deployed like any other Nix package using `nixos-rebuild` or similar tools.
+  - automatically decrypt on a target machine using the private SSH keys on that machine
+  - automatically mount these decrypted secrets on a well known path like `/run/agenix/...` to be consumed.
 
 ## Contents
 
