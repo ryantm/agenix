@@ -4,7 +4,7 @@
 You can encrypt a secret (password, access-token, etc.) on a source machine using a number of public SSH keys,
 and deploy that encrypted secret to any another target machine that has the corresponding private SSH key of one of those public keys.  
 This project contains two parts: 
-1. An `agenix` commandline app (CLI) to encrypt secrets into secured `.age` files that can be openly shared on Github, Nix store, etc.
+1. An `agenix` commandline app (CLI) to encrypt secrets into secured `.age` files that can be copied into the Nix store.
 2. An `agenix` NixOS module to conveniently
     * add those encrypted secrets (`.age` files) into the Nix store so that they can be deployed like any other Nix package using `nixos-rebuild` or similar tools.
     * automatically decrypt on a target machine using the private SSH keys on that machine
