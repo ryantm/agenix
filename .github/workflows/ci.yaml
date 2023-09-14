@@ -7,9 +7,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    - uses: cachix/install-nix-action@v18
+    - name: Install Nix
+      uses: DeterminateSystems/nix-installer-action@main
       with:
-        extra_nix_config: "system-features = nixos-test benchmark big-parallel kvm"
+        extra-conf: "system-features = nixos-test benchmark big-parallel kvm"
     - run: nix build
     - run: nix build .#doc
     - run: nix fmt . -- --check
@@ -18,9 +19,10 @@ jobs:
     runs-on: macos-11
     steps:
     - uses: actions/checkout@v3
-    - uses: cachix/install-nix-action@v18
+    - name: Install Nix
+      uses: DeterminateSystems/nix-installer-action@main
       with:
-        extra_nix_config: "system-features = nixos-test benchmark big-parallel kvm"
+        extra-conf: "system-features = nixos-test benchmark big-parallel kvm"
     - run: nix build
     - run: nix build .#doc
     - run: nix fmt . -- --check
