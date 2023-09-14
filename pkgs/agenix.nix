@@ -12,7 +12,7 @@
 }:
 stdenv.mkDerivation rec {
   pname = "agenix";
-  version = "0.13.0";
+  version = "0.14.0";
   src = substituteAll {
     inherit ageBin version;
     sedBin = "${gnused}/bin/sed";
