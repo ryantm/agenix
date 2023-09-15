@@ -115,7 +115,7 @@ function cleanup {
 trap "cleanup" 0 2 3 15
 
 function keys {
-    (@nixInstantiate@ --json --eval -E "(let rules = import $RULES; in builtins.concatStringsSep \"\n\" rules.\"$FILE\".publicKeys)" | @jqBin@ -r .[]) || exit 1
+    (@nixInstantiate@ --json --eval -E "(let rules = import $RULES; in rules.\"$FILE\".publicKeys)" | @jqBin@ -r .[]) || exit 1
 }
 
 function decrypt {
@@ -185,7 +185,7 @@ function edit {
 }
 
 function rekey {
-    FILES=$( (@nixInstantiate@ --json --eval -E "(let rules = import $RULES; in builtins.concatStringsSep \"\n\" (builtins.attrNames rules))"  | @jqBin@ -r .[]) || exit 1)
+    FILES=$( (@nixInstantiate@ --json --eval -E "(let rules = import $RULES; in builtins.attrNames rules)"  | @jqBin@ -r .[]) || exit 1)
 
     for FILE in $FILES
     do
