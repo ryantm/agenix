@@ -2,7 +2,7 @@
   lib,
   stdenv,
   rage,
-  gnused,
+  jq,
   nix,
   mktemp,
   diffutils,
@@ -15,7 +15,7 @@ stdenv.mkDerivation rec {
   version = "0.14.0";
   src = substituteAll {
     inherit ageBin version;
-    sedBin = "${gnused}/bin/sed";
+    jqBin = "${jq}/bin/jq";
     nixInstantiate = "${nix}/bin/nix-instantiate";
     mktempBin = "${mktemp}/bin/mktemp";
     diffBin = "${diffutils}/bin/diff";
