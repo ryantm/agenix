@@ -115,7 +115,7 @@ function cleanup {
 trap "cleanup" 0 2 3 15
 
 function keys {
-    (@nixInstantiate@ --json --eval --strict -E "(let rules = import $RULES; in rules.\"$FILE\".publicKeys)" | @jqBin@ -r .[]) || exit 1
+    (@nixInstantiate@ --json --eval --strict -E "(let rules = import $RULES; in rules.\"$FILE\".publicKeys)" | @jqBin@ -r 'map(rtrimstr("\n"))[]') || exit 1
 }
 
 function decrypt {
