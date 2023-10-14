@@ -244,15 +244,15 @@ e.g. inside your `flake.nix` file:
    have `sshd` running on it so that it has generated SSH host keys in
    `/etc/ssh/`.
 
-2. Make a directory to store secrets and `secrets.nix` file for listing secrets and their public keys:
+2. Make a directory to store secrets and `agenix-rules.nix` file for listing secrets and their public keys:
    ```ShellSession
    $ mkdir secrets
    $ cd secrets
-   $ touch secrets.nix
+   $ touch agenix-rules.nix
    ```
-   This `secrets.nix` file is **not** imported into your NixOS configuration. 
+   This `agenix-rules.nix` file is **not** imported into your NixOS configuration. 
    It's only used for the `agenix` CLI tool (example below) to know which public keys to use for encryption.
-3. Add public keys to your `secrets.nix` file:
+3. Add public keys to your `agenix-rules.nix` file:
    ```nix
    let
      user1 = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIL0idNvgGiucWgup/mP78zyC23uFjYq0evcWdjGQUaBH";
@@ -283,7 +283,7 @@ e.g. inside your `flake.nix` file:
    $ agenix -e secret1.age
    ```
    It will open a temporary file in the app configured in your $EDITOR environment variable.
-   When you save that file its content will be encrypted with all the public keys mentioned in the `secrets.nix` file.
+   When you save that file its content will be encrypted with all the public keys mentioned in the `agenix-rules.nix` file.
 5. Add secret to a NixOS module config:
    ```nix
    {
@@ -567,13 +567,18 @@ EDITOR environment variable of editor to use when editing FILE
 
 If STDIN is not interactive, EDITOR will be set to "cp /dev/stdin"
 
-RULES environment variable with path to Nix file specifying recipient public keys.
-Defaults to './secrets.nix'
+AGENIX_RULES environment variable with path to Nix file specifying recipient public keys. 
+Defaults to './agenix-rules.nix'
 ```
+
+Up to version 0.14.0, agenix used the variable `RULES` (instead of
+`AGENIX_RULES`) and the default rules file `secrets.nix` (instead of
+`agenix-rules.nix`). Currently agenix still honours those, but they will be
+deprecated in the future.
 
 #### Rekeying
 
-If you change the public keys in `secrets.nix`, you should rekey your
+If you change the public keys in `agenix-rules.nix`, you should rekey your
 secrets:
 
 ```ShellSession

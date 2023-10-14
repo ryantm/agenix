@@ -1,6 +1,6 @@
 # Rekeying {#rekeying}
 
-If you change the public keys in `secrets.nix`, you should rekey your
+If you change the public keys in `agenix-rules.nix`, you should rekey your
 secrets:
 
 ```ShellSession

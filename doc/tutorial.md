@@ -4,14 +4,14 @@
    have `sshd` running on it so that it has generated SSH host keys in
    `/etc/ssh/`.
 
-2. Make a directory to store secrets and `secrets.nix` file for listing secrets and their public keys (This file is **not** imported into your NixOS configuration. It is only used for the `agenix` CLI.):
+2. Make a directory to store secrets and `agenix-rules.nix` file for listing secrets and their public keys (This file is **not** imported into your NixOS configuration. It is only used for the `agenix` CLI.):
 
    ```ShellSession
    $ mkdir secrets
    $ cd secrets
-   $ touch secrets.nix
+   $ touch agenix-rules.nix
    ```
-3. Add public keys to `secrets.nix` file (hint: use `ssh-keyscan` or GitHub (for example, https://github.com/ryantm.keys)):
+3. Add public keys to `agenix-rules.nix` file (hint: use `ssh-keyscan` or GitHub (for example, https://github.com/ryantm.keys)):
    ```nix
    let
      user1 = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIL0idNvgGiucWgup/mP78zyC23uFjYq0evcWdjGQUaBH";
