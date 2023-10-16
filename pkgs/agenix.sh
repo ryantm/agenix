@@ -155,7 +155,10 @@ function edit {
 
     decrypt "$FILE" "$KEYS" || exit 1
 
-    cp "$CLEARTEXT_FILE" "$CLEARTEXT_FILE.before"
+    if [ -f "$CLEARTEXT_FILE" ]
+    then
+      cp "$CLEARTEXT_FILE" "$CLEARTEXT_FILE.before"
+    fi
 
     [ -t 0 ] || EDITOR='cp /dev/stdin'
 
