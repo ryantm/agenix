@@ -181,6 +181,8 @@ function edit {
 
     @ageBin@ "${ENCRYPT[@]}" <"$CLEARTEXT_FILE" || exit 1
 
+    mkdir -p "$(dirname "$FILE")"
+
     mv -f "$REENCRYPTED_FILE" "$FILE"
 }
 
