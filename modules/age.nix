@@ -61,35 +61,45 @@ with lib; let
     }
   '';
 
-  installSecret = secretType: ''
-    ${setTruePath secretType}
-    echo "decrypting '${secretType.file}' to '$_truePath'..."
-    TMP_FILE="$_truePath.tmp"
+  installSecretFn = ''
+    installSecret() {
+      symlink="$1"
+      name="$2"
+      path="$3"
+      file="$4"
+      mode="$5"
+      if "$symlink"; then
+        _truePath="${cfg.secretsMountPoint}/$_agenix_generation/$name"
+      else
+        _truePath="$path"
+      fi
+      echo "decrypting $file to '$_truePath'..."
+      TMP_FILE="$_truePath.tmp"
 
-    IDENTITIES=()
-    for identity in ${toString cfg.identityPaths}; do
-      test -r "$identity" || continue
-      test -s "$identity" || continue
-      IDENTITIES+=(-i)
-      IDENTITIES+=("$identity")
-    done
+      IDENTITIES=()
+      for identity in ${toString cfg.identityPaths}; do
+        test -r "$identity" || continue
+        test -s "$identity" || continue
+        IDENTITIES+=(-i)
+        IDENTITIES+=("$identity")
+      done
 
-    test "''${#IDENTITIES[@]}" -eq 0 && echo "[agenix] WARNING: no readable identities found!"
+      test "''${#IDENTITIES[@]}" -eq 0 && echo "[agenix] WARNING: no readable identities found!"
 
-    mkdir -p "$(dirname "$_truePath")"
-    [ "${secretType.path}" != "${cfg.secretsDir}/${secretType.name}" ] && mkdir -p "$(dirname "${secretType.path}")"
-    (
-      umask u=r,g=,o=
-      test -f "${secretType.file}" || echo '[agenix] WARNING: encrypted file ${secretType.file} does not exist!'
-      test -d "$(dirname "$TMP_FILE")" || echo "[agenix] WARNING: $(dirname "$TMP_FILE") does not exist!"
-      LANG=${config.i18n.defaultLocale or "C"} ${ageBin} --decrypt "''${IDENTITIES[@]}" -o "$TMP_FILE" "${secretType.file}"
-    )
-    chmod ${secretType.mode} "$TMP_FILE"
-    mv -f "$TMP_FILE" "$_truePath"
+      mkdir -p "$(dirname "$_truePath")"
+      [ "$path" != "${cfg.secretsDir}/$name" ] && mkdir -p "$(dirname "$path")"
+      (
+        umask u=r,g=,o=
+        test -f "$file" || echo '[agenix] WARNING: encrypted file '$file' does not exist!'
+        test -d "$(dirname "$TMP_FILE")" || echo "[agenix] WARNING: $(dirname "$TMP_FILE") does not exist!"
+        LANG=${config.i18n.defaultLocale or "C"} ${ageBin} --decrypt "''${IDENTITIES[@]}" -o "$TMP_FILE" "$file"
+      )
+      chmod "$mode" "$TMP_FILE"
+      mv -f "$TMP_FILE" "$_truePath"
 
-    ${optionalString secretType.symlink ''
-      [ "${secretType.path}" != "${cfg.secretsDir}/${secretType.name}" ] && ln -sfn "${cfg.secretsDir}/${secretType.name}" "${secretType.path}"
-    ''}
+      "$symlink" && ([ "$path" != "${cfg.secretsDir}/$name" ] && ln -sfn "${cfg.secretsDir}/$name" "$path")
+      true
+    }
   '';
 
   testIdentities =
@@ -111,12 +121,22 @@ with lib; let
     }
   '';
 
-  installSecrets = builtins.concatStringsSep "\n" (
-    ["echo '[agenix] decrypting secrets...'"]
-    ++ testIdentities
-    ++ (map installSecret (builtins.attrValues cfg.secrets))
-    ++ [cleanupAndLink]
-  );
+  installSecrets = let
+    mkLine = secretType: ''
+      installSecret "${
+        if secretType.symlink
+        then "true"
+        else "false"
+      }" "${secretType.name}" "${secretType.path}" "${secretType.file}" "${secretType.mode}";
+    '';
+  in
+    builtins.concatStringsSep "\n" (
+      ["echo '[agenix] decrypting secrets...'"]
+      ++ testIdentities
+      ++ [installSecretFn]
+      ++ (map mkLine (builtins.attrValues cfg.secrets))
+      ++ [cleanupAndLink]
+    );
 
   chownSecret = secretType: ''
     ${setTruePath secretType}
