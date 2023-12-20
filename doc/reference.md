@@ -166,7 +166,7 @@ Example of a secret with a name different from its attrpath:
 ### `age.ageBin`
 
 `age.ageBin` the string of the path to the `age` binary. Usually, you
-don't need to change this. Defaults to `rage/bin/rage`.
+don't need to change this. Defaults to `age/bin/age`.
 
 Overriding `age.ageBin` example:
 

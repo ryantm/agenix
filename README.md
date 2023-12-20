@@ -45,7 +45,7 @@ All files in the Nix store are readable by any system user, so it is not a suita
 
 ## Notices
 
-* Password-protected ssh keys: since the underlying tool age/rage do not support ssh-agent, password-protected ssh keys do not work well. For example, if you need to rekey 20 secrets you will have to enter your password 20 times.
+* Password-protected ssh keys: since age does not support ssh-agent, password-protected ssh keys do not work well. For example, if you need to rekey 20 secrets you will have to enter your password 20 times.
 
 ## Installation
 
@@ -487,7 +487,7 @@ Example of a secret with a name different from its attrpath:
 #### `age.ageBin`
 
 `age.ageBin` the string of the path to the `age` binary. Usually, you
-don't need to change this. Defaults to `rage/bin/rage`.
+don't need to change this. Defaults to `age/bin/age`.
 
 Overriding `age.ageBin` example:
 
@@ -587,13 +587,13 @@ improved upon by reading the identities from the age file.)
 
 #### Overriding age binary
 
-The agenix CLI uses `rage` by default as its age implemenation, you
-can use the reference implementation `age` with Flakes like this:
+The agenix CLI uses `age` by default as its age implemenation, you
+can use the `rage` implementation with Flakes like this:
 
 ```nix
 {pkgs,agenix,...}:{
   environment.systemPackages = [
-    (agenix.packages.x86_64-linux.default.override { ageBin = "${pkgs.age}/bin/age"; })
+    (agenix.packages.x86_64-linux.default.override { ageBin = "${pkgs.rage}/bin/rage"; })
   ];
 }
 ```

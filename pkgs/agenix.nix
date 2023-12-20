@@ -1,13 +1,13 @@
 {
   lib,
   stdenv,
-  rage,
+  age,
   jq,
   nix,
   mktemp,
   diffutils,
   substituteAll,
-  ageBin ? "${rage}/bin/rage",
+  ageBin ? "${age}/bin/age",
   shellcheck,
 }:
 stdenv.mkDerivation rec {
