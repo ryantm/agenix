@@ -12,7 +12,7 @@
 }:
 stdenv.mkDerivation rec {
   pname = "agenix";
-  version = "0.14.0";
+  version = "0.15.0";
   src = substituteAll {
     inherit ageBin version;
     jqBin = "${jq}/bin/jq";
