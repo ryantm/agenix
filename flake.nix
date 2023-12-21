@@ -49,7 +49,9 @@
             inherit system;
             modules = [
               ./test/integration_darwin.nix
-              darwin.darwinModules.simple
+
+              # Allow new-style nix commands in CI
+              {nix.extraOptions = "experimental-features = nix-command flakes";}
 
               home-manager.darwinModules.home-manager
               {
