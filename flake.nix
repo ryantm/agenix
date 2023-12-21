@@ -49,7 +49,6 @@
             inherit system;
             modules = [
               ./test/integration_darwin.nix
-              "${darwin.outPath}/pkgs/darwin-installer/installer.nix"
               home-manager.darwinModules.home-manager
               {
                 home-manager = {
