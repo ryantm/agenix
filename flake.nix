@@ -49,6 +49,8 @@
             inherit system;
             modules = [
               ./test/integration_darwin.nix
+              darwin.darwinModules.simple
+
               home-manager.darwinModules.home-manager
               {
                 home-manager = {
