@@ -38,7 +38,7 @@
 
     packages = eachSystem (system: {
       agenix = nixpkgs.legacyPackages.${system}.callPackage ./pkgs/agenix.nix {};
-      doc = nixpkgs.legacyPackages.${system}.callPackage ./pkgs/doc.nix {};
+      doc = nixpkgs.legacyPackages.${system}.callPackage ./pkgs/doc.nix {inherit self;};
       default = self.packages.${system}.agenix;
     });
 
@@ -49,7 +49,10 @@
             inherit system;
             modules = [
               ./test/integration_darwin.nix
-              "${darwin.outPath}/pkgs/darwin-installer/installer.nix"
+
+              # Allow new-style nix commands in CI
+              {nix.extraOptions = "experimental-features = nix-command flakes";}
+
               home-manager.darwinModules.home-manager
               {
                 home-manager = {

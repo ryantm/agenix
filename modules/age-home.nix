@@ -155,7 +155,7 @@ with lib; let
     '';
 in {
   options.age = {
-    package = mkPackageOption pkgs "rage" {};
+    package = mkPackageOption pkgs "age" {};
 
     secrets = mkOption {
       type = types.attrsOf secretType;
