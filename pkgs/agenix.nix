@@ -30,10 +30,15 @@ in
       shellcheck ${bin}
       ${bin} -h | grep ${version}
 
-      mkdir -p /tmp/home/.ssh
-      cp -r "${../example}" /tmp/home/secrets
-      chmod -R u+rw /tmp/home/secrets
-      export HOME=/tmp/home
+      HOME=$(mktemp -d 2>/dev/null || mktemp -d -t 'mytmpdir')
+      function cleanup {
+        rm -rf $HOME
+      }
+      trap "cleanup" 0 2 3 15
+
+      mkdir -p $HOME/.ssh
+      cp -r "${../example}" $HOME/secrets
+      chmod -R u+rw $HOME/secrets
       (
       umask u=rw,g=r,o=r
       cp ${../example_keys/user1.pub} $HOME/.ssh/id_ed25519.pub
@@ -45,7 +50,7 @@ in
       chown $UID $HOME/.ssh/id_ed25519
       )
 
-      cd /tmp/home/secrets
+      cd $HOME/secrets
       test $(${bin} -d secret1.age) = "hello"
     '';
 
