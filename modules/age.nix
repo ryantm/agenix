@@ -88,9 +88,10 @@ with lib; let
         trap "rm -f $TMP_FILE_DERIVED" EXIT
         (cat $TMP_FILE && printf ${escapeShellArg secretType.derive.path}) | \
           sha256sum -z | tr -d '-' > $TMP_FILE_DERIVED
-        ${pkgs.openssl}/bin/openssl enc -aes-256-cbc -kfile "$TMP_FILE_DERIVED" -in /dev/zero -iv "" -nosalt | \
+        (${pkgs.openssl}/bin/openssl enc -aes-256-cbc -kfile "$TMP_FILE_DERIVED" -in /dev/zero -iv 00000000000000000000000000000000 -nosalt -md sha256 | \
           tr -dc ${escapeShellArg secretType.derive.filter} | \
-          head -c ${escapeShellArg secretType.derive.length} > $TMP_FILE
+          head -c ${escapeShellArg secretType.derive.length} > $TMP_FILE) 2> /dev/null
+        test -s $TMP_FILE
     ''}
     )
     chmod ${secretType.mode} "$TMP_FILE"
