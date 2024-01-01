@@ -24,8 +24,18 @@ pkgs.nixosTest {
 
     services.openssh.enable = true;
 
-    age.secrets.passwordfile-user1 = {
-      file = ../example/passwordfile-user1.age;
+    age.secrets = rec {
+      passwordfile-user1 = {
+        file = ../example/passwordfile-user1.age;
+      };
+      passwordfile-user1-derived =
+        passwordfile-user1
+        // {
+          derive = {
+            length = 16;
+            path = "test";
+          };
+        };
     };
 
     age.identityPaths = options.age.identityPaths.default ++ ["/etc/ssh/this_key_wont_exist"];

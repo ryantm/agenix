@@ -83,6 +83,15 @@ with lib; let
       test -f "${secretType.file}" || echo '[agenix] WARNING: encrypted file ${secretType.file} does not exist!'
       test -d "$(dirname "$TMP_FILE")" || echo "[agenix] WARNING: $(dirname "$TMP_FILE") does not exist!"
       LANG=${config.i18n.defaultLocale or "C"} ${ageBin} --decrypt "''${IDENTITIES[@]}" -o "$TMP_FILE" "${secretType.file}"
+      ${optionalString (secretType.derive.path != null) ''
+        TMP_FILE_DERIVED="$_truePath.derive.tmp"
+        trap "rm -f $TMP_FILE_DERIVED" EXIT
+        (cat $TMP_FILE && printf ${escapeShellArg secretType.derive.path}) | \
+          sha256sum -z | tr -d '-' > $TMP_FILE_DERIVED
+        ${pkgs.openssl}/bin/openssl enc -aes-256-cbc -kfile "$TMP_FILE_DERIVED" -in /dev/zero -iv "" -nosalt | \
+          tr -dc ${escapeShellArg secretType.derive.filter} | \
+          head -c ${escapeShellArg secretType.derive.length} > $TMP_FILE
+    ''}
     )
     chmod ${secretType.mode} "$TMP_FILE"
     mv -f "$TMP_FILE" "$_truePath"
@@ -154,6 +163,20 @@ with lib; let
         description = ''
           Path where the decrypted secret is installed.
         '';
+      };
+      derive = {
+        path = mkOption {
+          type = with types; nullOr str;
+          default = null;
+        };
+        filter = mkOption {
+          type = types.str;
+          default = "A-Za-z0-9_";
+        };
+        length = mkOption {
+          type = types.int;
+          default = 32;
+        };
       };
       mode = mkOption {
         type = types.str;
