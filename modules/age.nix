@@ -174,7 +174,7 @@ with lib; let
           default = "A-Za-z0-9_";
         };
         length = mkOption {
-          type = types.int;
+          type = types.ints.between 1 1024;
           default = 32;
         };
       };
