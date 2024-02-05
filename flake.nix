@@ -23,13 +23,13 @@
   }: let
     eachSystem = nixpkgs.lib.genAttrs (import systems);
   in {
-    nixosModules.age = import ./modules/age.nix;
+    nixosModules.age = ./modules/age.nix;
     nixosModules.default = self.nixosModules.age;
 
-    darwinModules.age = import ./modules/age.nix;
+    darwinModules.age = ./modules/age.nix;
     darwinModules.default = self.darwinModules.age;
 
-    homeManagerModules.age = import ./modules/age-home.nix;
+    homeManagerModules.age = ./modules/age-home.nix;
     homeManagerModules.default = self.homeManagerModules.age;
 
     overlays.default = import ./overlay.nix;
