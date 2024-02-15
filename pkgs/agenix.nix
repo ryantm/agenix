@@ -30,9 +30,13 @@ in
       shellcheck ${bin}
       ${bin} -h | grep ${version}
 
-      HOME=$(mktemp -d 2>/dev/null || mktemp -d -t 'mytmpdir')
+      test_tmp=$(mktemp -d 2>/dev/null || mktemp -d -t 'mytmpdir')
+      export HOME="$test_tmp/home"
+      export NIX_STORE_DIR="$test_tmp/nix/store"
+      export NIX_STATE_DIR="$test_tmp/nix/var"
+      mkdir -p "$HOME" "$NIX_STORE_DIR" "$NIX_STATE_DIR"
       function cleanup {
-        rm -rf $HOME
+        rm -rf "$test_tmp"
       }
       trap "cleanup" 0 2 3 15
 
