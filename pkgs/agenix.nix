@@ -3,6 +3,7 @@
   stdenv,
   age,
   jq,
+  gnused,
   nix,
   mktemp,
   diffutils,
@@ -18,6 +19,7 @@ in
     src = substituteAll {
       inherit ageBin version;
       jqBin = "${jq}/bin/jq";
+      sedBin = "${gnused}/bin/sed";
       nixInstantiate = "${nix}/bin/nix-instantiate";
       mktempBin = "${mktemp}/bin/mktemp";
       diffBin = "${diffutils}/bin/diff";
