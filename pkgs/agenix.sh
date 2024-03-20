@@ -187,7 +187,7 @@ function edit {
 }
 
 function rekey {
-    FILES=$( (@nixInstantiate@ --json --eval -E "(let rules = import $RULES; in builtins.attrNames rules)"  | @jqBin@ -r .[]) || exit 1)
+    FILES=$( (@nixInstantiate@ --json --eval --strict -E "(let rules = import $RULES; in builtins.attrNames rules)"  | @jqBin@ -r .[]) || exit 1)
 
     for FILE in $FILES
     do
