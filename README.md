@@ -273,7 +273,7 @@ e.g. inside your `flake.nix` file:
    * your local computer usually in `~/.ssh`, e.g. `~/.ssh/id_ed25519.pub`.
    * from a running target machine with `ssh-keyscan`:
      ```ShellSession
-     $ ssh-keyscan <user>@<ip-address>
+     $ ssh-keyscan <ip-address>
      ... ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKzxQgondgEYcLpcPdJLrTdNgZ2gznOHCAxMdaceTUT1
      ...
      ```
