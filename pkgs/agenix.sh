@@ -171,7 +171,9 @@ function edit {
     ENCRYPT=()
     while IFS= read -r key
     do
-        ENCRYPT+=(--recipient "$key")
+        if [ -n "$key" ]; then
+            ENCRYPT+=(--recipient "$key")
+        fi
     done <<< "$KEYS"
 
     REENCRYPTED_DIR=$(@mktempBin@ -d)
