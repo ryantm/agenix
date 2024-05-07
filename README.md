@@ -205,7 +205,7 @@ You can run the CLI tool ad-hoc without installing it:
 nix run github:ryantm/agenix -- --help
 ```
 
-But you can also add it permanently into a [NixOS module](https://nixos.wiki/wiki/NixOS_modules) 
+But you can also add it permanently into a [NixOS module](https://wiki.nixos.org/wiki/NixOS_modules)
 (replace system "x86_64-linux" with your system):
 
 ```nix
