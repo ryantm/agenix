@@ -445,7 +445,7 @@ Example:
 #### `age.secrets.<name>.symlink`
 
 `age.secrets.<name>.symlink` is a boolean. If true (the default),
-secrets are symlinked to `age.secrets.<name>.path`. If false, secerts
+secrets are symlinked to `age.secrets.<name>.path`. If false, secrets
 are copied to `age.secrets.<name>.path`. Usually, you want to keep
 this as true, because it secure cleanup of secrets no longer
 used. (The symlink will still be there, but it will be broken.) If
