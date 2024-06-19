@@ -618,6 +618,8 @@ authentication code (MAC) like other implementations like GPG or
 [sops](https://github.com/Mic92/sops-nix) have, however this was left
 out for simplicity in `age`.
 
+Additionally you should only encrypt secrets that you are able to make useless in the event that they are decrypted in the future and be ready to rotate them periodically as [age](https://github.com/FiloSottile/age) is [as of 19th June 2024 NOT Post-Quantum Safe](https://github.com/FiloSottile/age/discussions/231#discussioncomment-3092773) and so in case the threat actor can access your encrypted keys e.g. via their use in a public repository then they can utilize the strategy of [Harvest Now, Decrypt Later](https://en.wikipedia.org/wiki/Harvest_now,_decrypt_later) to store your keys now for later decryption including the case where a major vulnerability is found that would expose the secrets. See https://github.com/FiloSottile/age/issues/578 for details.
+
 ## Contributing
 
 * The main branch is protected against direct pushes
