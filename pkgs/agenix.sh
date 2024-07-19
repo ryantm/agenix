@@ -6,11 +6,14 @@ PACKAGE="agenix"
 function show_help () {
   echo "$PACKAGE - edit and rekey age secret files"
   echo " "
+  echo "$PACKAGE -c FILE"
   echo "$PACKAGE -e FILE [-i PRIVATE_KEY]"
   echo "$PACKAGE -r [-i PRIVATE_KEY]"
   echo ' '
   echo 'options:'
   echo '-h, --help                show help'
+  # shellcheck disable=SC2016
+  echo '-c, --create FILE         create or replace FILE using $EDITOR'
   # shellcheck disable=SC2016
   echo '-e, --edit FILE           edits FILE using $EDITOR'
   echo '-r, --rekey               re-encrypts all secrets with specified recipients'
@@ -46,6 +49,7 @@ function err() {
 test $# -eq 0 && (show_help && exit 1)
 
 REKEY=0
+ENCRYPT_ONLY=0
 DECRYPT_ONLY=0
 DEFAULT_DECRYPT=(--decrypt)
 
@@ -54,6 +58,17 @@ while test $# -gt 0; do
     -h|--help)
       show_help
       exit 0
+      ;;
+    -c|--create)
+      shift
+      ENCRYPT_ONLY=1
+      if test $# -gt 0; then
+        export FILE=$1
+      else
+        echo "no FILE specified"
+        exit 1
+      fi
+      shift
       ;;
     -e|--edit)
       shift
@@ -153,22 +168,29 @@ function edit {
     CLEARTEXT_FILE="$CLEARTEXT_DIR/$(basename "$FILE")"
     DEFAULT_DECRYPT+=(-o "$CLEARTEXT_FILE")
 
-    decrypt "$FILE" "$KEYS" || exit 1
+    # Decrypt file
+    if [ $ENCRYPT_ONLY -eq 0 ]
+    then
+      decrypt "$FILE" "$KEYS" || exit 1
+      [ ! -f "$CLEARTEXT_FILE" ] || cp "$CLEARTEXT_FILE" "$CLEARTEXT_FILE.before"
+    else
+      touch "$CLEARTEXT_FILE.before"
+    fi
 
-    [ ! -f "$CLEARTEXT_FILE" ] || cp "$CLEARTEXT_FILE" "$CLEARTEXT_FILE.before"
-
+    # Prompt file edit
     [ -t 0 ] || EDITOR='cp /dev/stdin'
-
     $EDITOR "$CLEARTEXT_FILE"
 
+    # Check file status
     if [ ! -f "$CLEARTEXT_FILE" ]
     then
       warn "$FILE wasn't created."
       return
     fi
-    [ -f "$FILE" ] && [ "$EDITOR" != ":" ] && @diffBin@ -q "$CLEARTEXT_FILE.before" "$CLEARTEXT_FILE" && warn "$FILE wasn't changed, skipping re-encryption." && return
+    [ $ENCRYPT_ONLY -eq 0 ] && [ -f "$FILE" ] && [ "$EDITOR" != ":" ] && @diffBin@ -q "$CLEARTEXT_FILE.before" "$CLEARTEXT_FILE" && warn "$FILE wasn't changed, skipping re-encryption." && return
 
     ENCRYPT=()
+    # Build recipient list
     while IFS= read -r key
     do
         if [ -n "$key" ]; then

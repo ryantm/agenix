@@ -120,6 +120,10 @@ pkgs.nixosTest {
     # and get it back out via --decrypt
     assert "secret1234" in system1.succeed(userDo("agenix -d passwordfile-user1.age"))
 
+    # user1 can recreate the secret without decrypting it
+    system1.succeed(userDo("echo 'secret5678' | agenix -c passwordfile-user1.age"))
+    assert "secret5678" in system1.succeed(userDo("agenix -d passwordfile-user1.age"))
+
     # finally, the plain text should not linger around anywhere in the filesystem.
     system1.fail("grep -r secret1234 /tmp")
   '';
