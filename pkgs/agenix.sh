@@ -148,7 +148,7 @@ function cleanup {
 trap "cleanup" 0 2 3 15
 
 function keys {
-    (@nixInstantiate@ --json --eval --strict -E "(let rules = import $RULES; in rules.\"$FILE\".publicKeys)" | @jqBin@ -r .[]) || exit 1
+    (@nixInstantiate@ --json --eval --strict -E "(let rules = import $RULES; in rules.\"$1\".publicKeys)" | @jqBin@ -r .[]) || exit 1
 }
 
 function decrypt {
@@ -188,7 +188,7 @@ function edit {
 
     decrypt "$FILE" "$KEYS" || exit 1
 
-    cp "$CLEARTEXT_FILE" "$CLEARTEXT_FILE.before"
+    [ ! -f "$CLEARTEXT_FILE" ] || cp "$CLEARTEXT_FILE" "$CLEARTEXT_FILE.before"
 
     [ -t 0 ] || EDITOR='cp /dev/stdin'
 
@@ -204,7 +204,9 @@ function edit {
     ENCRYPT=()
     while IFS= read -r key
     do
-        ENCRYPT+=(--recipient "$key")
+        if [ -n "$key" ]; then
+            ENCRYPT+=(--recipient "$key")
+        fi
     done <<< "$KEYS"
 
     REENCRYPTED_DIR=$(@mktempBin@ -d)
@@ -214,7 +216,9 @@ function edit {
 
     @ageBin@ "${ENCRYPT[@]}" <"$CLEARTEXT_FILE" || exit 1
 
-    mv -f "$REENCRYPTED_FILE" "$1"
+    mkdir -p "$(dirname "$FILE")"
+
+    mv -f "$REENCRYPTED_FILE" "$FILE"
 }
 
 function rekey {

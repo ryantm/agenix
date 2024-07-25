@@ -11,6 +11,7 @@
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    systems.url = "github:nix-systems/default";
   };
 
   outputs = {
@@ -18,9 +19,9 @@
     nixpkgs,
     darwin,
     home-manager,
+    systems,
   }: let
-    agenix = system: nixpkgs.legacyPackages.${system}.callPackage ./pkgs/agenix.nix {};
-    doc = system: nixpkgs.legacyPackages.${system}.callPackage ./pkgs/doc.nix {};
+    eachSystem = nixpkgs.lib.genAttrs (import systems);
   in {
     nixosModules.age = import ./modules/age.nix;
     nixosModules.default = self.nixosModules.age;
@@ -33,30 +34,13 @@
 
     overlays.default = import ./overlay.nix;
 
-    formatter.x86_64-darwin = nixpkgs.legacyPackages.x86_64-darwin.alejandra;
-    packages.x86_64-darwin.agenix = agenix "x86_64-darwin";
-    packages.x86_64-darwin.doc = doc "x86_64-darwin";
-    packages.x86_64-darwin.default = self.packages.x86_64-darwin.agenix;
+    formatter = eachSystem (system: nixpkgs.legacyPackages.${system}.alejandra);
 
-    formatter.aarch64-darwin = nixpkgs.legacyPackages.aarch64-darwin.alejandra;
-    packages.aarch64-darwin.agenix = agenix "aarch64-darwin";
-    packages.aarch64-darwin.doc = doc "aarch64-darwin";
-    packages.aarch64-darwin.default = self.packages.aarch64-darwin.agenix;
-
-    formatter.aarch64-linux = nixpkgs.legacyPackages.aarch64-linux.alejandra;
-    packages.aarch64-linux.agenix = agenix "aarch64-linux";
-    packages.aarch64-linux.doc = doc "aarch64-linux";
-    packages.aarch64-linux.default = self.packages.aarch64-linux.agenix;
-
-    formatter.i686-linux = nixpkgs.legacyPackages.i686-linux.alejandra;
-    packages.i686-linux.agenix = agenix "i686-linux";
-    packages.i686-linux.doc = doc "i686-linux";
-    packages.i686-linux.default = self.packages.i686-linux.agenix;
-
-    formatter.x86_64-linux = nixpkgs.legacyPackages.x86_64-linux.alejandra;
-    packages.x86_64-linux.agenix = agenix "x86_64-linux";
-    packages.x86_64-linux.default = self.packages.x86_64-linux.agenix;
-    packages.x86_64-linux.doc = doc "x86_64-linux";
+    packages = eachSystem (system: {
+      agenix = nixpkgs.legacyPackages.${system}.callPackage ./pkgs/agenix.nix {};
+      doc = nixpkgs.legacyPackages.${system}.callPackage ./pkgs/doc.nix {inherit self;};
+      default = self.packages.${system}.agenix;
+    });
 
     checks =
       nixpkgs.lib.genAttrs ["aarch64-darwin" "x86_64-darwin"] (system: {
@@ -65,7 +49,10 @@
             inherit system;
             modules = [
               ./test/integration_darwin.nix
-              "${darwin.outPath}/pkgs/darwin-installer/installer.nix"
+
+              # Allow new-style nix commands in CI
+              {nix.extraOptions = "experimental-features = nix-command flakes";}
+
               home-manager.darwinModules.home-manager
               {
                 home-manager = {

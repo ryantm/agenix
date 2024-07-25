@@ -45,7 +45,7 @@ All files in the Nix store are readable by any system user, so it is not a suita
 
 ## Notices
 
-* Password-protected ssh keys: since the underlying tool age/rage do not support ssh-agent, password-protected ssh keys do not work well. For example, if you need to rekey 20 secrets you will have to enter your password 20 times.
+* Password-protected ssh keys: since age does not support ssh-agent, password-protected ssh keys do not work well. For example, if you need to rekey 20 secrets you will have to enter your password 20 times.
 
 ## Installation
 
@@ -205,7 +205,7 @@ You can run the CLI tool ad-hoc without installing it:
 nix run github:ryantm/agenix -- --help
 ```
 
-But you can also add it permanently into a [NixOS module](https://nixos.wiki/wiki/NixOS_modules) 
+But you can also add it permanently into a [NixOS module](https://wiki.nixos.org/wiki/NixOS_modules)
 (replace system "x86_64-linux" with your system):
 
 ```nix
@@ -273,7 +273,7 @@ e.g. inside your `flake.nix` file:
    * your local computer usually in `~/.ssh`, e.g. `~/.ssh/id_ed25519.pub`.
    * from a running target machine with `ssh-keyscan`:
      ```ShellSession
-     $ ssh-keyscan <user>@<ip-address>
+     $ ssh-keyscan <ip-address>
      ... ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKzxQgondgEYcLpcPdJLrTdNgZ2gznOHCAxMdaceTUT1
      ...
      ```
@@ -445,7 +445,7 @@ Example:
 #### `age.secrets.<name>.symlink`
 
 `age.secrets.<name>.symlink` is a boolean. If true (the default),
-secrets are symlinked to `age.secrets.<name>.path`. If false, secerts
+secrets are symlinked to `age.secrets.<name>.path`. If false, secrets
 are copied to `age.secrets.<name>.path`. Usually, you want to keep
 this as true, because it secure cleanup of secrets no longer
 used. (The symlink will still be there, but it will be broken.) If
@@ -487,7 +487,7 @@ Example of a secret with a name different from its attrpath:
 #### `age.ageBin`
 
 `age.ageBin` the string of the path to the `age` binary. Usually, you
-don't need to change this. Defaults to `rage/bin/rage`.
+don't need to change this. Defaults to `age/bin/age`.
 
 Overriding `age.ageBin` example:
 
@@ -592,13 +592,13 @@ improved upon by reading the identities from the age file.)
 
 #### Overriding age binary
 
-The agenix CLI uses `rage` by default as its age implemenation, you
-can use the reference implementation `age` with Flakes like this:
+The agenix CLI uses `age` by default as its age implemenation, you
+can use the `rage` implementation with Flakes like this:
 
 ```nix
 {pkgs,agenix,...}:{
   environment.systemPackages = [
-    (agenix.packages.x86_64-linux.default.override { ageBin = "${pkgs.age}/bin/age"; })
+    (agenix.packages.x86_64-linux.default.override { ageBin = "${pkgs.rage}/bin/rage"; })
   ];
 }
 ```
@@ -622,6 +622,8 @@ example, 4096-bit rsa keys). This would be solved by having a message
 authentication code (MAC) like other implementations like GPG or
 [sops](https://github.com/Mic92/sops-nix) have, however this was left
 out for simplicity in `age`.
+
+Additionally you should only encrypt secrets that you are able to make useless in the event that they are decrypted in the future and be ready to rotate them periodically as [age](https://github.com/FiloSottile/age) is [as of 19th June 2024 NOT Post-Quantum Safe](https://github.com/FiloSottile/age/discussions/231#discussioncomment-3092773) and so in case the threat actor can access your encrypted keys e.g. via their use in a public repository then they can utilize the strategy of [Harvest Now, Decrypt Later](https://en.wikipedia.org/wiki/Harvest_now,_decrypt_later) to store your keys now for later decryption including the case where a major vulnerability is found that would expose the secrets. See https://github.com/FiloSottile/age/issues/578 for details.
 
 ## Contributing
 

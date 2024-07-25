@@ -69,6 +69,7 @@ with lib; let
     IDENTITIES=()
     for identity in ${toString cfg.identityPaths}; do
       test -r "$identity" || continue
+      test -s "$identity" || continue
       IDENTITIES+=(-i)
       IDENTITIES+=("$identity")
     done
@@ -87,7 +88,7 @@ with lib; let
     mv -f "$TMP_FILE" "$_truePath"
 
     ${optionalString secretType.symlink ''
-      [ "${secretType.path}" != "${cfg.secretsDir}/${secretType.name}" ] && ln -sfn "${cfg.secretsDir}/${secretType.name}" "${secretType.path}"
+      [ "${secretType.path}" != "${cfg.secretsDir}/${secretType.name}" ] && ln -sfT "${cfg.secretsDir}/${secretType.name}" "${secretType.path}"
     ''}
   '';
 
@@ -102,7 +103,7 @@ with lib; let
     _agenix_generation="$(basename "$(readlink ${cfg.secretsDir})" || echo 0)"
     (( ++_agenix_generation ))
     echo "[agenix] symlinking new secrets to ${cfg.secretsDir} (generation $_agenix_generation)..."
-    ln -sfn "${cfg.secretsMountPoint}/$_agenix_generation" ${cfg.secretsDir}
+    ln -sfT "${cfg.secretsMountPoint}/$_agenix_generation" ${cfg.secretsDir}
 
     (( _agenix_generation > 1 )) && {
     echo "[agenix] removing old secrets (generation $(( _agenix_generation - 1 )))..."
@@ -189,9 +190,9 @@ in {
   options.age = {
     ageBin = mkOption {
       type = types.str;
-      default = "${pkgs.rage}/bin/rage";
+      default = "${pkgs.age}/bin/age";
       defaultText = literalExpression ''
-        "''${pkgs.rage}/bin/rage"
+        "''${pkgs.age}/bin/age"
       '';
       description = ''
         The age executable to use.
