@@ -5,4 +5,8 @@ in {
   "secret1.age".publicKeys = [user1 system1];
   "secret2.age".publicKeys = [user1];
   "passwordfile-user1.age".publicKeys = [user1 system1];
+  "armored-secret.age" = {
+    publicKeys = [ user1 ];
+    armor = true;
+  };
 }
