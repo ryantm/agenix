@@ -332,6 +332,10 @@ e.g. inside your `flake.nix` file:
    {
      "secret1.age".publicKeys = [ user1 system1 ];
      "secret2.age".publicKeys = users ++ systems;
+     "armored-secret.age" = {
+       publicKeys = [ user1 ];
+       armor = true;
+     };
    }
    ```
    These are the users and systems that will be able to decrypt the `.age` files later with their corresponding private keys.
