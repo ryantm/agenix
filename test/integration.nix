@@ -64,6 +64,10 @@ pkgs.nixosTest {
           file = ../example/secret2.age;
           path = "/home/user1/secret2";
         };
+        secrets.armored-secret = {
+          file = ../example/armored-secret.age;
+          path = "/home/user1/armored-secret";
+        };
       };
     };
   };
@@ -73,6 +77,7 @@ pkgs.nixosTest {
     password = "password1234";
     secret2 = "world!";
     hyphen-secret = "filename started with hyphen";
+    armored-secret = "Hello World!";
   in ''
     system1.wait_for_unit("multi-user.target")
     system1.wait_until_succeeds("pgrep -f 'agetty.*tty1'")
@@ -91,8 +96,10 @@ pkgs.nixosTest {
     system1.wait_for_file("/tmp/1")
     assert "${user}" in system1.succeed("cat /tmp/1")
     system1.send_chars("cat /run/user/$(id -u)/agenix/secret2 > /tmp/2\n")
+    system1.send_chars("cat /run/user/$(id -u)/agenix/armored-secret > /tmp/3\n")
     system1.wait_for_file("/tmp/2")
     assert "${secret2}" in system1.succeed("cat /tmp/2")
+    assert "${armored-secret}" in system1.succeed("cat /tmp/3")
 
     assert "${hyphen-secret}" in system1.succeed("cat /run/agenix/leading-hyphen")
 
