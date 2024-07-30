@@ -7,7 +7,7 @@ in {
   "passwordfile-user1.age".publicKeys = [user1 system1];
   "-leading-hyphen-filename.age".publicKeys = [user1 system1];
   "armored-secret.age" = {
-    publicKeys = [ user1 ];
+    publicKeys = [user1];
     armor = true;
   };
 }
