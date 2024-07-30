@@ -65,7 +65,6 @@ pkgs.nixosTest {
         };
         secrets.armored-secret = {
           file = ../example/armored-secret.age;
-          path = "/home/user1/armored-secret";
         };
       };
     };
