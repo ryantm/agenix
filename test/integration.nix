@@ -95,9 +95,10 @@ pkgs.nixosTest {
     system1.wait_for_file("/tmp/1")
     assert "${user}" in system1.succeed("cat /tmp/1")
     system1.send_chars("cat /run/user/$(id -u)/agenix/secret2 > /tmp/2\n")
-    system1.send_chars("cat /run/user/$(id -u)/agenix/armored-secret > /tmp/3\n")
     system1.wait_for_file("/tmp/2")
     assert "${secret2}" in system1.succeed("cat /tmp/2")
+    system1.send_chars("cat /run/user/$(id -u)/agenix/armored-secret > /tmp/3\n")
+    system1.wait_for_file("/tmp/3")
     assert "${armored-secret}" in system1.succeed("cat /tmp/3")
 
     assert "${hyphen-secret}" in system1.succeed("cat /run/agenix/leading-hyphen")
