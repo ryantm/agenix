@@ -339,6 +339,7 @@ e.g. inside your `flake.nix` file:
    }
    ```
    These are the users and systems that will be able to decrypt the `.age` files later with their corresponding private keys.
+   The armor option may also be supplied here to ensure files are output in Base64 PEM text which is useful for more readable diffs.
    You can obtain the public keys from
    * your local computer usually in `~/.ssh`, e.g. `~/.ssh/id_ed25519.pub`.
    * from a running target machine with `ssh-keyscan`:
