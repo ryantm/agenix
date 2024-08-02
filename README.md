@@ -370,7 +370,7 @@ e.g. inside your `flake.nix` file:
    ```
    You can reference the mount path to the (later) unencrypted secret already in your other configuration.
    So `config.age.secrets.secret1.path` will contain the path `/run/agenix/secret1` by default.
-7. Use `nixos-rebuild` or [another deployment tool](https://nixos.wiki/wiki/Applications#Deployment") of choice as usual.
+7. Use `nixos-rebuild` or [another deployment tool](https://wiki.nixos.org/wiki/Applications#Deployment") of choice as usual.
 
    The `secret1.age` file will be copied over to the target machine like any other Nix package.
    Then it will be decrypted and mounted as described before.
