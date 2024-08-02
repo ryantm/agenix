@@ -26,8 +26,8 @@ function show_help () {
   echo ' '
   echo 'If STDIN is not interactive, EDITOR will be set to "cp /dev/stdin"'
   echo ' '
-  echo 'RULES environment variable with path to Nix file specifying recipient public keys.'
-  echo "Defaults to './secrets.nix'"
+  echo 'AGENIX_RULES environment variable with path to Nix file specifying recipient public keys.'
+  echo "Defaults to './agenix-rules.nix'"
   echo ' '
   echo "agenix version: @version@"
   echo "age binary path: @ageBin@"
@@ -101,7 +101,40 @@ while test $# -gt 0; do
   esac
 done
 
-RULES=${RULES:-./secrets.nix}
+function get_configured_rules {
+    # prints the first among $AGENIX_RULES, $RULES, erroring out if it points to a
+    # non-existing file
+    ! [ -v AGENIX_RULES ] && ! [ -v RULES ] && return 1
+    local rulesfile="${AGENIX_RULES:-$RULES}"
+    [ -f "$rulesfile" ] || {
+        [ -v AGENIX_RULES ] && variable='AGENIX_RULES' || variable='RULES'
+        err "Rules file '$rulesfile' specified via the variable $variable not found."
+    }
+    echo "$rulesfile"
+}
+
+function find_rules {
+    # walks up the directory tree, printing the first file named agenix-rules.nix
+    # or ./secrets.nix it finds and erroring out otherwise
+    local cwd="$PWD"
+    local rulesfile=''
+    while [ -z "$rulesfile" ]
+    do
+        for f in "$cwd/agenix-rules.nix" "$cwd/secrets.nix"
+        do
+            [ -f "$f" ] && rulesfile="$f"
+        done
+        [ "$cwd" != '/' ] || break
+        cwd=$(dirname "$cwd")
+    done
+    [ -n "$rulesfile" ] || err "$PACKAGE needs a rules file. You can specify one by setting the AGENIX_RULES variable or you can create a file named 'agenix-rules.nix' in the current directory or one of its parents."
+    echo "$rulesfile"
+    unset cwd rulesfile
+}
+
+RULES=$(get_configured_rules || find_rules)
+[ -r "$RULES" ] || err "Cannot read rules file '$RULES'."
+
 function cleanup {
     if [ -n "${CLEARTEXT_DIR+x}" ]
     then
