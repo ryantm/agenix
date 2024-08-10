@@ -146,12 +146,12 @@ with lib; let
     baseDir =
       if isDarwin
       then "$(getconf DARWIN_USER_TEMP_DIR)"
-      else "$XDG_RUNTIME_DIR";
+      else "\${XDG_RUNTIME_DIR}";
   in "${baseDir}/${dir}";
 
   userDirectoryDescription = dir:
     literalExpression ''
-      "$XDG_RUNTIME_DIR"/${dir} on linux or "$(getconf DARWIN_USER_TEMP_DIR)"/${dir} on darwin.
+      "${XDG_RUNTIME_DIR}"/${dir} on linux or "$(getconf DARWIN_USER_TEMP_DIR)"/${dir} on darwin.
     '';
 in {
   options.age = {
