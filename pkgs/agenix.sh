@@ -157,7 +157,17 @@ function edit {
 
     [ ! -f "$CLEARTEXT_FILE" ] || cp "$CLEARTEXT_FILE" "$CLEARTEXT_FILE.before"
 
-    [ -t 0 ] || EDITOR='cp /dev/stdin'
+    if [ ! -t 0 ]; then
+      EDITOR='cp /dev/stdin'
+    else
+      COMMON_EDITORS=("${EDITOR}" "vim" "vi" "nvim" "nano")
+      for e in "${COMMON_EDITORS[@]}"; do
+        if command -v "$e" &> /dev/null; then
+          EDITOR="$e"
+          break
+        fi
+      done
+    fi
 
     $EDITOR "$CLEARTEXT_FILE"
 
