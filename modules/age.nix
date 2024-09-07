@@ -17,7 +17,7 @@ with lib; let
   sysusersEnabled =
     if isDarwin
     then false
-    else options.systemd ? sysusers && config.systemd.sysusers.enable;
+    else options.systemd ? sysusers && (config.systemd.sysusers.enable || config.services.userborn.enable);
 
   mountCommand =
     if isDarwin
