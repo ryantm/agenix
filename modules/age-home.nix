@@ -11,7 +11,7 @@ with lib; let
   ageBin = lib.getExe config.age.package;
 
   newGeneration = ''
-    _agenix_generation="$(basename "$(readlink "${cfg.secretsDir}")" || echo 0)"
+    _agenix_generation="$(basename "$(readlink "${cfg.secretsDir}" || echo 0)")"
     (( ++_agenix_generation ))
     echo "[agenix] creating new generation in ${cfg.secretsMountPoint}/$_agenix_generation"
     mkdir -p "${cfg.secretsMountPoint}"
@@ -73,7 +73,7 @@ with lib; let
     cfg.identityPaths;
 
   cleanupAndLink = ''
-    _agenix_generation="$(basename "$(readlink "${cfg.secretsDir}")" || echo 0)"
+    _agenix_generation="$(basename "$(readlink "${cfg.secretsDir}" || echo 0)")"
     (( ++_agenix_generation ))
     echo "[agenix] symlinking new secrets to ${cfg.secretsDir} (generation $_agenix_generation)..."
     ln -sfT "${cfg.secretsMountPoint}/$_agenix_generation" "${cfg.secretsDir}"
