@@ -65,6 +65,12 @@ with lib; let
     ''}
   '';
 
+  substituteSecret = secretType:
+    builtins.concatStringsSep "\n" (builtins.map (file: ''
+        ${pkgs.gnused}/bin/sed -i "s#@${secretType.name}@#$(cat ${secretType.path})#" ${file}
+      '')
+      secretType.substitutions);
+
   testIdentities =
     map
     (path: ''
@@ -89,6 +95,11 @@ with lib; let
     ++ testIdentities
     ++ (map installSecret (builtins.attrValues cfg.secrets))
     ++ [cleanupAndLink]
+  );
+
+  substituteSecrets = builtins.concatStringsSep "\n" (
+    ["echo '[agenix] substituting secrets...'"]
+    ++ (map substituteSecret (builtins.attrValues cfg.secrets))
   );
 
   secretType = types.submodule ({
@@ -117,6 +128,14 @@ with lib; let
           Path where the decrypted secret is installed.
         '';
       };
+      substitutions = mkOption {
+        type = types.listOf types.str;
+        default = [];
+        description = ''
+          List of files to substitute the secret into.
+          WARNING: It is recommended to set `force = true` for files managed through home-manager.
+        '';
+      };
       mode = mkOption {
         type = types.str;
         default = "0400";
@@ -135,6 +154,7 @@ with lib; let
       text = ''
         ${newGeneration}
         ${installSecrets}
+        ${substituteSecrets}
         exit 0
       '';
     };
@@ -233,5 +253,9 @@ in {
         StandardErrorPath = "${config.home.homeDirectory}/Library/Logs/agenix/stderr";
       };
     };
+
+    home.activation.agenix = lib.mkIf pkgs.stdenv.hostPlatform.isLinux (
+      lib.hm.dag.entryAfter ["linkGeneration"] mountingScript
+    );
   };
 }
