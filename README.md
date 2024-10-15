@@ -278,6 +278,7 @@ e.g. inside your `flake.nix` file:
      ...
      ```
    * from GitHub like https://github.com/ryantm.keys.
+   * from GitLab like https://gitlab.com/ryantm.keys.
 4. Create a secret file:
    ```ShellSession
    $ agenix -e secret1.age
