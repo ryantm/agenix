@@ -13,7 +13,7 @@ function show_help () {
   echo '-h, --help                show help'
   # shellcheck disable=SC2016
   echo '-e, --edit FILE           edits FILE using $EDITOR'
-  echo '-r, --rekey               re-encrypts all secrets with specified recipients'
+  echo '-r, --rekey [PUBLIC_KEY]  re-encrypts all secrets with specified recipients'
   echo '-d, --decrypt FILE        decrypts FILE to STDOUT'
   echo '-i, --identity            identity to use when decrypting'
   echo '-v, --verbose             verbose output'
@@ -46,6 +46,7 @@ function err() {
 test $# -eq 0 && (show_help && exit 1)
 
 REKEY=0
+REKEY_PUBLIC_KEY=
 DECRYPT_ONLY=0
 DEFAULT_DECRYPT=(--decrypt)
 
@@ -77,6 +78,10 @@ while test $# -gt 0; do
       ;;
     -r|--rekey)
       shift
+      if test $# -gt 0; then
+        REKEY_PUBLIC_KEY="$1"
+        shift
+      fi
       REKEY=1
       ;;
     -d|--decrypt)
@@ -189,7 +194,22 @@ function edit {
 }
 
 function rekey {
-    FILES=$( (@nixInstantiate@ --json --eval -E "(let rules = import $RULES; in builtins.attrNames rules)"  | @jqBin@ -r .[]) || exit 1)
+    if test ! -z "$REKEY_PUBLIC_KEY"; then
+        FILTER_EXPRESSION="builtins.elem \"$REKEY_PUBLIC_KEY\" rules.\${file}.publicKeys";
+    else
+        FILTER_EXPRESSION="true";
+    fi
+
+    RULES_EXPRESSION=$(cat <<EOF
+let 
+    rules = import $RULES;
+    filter = file: $FILTER_EXPRESSION;
+in 
+    builtins.filter filter (builtins.attrNames rules)
+EOF
+)
+
+    FILES=$( (@nixInstantiate@ --json --eval -E "$RULES_EXPRESSION"  | @jqBin@ -r .[]) || exit 1)
 
     for FILE in $FILES
     do
