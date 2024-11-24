@@ -13,6 +13,7 @@ function show_help () {
   echo '-h, --help                show help'
   # shellcheck disable=SC2016
   echo '-e, --edit FILE           edits FILE using $EDITOR'
+  echo '-f, --encrypt FILE OUTPUT encrypts a given FILE to OUTPUT'
   echo '-r, --rekey               re-encrypts all secrets with specified recipients'
   echo '-d, --decrypt FILE        decrypts FILE to STDOUT'
   echo '-i, --identity            identity to use when decrypting'
@@ -47,6 +48,7 @@ test $# -eq 0 && (show_help && exit 1)
 
 REKEY=0
 DECRYPT_ONLY=0
+ENCRYPT_FILE=0
 DEFAULT_DECRYPT=(--decrypt)
 
 while test $# -gt 0; do
@@ -61,6 +63,24 @@ while test $# -gt 0; do
         export FILE=$1
       else
         echo "no FILE specified"
+        exit 1
+      fi
+      shift
+      ;;
+    -f|--encrypt)
+      shift
+      ENCRYPT_FILE=1
+      if test $# -gt 0; then
+        export FILE=$1
+      else
+        echo "no FILE specified"
+        exit 1
+      fi
+      shift
+      if test $# -gt 0; then
+        export OUTPUT=$1
+      else
+        echo "no OUTPUT specified"
         exit 1
       fi
       shift
@@ -188,6 +208,37 @@ function edit {
     mv -f "$REENCRYPTED_FILE" "$FILE"
 }
 
+function encrypt {
+    FILE=$1
+    OUTPUT=$2
+    KEYS=$(keys "$OUTPUT") || exit 1
+
+    if [ ! -f "$FILE" ]
+    then
+      warn "$FILE does not exist."
+      return
+    fi
+
+    ENCRYPT=()
+    while IFS= read -r key
+    do
+        if [ -n "$key" ]; then
+            ENCRYPT+=(--recipient "$key")
+        fi
+    done <<< "$KEYS"
+
+    ENCRYPTED_DIR=$(@mktempBin@ -d)
+    ENCRYPTED_FILE="$ENCRYPTED_DIR/$(basename "$OUTPUT")"
+
+    ENCRYPT+=(-o "$ENCRYPTED_FILE")
+
+    @ageBin@ "${ENCRYPT[@]}" <"$FILE" || exit 1
+
+    mkdir -p "$(dirname "$FILE")"
+
+    mv -f "$ENCRYPTED_FILE" "$OUTPUT"
+}
+
 function rekey {
     FILES=$( (@nixInstantiate@ --json --eval -E "(let rules = import $RULES; in builtins.attrNames rules)"  | @jqBin@ -r .[]) || exit 1)
 
@@ -201,4 +252,5 @@ function rekey {
 
 [ $REKEY -eq 1 ] && rekey && exit 0
 [ $DECRYPT_ONLY -eq 1 ] && DEFAULT_DECRYPT+=("-o" "-") && decrypt "${FILE}" "$(keys "$FILE")" && exit 0
+[ $ENCRYPT_FILE -eq 1 ] && encrypt "$FILE" "$OUTPUT" && exit 0
 edit "$FILE" && cleanup && exit 0
