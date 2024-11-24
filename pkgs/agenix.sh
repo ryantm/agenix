@@ -227,16 +227,8 @@ function encrypt {
         fi
     done <<< "$KEYS"
 
-    ENCRYPTED_DIR=$(@mktempBin@ -d)
-    ENCRYPTED_FILE="$ENCRYPTED_DIR/$(basename "$OUTPUT")"
-
-    ENCRYPT+=(-o "$ENCRYPTED_FILE")
-
+    ENCRYPT+=(-o "$OUTPUT")
     @ageBin@ "${ENCRYPT[@]}" <"$FILE" || exit 1
-
-    mkdir -p "$(dirname "$FILE")"
-
-    mv -f "$ENCRYPTED_FILE" "$OUTPUT"
 }
 
 function rekey {
