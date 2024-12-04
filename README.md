@@ -253,6 +253,10 @@ e.g. inside your `flake.nix` file:
    This `secrets.nix` file is **not** imported into your NixOS configuration. 
    It's only used for the `agenix` CLI tool (example below) to know which public keys to use for encryption.
 3. Add public keys to your `secrets.nix` file:
+> [!NOTE]
+> If you use impermanence and wish to decrypt secrets on boot time for use cases such as
+> user passwords, you must set the partition where your private keys are stored as ``neededForBoot``
+> using ``fileSystems.${PARTITION_DIRECTORY}.neededForBoot = true;``  
    ```nix
    let
      user1 = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIL0idNvgGiucWgup/mP78zyC23uFjYq0evcWdjGQUaBH";
@@ -278,13 +282,13 @@ e.g. inside your `flake.nix` file:
      ...
      ```
    * from GitHub like https://github.com/ryantm.keys.
-4. Create a secret file:
+5. Create a secret file:
    ```ShellSession
    $ agenix -e secret1.age
    ```
    It will open a temporary file in the app configured in your $EDITOR environment variable.
    When you save that file its content will be encrypted with all the public keys mentioned in the `secrets.nix` file.
-5. Add secret to a NixOS module config:
+6. Add secret to a NixOS module config:
    ```nix
    {
      age.secrets.secret1.file = ../secrets/secret1.age;
@@ -293,7 +297,7 @@ e.g. inside your `flake.nix` file:
    When the `age.secrets` attribute set contains a secret, the `agenix` NixOS module will later automatically decrypt and mount that secret under the default path `/run/agenix/secret1`. 
    Here the `secret1.age` file becomes part of your NixOS deployment, i.e. moves into the Nix store.
 
-6. Reference the secrets' mount path in your config:
+7. Reference the secrets' mount path in your config:
    ```nix
    {
      users.users.user1 = {
@@ -304,11 +308,11 @@ e.g. inside your `flake.nix` file:
    ```
    You can reference the mount path to the (later) unencrypted secret already in your other configuration.
    So `config.age.secrets.secret1.path` will contain the path `/run/agenix/secret1` by default.
-7. Use `nixos-rebuild` or [another deployment tool](https://nixos.wiki/wiki/Applications#Deployment") of choice as usual.
+8. Use `nixos-rebuild` or [another deployment tool](https://nixos.wiki/wiki/Applications#Deployment") of choice as usual.
 
    The `secret1.age` file will be copied over to the target machine like any other Nix package. 
    Then it will be decrypted and mounted as described before.
-8. Edit secret files:
+9. Edit secret files:
    ```ShellSession
    $ agenix -e secret1.age
    ```
