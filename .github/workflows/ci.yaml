@@ -17,10 +17,10 @@ jobs:
     - run: nix fmt . -- --check
     - run: nix flake check
   tests-darwin:
-    runs-on: macos-12
+    runs-on: macos-15
     steps:
     - uses: actions/checkout@v3
-    - uses: cachix/install-nix-action@v24
+    - uses: cachix/install-nix-action@v30
       with:
         extra_nix_config: |
           system-features = nixos-test recursive-nix benchmark big-parallel kvm
@@ -36,7 +36,7 @@ jobs:
         sudo mv /etc/nix/nix.conf{,.bak}
         nix \
           --extra-experimental-features 'nix-command flakes' \
-          build .#checks.x86_64-darwin.integration
+          build .#checks.aarch64-darwin.integration
 
         ./result/activate-user
         sudo ./result/activate
