@@ -17,7 +17,7 @@ jobs:
     - run: nix fmt . -- --check
     - run: nix flake check
   tests-darwin:
-    runs-on: macos-15
+    runs-on: macos-latest
     steps:
     - uses: actions/checkout@v3
     - uses: cachix/install-nix-action@v30
@@ -31,12 +31,17 @@ jobs:
     - run: nix flake check
     - name: "Install nix-darwin module"
       run: |
+        # Determine architecture of GitHub runner
+        ARCH=x86_64
+        if [ "$(arch)" = arm64 ]; then
+            ARCH=aarch64
+        fi
         # https://github.com/ryantm/agenix/pull/230#issuecomment-1867025385
 
         sudo mv /etc/nix/nix.conf{,.bak}
         nix \
           --extra-experimental-features 'nix-command flakes' \
-          build .#checks.aarch64-darwin.integration
+          build .#checks."${ARCH}"-darwin.integration
 
         ./result/activate-user
         sudo ./result/activate
