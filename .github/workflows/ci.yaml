@@ -34,7 +34,7 @@ jobs:
         # Determine architecture of GitHub runner
         ARCH=x86_64
         if [ "$(arch)" = arm64 ]; then
-            ARCH=aarch64
+          ARCH=aarch64
         fi
         # https://github.com/ryantm/agenix/pull/230#issuecomment-1867025385
 
