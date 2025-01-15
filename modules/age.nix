@@ -228,22 +228,22 @@ in {
     identityPaths = mkOption {
       type = types.listOf types.path;
       default =
-        if (config.services.openssh.enable or false)
-        then map (e: e.path) (lib.filter (e: e.type == "rsa" || e.type == "ed25519") config.services.openssh.hostKeys)
-        else if isDarwin
+        if isDarwin
         then [
           "/etc/ssh/ssh_host_ed25519_key"
           "/etc/ssh/ssh_host_rsa_key"
         ]
+        else if (config.services.openssh.enable or false)
+        then map (e: e.path) (lib.filter (e: e.type == "rsa" || e.type == "ed25519") config.services.openssh.hostKeys)
         else [];
       defaultText = literalExpression ''
-        if (config.services.openssh.enable or false)
-        then map (e: e.path) (lib.filter (e: e.type == "rsa" || e.type == "ed25519") config.services.openssh.hostKeys)
-        else if isDarwin
+        if isDarwin
         then [
           "/etc/ssh/ssh_host_ed25519_key"
           "/etc/ssh/ssh_host_rsa_key"
         ]
+        else if (config.services.openssh.enable or false)
+        then map (e: e.path) (lib.filter (e: e.type == "rsa" || e.type == "ed25519") config.services.openssh.hostKeys)
         else [];
       '';
       description = ''
