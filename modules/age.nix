@@ -82,7 +82,7 @@ with lib; let
       umask u=r,g=,o=
       test -f "${secretType.file}" || echo '[agenix] WARNING: encrypted file ${secretType.file} does not exist!'
       test -d "$(dirname "$TMP_FILE")" || echo "[agenix] WARNING: $(dirname "$TMP_FILE") does not exist!"
-      LANG=${config.i18n.defaultLocale or "C"} ${ageBin} --decrypt "''${IDENTITIES[@]}" -o "$TMP_FILE" "${secretType.file}"
+      LANG=${config.i18n.defaultLocale or "C"} PATH=${lib.makeBinPath cfg.pluginPackages} ${ageBin} --decrypt "''${IDENTITIES[@]}" -o "$TMP_FILE" "${secretType.file}"
     )
     chmod ${secretType.mode} "$TMP_FILE"
     mv -f "$TMP_FILE" "$_truePath"
@@ -196,6 +196,13 @@ in {
       '';
       description = ''
         The age executable to use.
+      '';
+    };
+    pluginPackages = mkOption {
+      type = types.listOf types.package;
+      default = [];
+      description = ''
+        List of age plugins that should be available in $PATH during the build.
       '';
     };
     secrets = mkOption {
