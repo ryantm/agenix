@@ -280,7 +280,7 @@ e.g. inside your `flake.nix` file:
    * from GitHub like https://github.com/ryantm.keys.
 4. Create a secret file:
    ```ShellSession
-   $ agenix -e secret1.age
+   $ agenix -c secret1.age
    ```
    It will open a temporary file in the app configured in your $EDITOR environment variable.
    When you save that file its content will be encrypted with all the public keys mentioned in the `secrets.nix` file.
@@ -548,11 +548,13 @@ Overriding `age.secretsMountPoint` example:
 ```
 agenix - edit and rekey age secret files
 
+agenix -c FILE
 agenix -e FILE [-i PRIVATE_KEY]
 agenix -r [-i PRIVATE_KEY]
 
 options:
 -h, --help                show help
+-c, --create FILE         create or replace FILE using $EDITOR
 -e, --edit FILE           edits FILE using $EDITOR
 -r, --rekey               re-encrypts all secrets with specified recipients
 -d, --decrypt FILE        decrypts FILE to STDOUT
