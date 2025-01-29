@@ -131,6 +131,7 @@ with lib; let
 
   substituteSecret = secretType:
     builtins.concatStringsSep "\n" (builtins.map (file: ''
+        echo "substituting secret '$(cat "${secretType.path}")' from '${secretType.path}' into '${file}'..."
         ${pkgs.gnused}/bin/sed -i "s#@${secretType.name}@#$(cat ${secretType.path})#" ${file}
       '')
       secretType.substitutions);
