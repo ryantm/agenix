@@ -233,6 +233,7 @@ in {
       Unit = {
         Description = "agenix activation";
         X-SwitchMethod = "restart";
+        After = ["default.target"];
       };
       Service = {
         Type = "oneshot";
