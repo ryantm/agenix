@@ -119,10 +119,12 @@ let
     }
   '';
 
+  enabledSecrets = lib.filter (secret: secret.enable) (builtins.attrValues cfg.secrets);
+
   installSecrets = builtins.concatStringsSep "\n" (
     [ "echo '[agenix] decrypting secrets...'" ]
     ++ testIdentities
-    ++ (map installSecret (builtins.attrValues cfg.secrets))
+    ++ (map installSecret enabledSecrets)
     ++ [ cleanupAndLink ]
   );
 
@@ -134,13 +136,18 @@ let
   chownSecrets = builtins.concatStringsSep "\n" (
     [ "echo '[agenix] chowning...'" ]
     ++ [ chownMountPoint ]
-    ++ (map chownSecret (builtins.attrValues cfg.secrets))
+    ++ (map chownSecret enabledSecrets)
   );
 
   secretType = types.submodule (
     { config, ... }:
     {
       options = {
+        enable = mkOption {
+          type = types.bool;
+          default = true;
+          description = "Whether to decrypt and install this secret.";
+        };
         name = mkOption {
           type = types.str;
           default = config._module.args.name;
@@ -202,6 +209,10 @@ in
   ];
 
   options.age = {
+    enable = mkEnableOption "agenix" // {
+      default = cfg.secrets != { };
+    };
+
     ageBin = mkOption {
       type = types.str;
       default = "${pkgs.age}/bin/age";
@@ -271,7 +282,7 @@ in
     };
   };
 
-  config = mkIf (cfg.secrets != { }) (mkMerge [
+  config = mkIf cfg.enable (mkMerge [
     {
       assertions = [
         {
