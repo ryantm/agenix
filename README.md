@@ -22,6 +22,7 @@ This project contains two parts:
 * [Tutorial](#tutorial)
 * [Reference](#reference)
   * [`age` module reference](#age-module-reference)
+  * [`age-home` module reference](#age-home-module-reference)
   * [agenix CLI reference](#agenix-cli-reference)
 * [Community and Support](#community-and-support)
 * [Threat model/Warnings](#threat-modelwarnings)
@@ -72,6 +73,16 @@ Then add the following to your `configuration.nix` in the `imports` list:
 }
 ```
 
+#### Install home-manager module via niv
+
+Add the following to your home configuration:
+
+```nix
+{
+  imports = [ "${(import ./nix/sources.nix).agenix}/modules/age-home.nix" ];
+}
+```
+
 #### Install CLI via niv
 
 To install the `agenix` binary:
@@ -105,6 +116,16 @@ Then add the following to your `configuration.nix` in the `imports` list:
 ```nix
 {
   imports = [ <agenix/modules/age.nix> ];
+}
+```
+
+#### Install home-manager module via nix-channel
+
+Add the following to your home configuration:
+
+```nix
+{
+  imports = [ <agenix/modules/age-home.nix> ];
 }
 ```
 
@@ -154,6 +175,33 @@ Add the following to your configuration.nix:
 }
 ```
 
+#### Install home-manager module via fetchTarball
+
+Add the following to your home configuration:
+
+```nix
+{
+  imports = [ "${builtins.fetchTarball "https://github.com/ryantm/agenix/archive/main.tar.gz"}/modules/age-home.nix" ];
+}
+```
+
+Or with pinning:
+
+```nix
+{
+  imports = let
+    # replace this with an actual commit id or tag
+    commit = "298b235f664f925b433614dc33380f0662adfc3f";
+  in [
+    "${builtins.fetchTarball {
+      url = "https://github.com/ryantm/agenix/archive/${commit}.tar.gz";
+      # update hash from nix build output
+      sha256 = "";
+    }}/modules/age-home.nix"
+  ];
+}
+```
+
 #### Install CLI via fetchTarball
 
 To install the `agenix` binary:
@@ -191,6 +239,24 @@ To install the `agenix` binary:
       modules = [
         ./configuration.nix
         agenix.nixosModules.default
+      ];
+    };
+  };
+}
+```
+
+#### Install home-manager module via Flakes
+
+```nix
+{
+  inputs.agenix.url = "github:ryantm/agenix";
+  
+  outputs = { self, nixpkgs, agenix, home-manager }: {
+    homeConfigurations."username" = home-manager.lib.homeManagerConfiguration {
+      # ...
+      modules = [
+        agenix.homeManagerModules.default
+        # ...
       ];
     };
   };
@@ -318,6 +384,39 @@ e.g. inside your `flake.nix` file:
    ```ShellSession
    $ agenix -e secret1.age -i ~/.ssh/id_ed25519
    ```
+
+### Using agenix with home-manager
+
+The home-manager module follows the same general principles as the NixOS module but is scoped to a single user. Here's how to use it:
+
+1. Add the home-manager module to your configuration as shown in the Installation section.
+2. Define your SSH identities and secrets:
+
+```nix
+{
+  age = {
+    identityPaths = [ "~/.ssh/id_ed25519" ];
+    secrets = {
+      example-secret = {
+        file = ../secrets/example-secret.age;
+      };
+    };
+  };
+}
+```
+
+3. Reference your secrets in your home configuration:
+
+```nix
+{
+  programs.some-program = {
+    enable = true;
+    passwordFile = config.age.secrets.example-secret.path;
+  };
+}
+```
+
+When you run `home-manager switch`, your secrets will be decrypted to a user-specific directory (usually `$XDG_RUNTIME_DIR/agenix` on Linux or a temporary directory on Darwin) and can be referenced in your configuration.
 
 ## Reference
 
@@ -542,6 +641,54 @@ Overriding `age.secretsMountPoint` example:
     age.secretsMountPoint = "/run/secret-generations";
 }
 ```
+
+### `age-home` module reference
+
+The home-manager module provides options similar to the NixOS module but scoped to a single user.
+
+#### `age.secrets`
+
+`age.secrets` attrset of secrets. You always need to use this
+configuration option. Defaults to `{}`.
+
+#### `age.secrets.<name>.file`
+
+`age.secrets.<name>.file` is the path to the encrypted `.age` for this
+secret. This is the only required secret option.
+
+#### `age.secrets.<name>.path`
+
+`age.secrets.<name>.path` is the path where the secret is decrypted
+to. Defaults to `$XDG_RUNTIME_DIR/agenix/<name>` on Linux and 
+`$(getconf DARWIN_USER_TEMP_DIR)/agenix/<name>` on Darwin.
+
+#### `age.secrets.<name>.mode`
+
+`age.secrets.<name>.mode` is permissions mode of the decrypted secret
+in a format understood by chmod.
+
+#### `age.secrets.<name>.symlink`
+
+`age.secrets.<name>.symlink` is a boolean. If true (the default),
+secrets are symlinked to `age.secrets.<name>.path`. If false, secrets
+are copied to `age.secrets.<name>.path`.
+
+#### `age.identityPaths`
+
+`age.identityPaths` is a list of paths to SSH private keys to use for decryption.
+This is a required option; there is no default value.
+
+#### `age.secretsDir`
+
+`age.secretsDir` is the directory where secrets are symlinked to by
+default. Defaults to `$XDG_RUNTIME_DIR/agenix` on Linux and 
+`$(getconf DARWIN_USER_TEMP_DIR)/agenix` on Darwin.
+
+#### `age.secretsMountPoint`
+
+`age.secretsMountPoint` is the directory where the secret generations
+are created before they are symlinked. Defaults to `$XDG_RUNTIME_DIR/agenix.d` 
+on Linux and `$(getconf DARWIN_USER_TEMP_DIR)/agenix.d` on Darwin.
 
 ### agenix CLI reference
 
