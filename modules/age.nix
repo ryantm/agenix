@@ -290,6 +290,7 @@ in {
         deps = [
           "users"
           "groups"
+          "agenixInstall"
         ];
       };
 
