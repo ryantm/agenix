@@ -6,7 +6,7 @@
   nix,
   mktemp,
   diffutils,
-  substituteAll,
+  replaceVars,
   ageBin ? "${age}/bin/age",
   shellcheck,
 }: let
@@ -15,13 +15,12 @@ in
   stdenv.mkDerivation rec {
     pname = "agenix";
     version = "0.15.0";
-    src = substituteAll {
+    src = replaceVars ./agenix.sh {
       inherit ageBin version;
       jqBin = "${jq}/bin/jq";
       nixInstantiate = "${nix}/bin/nix-instantiate";
       mktempBin = "${mktemp}/bin/mktemp";
       diffBin = "${diffutils}/bin/diff";
-      src = ./agenix.sh;
     };
     dontUnpack = true;
     doInstallCheck = true;
