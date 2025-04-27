@@ -25,6 +25,10 @@
    {
      "secret1.age".publicKeys = [ user1 system1 ];
      "secret2.age".publicKeys = users ++ systems;
+     "armored-secret.age" = {
+       publicKeys = [ user1 ];
+       armor = true;
+     };
    }
    ```
 4. Edit secret files (these instructions assume your SSH private key is in ~/.ssh/):
