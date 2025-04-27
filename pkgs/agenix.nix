@@ -54,6 +54,7 @@ in
       )
 
       cd $HOME/secrets
+      echo hello | ${bin} -c secret1.age
       test $(${bin} -d secret1.age) = "hello"
     '';
 
