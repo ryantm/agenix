@@ -24,8 +24,9 @@ pkgs.nixosTest {
 
     services.openssh.enable = true;
 
-    age.secrets.passwordfile-user1 = {
-      file = ../example/passwordfile-user1.age;
+    age.secrets = {
+      passwordfile-user1.file = ../example/passwordfile-user1.age;
+      leading-hyphen.file = ../example/-leading-hyphen-filename.age;
     };
 
     age.identityPaths = options.age.identityPaths.default ++ ["/etc/ssh/this_key_wont_exist"];
@@ -71,6 +72,7 @@ pkgs.nixosTest {
     user = "user1";
     password = "password1234";
     secret2 = "world!";
+    hyphen-secret = "filename started with hyphen";
   in ''
     system1.wait_for_unit("multi-user.target")
     system1.wait_until_succeeds("pgrep -f 'agetty.*tty1'")
@@ -91,6 +93,8 @@ pkgs.nixosTest {
     system1.send_chars("cat /run/user/$(id -u)/agenix/secret2 > /tmp/2\n")
     system1.wait_for_file("/tmp/2")
     assert "${secret2}" in system1.succeed("cat /tmp/2")
+
+    assert "${hyphen-secret}" in system1.succeed("cat /run/agenix/leading-hyphen")
 
     userDo = lambda input : f"sudo -u user1 -- bash -c 'set -eou pipefail; cd /tmp/secrets; {input}'"
 
