@@ -118,6 +118,10 @@ function keys {
     (@nixInstantiate@ --json --eval --strict -E "(let rules = import $RULES; in rules.\"$1\".publicKeys)" | @jqBin@ -r .[]) || exit 1
 }
 
+function armor {
+    (@nixInstantiate@ --json --eval --strict -E "(let rules = import $RULES; in (builtins.hasAttr \"armor\" rules.\"$1\" && rules.\"$1\".armor))") || exit 1
+}
+
 function decrypt {
     FILE=$1
     KEYS=$2
@@ -148,6 +152,7 @@ function decrypt {
 function edit {
     FILE=$1
     KEYS=$(keys "$FILE") || exit 1
+    ARMOR=$(armor "$FILE") || exit 1
 
     CLEARTEXT_DIR=$(@mktempBin@ -d)
     CLEARTEXT_FILE="$CLEARTEXT_DIR/$(basename -- "$FILE")"
@@ -169,6 +174,9 @@ function edit {
     [ -f "$FILE" ] && [ "$EDITOR" != ":" ] && @diffBin@ -q -- "$CLEARTEXT_FILE.before" "$CLEARTEXT_FILE" && warn "$FILE wasn't changed, skipping re-encryption." && return
 
     ENCRYPT=()
+    if [[ "$ARMOR" == "true" ]]; then
+        ENCRYPT+=(--armor)
+    fi
     while IFS= read -r key
     do
         if [ -n "$key" ]; then
