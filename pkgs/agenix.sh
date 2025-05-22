@@ -151,9 +151,8 @@ function edit {
 
     CLEARTEXT_DIR=$(@mktempBin@ -d)
     CLEARTEXT_FILE="$CLEARTEXT_DIR/$(basename -- "$FILE")"
-    DEFAULT_DECRYPT+=(-o "$CLEARTEXT_FILE")
 
-    decrypt "$FILE" "$KEYS" || exit 1
+    decrypt "$FILE" "$KEYS" >"$CLEARTEXT_FILE" || exit 1
 
     [ ! -f "$CLEARTEXT_FILE" ] || cp -- "$CLEARTEXT_FILE" "$CLEARTEXT_FILE.before"
 
