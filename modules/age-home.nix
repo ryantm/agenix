@@ -84,10 +84,12 @@ with lib; let
     }
   '';
 
+  enabledSecrets = lib.filter (s: s.enable) (builtins.attrValues cfg.secrets);
+
   installSecrets = builtins.concatStringsSep "\n" (
     ["echo '[agenix] decrypting secrets...'"]
     ++ testIdentities
-    ++ (map installSecret (builtins.attrValues cfg.secrets))
+    ++ (map installSecret enabledSecrets)
     ++ [cleanupAndLink]
   );
 
@@ -97,6 +99,11 @@ with lib; let
     ...
   }: {
     options = {
+      enable = mkOption {
+        type = types.bool;
+        default = true;
+        description = "Whether to include and decrypt this secret";
+      };
       name = mkOption {
         type = types.str;
         default = name;
@@ -155,6 +162,8 @@ with lib; let
     '';
 in {
   options.age = {
+    enable = mkEnableOption "agenix" // {default = cfg.secrets != {};};
+
     package = mkPackageOption pkgs "age" {};
 
     secrets = mkOption {
@@ -200,7 +209,7 @@ in {
     };
   };
 
-  config = mkIf (cfg.secrets != {}) {
+  config = mkIf cfg.enable {
     assertions = [
       {
         assertion = cfg.identityPaths != [];
