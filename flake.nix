@@ -69,9 +69,15 @@
       })
       // {
         x86_64-linux.integration = import ./test/integration.nix {
-          inherit nixpkgs home-manager;
+          inherit home-manager;
           pkgs = nixpkgs.legacyPackages.x86_64-linux;
           system = "x86_64-linux";
+        };
+        x86_64-linux.integration-rage = import ./test/integration.nix {
+          inherit home-manager;
+          pkgs = nixpkgs.legacyPackages.x86_64-linux;
+          system = "x86_64-linux";
+          useRage = true;
         };
       };
 

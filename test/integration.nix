@@ -1,5 +1,4 @@
 {
-  nixpkgs ? <nixpkgs>,
   pkgs ?
     import <nixpkgs> {
       inherit system;
@@ -7,6 +6,7 @@
     },
   system ? builtins.currentSystem,
   home-manager ? <home-manager>,
+  useRage ? false,
 }:
 pkgs.nixosTest {
   name = "agenix-integration";
@@ -31,8 +31,13 @@ pkgs.nixosTest {
 
     age.identityPaths = options.age.identityPaths.default ++ ["/etc/ssh/this_key_wont_exist"];
 
-    environment.systemPackages = [
-      (pkgs.callPackage ../pkgs/agenix.nix {})
+    environment.systemPackages = let
+      args =
+        if useRage
+        then {ageBin = "${pkgs.rage}/bin/rage";}
+        else {};
+    in [
+      (pkgs.callPackage ../pkgs/agenix.nix args)
     ];
 
     users = {
@@ -41,7 +46,7 @@ pkgs.nixosTest {
       users = {
         user1 = {
           isNormalUser = true;
-          passwordFile = config.age.secrets.passwordfile-user1.path;
+          hashedPasswordFile = config.age.secrets.passwordfile-user1.path;
           uid = 1000;
         };
       };
