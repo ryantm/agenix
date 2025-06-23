@@ -2,8 +2,8 @@
 
 `agenix` is a small and convenient Nix library for securely managing and deploying secrets using common public-private SSH key pairs:
 You can encrypt a secret (password, access-token, etc.) on a source machine using a number of public SSH keys,
-and deploy that encrypted secret to any another target machine that has the corresponding private SSH key of one of those public keys.  
-This project contains two parts: 
+and deploy that encrypted secret to any another target machine that has the corresponding private SSH key of one of those public keys.
+This project contains two parts:
 1. An `agenix` commandline app (CLI) to encrypt secrets into secured `.age` files that can be copied into the Nix store.
 2. An `agenix` NixOS module to conveniently
     * add those encrypted secrets (`.age` files) into the Nix store so that they can be deployed like any other Nix package using `nixos-rebuild` or similar tools.
@@ -22,6 +22,7 @@ This project contains two parts:
 * [Tutorial](#tutorial)
 * [Reference](#reference)
   * [`age` module reference](#age-module-reference)
+  * [`age-home` module reference](#age-home-module-reference)
   * [agenix CLI reference](#agenix-cli-reference)
 * [Community and Support](#community-and-support)
 * [Threat model/Warnings](#threat-modelwarnings)
@@ -72,6 +73,16 @@ Then add the following to your `configuration.nix` in the `imports` list:
 }
 ```
 
+#### Install home-manager module via niv
+
+Add the following to your home configuration:
+
+```nix
+{
+  imports = [ "${(import ./nix/sources.nix).agenix}/modules/age-home.nix" ];
+}
+```
+
 #### Install CLI via niv
 
 To install the `agenix` binary:
@@ -105,6 +116,16 @@ Then add the following to your `configuration.nix` in the `imports` list:
 ```nix
 {
   imports = [ <agenix/modules/age.nix> ];
+}
+```
+
+#### Install home-manager module via nix-channel
+
+Add the following to your home configuration:
+
+```nix
+{
+  imports = [ <agenix/modules/age-home.nix> ];
 }
 ```
 
@@ -154,6 +175,33 @@ Add the following to your configuration.nix:
 }
 ```
 
+#### Install home-manager module via fetchTarball
+
+Add the following to your home configuration:
+
+```nix
+{
+  imports = [ "${builtins.fetchTarball "https://github.com/ryantm/agenix/archive/main.tar.gz"}/modules/age-home.nix" ];
+}
+```
+
+Or with pinning:
+
+```nix
+{
+  imports = let
+    # replace this with an actual commit id or tag
+    commit = "298b235f664f925b433614dc33380f0662adfc3f";
+  in [
+    "${builtins.fetchTarball {
+      url = "https://github.com/ryantm/agenix/archive/${commit}.tar.gz";
+      # update hash from nix build output
+      sha256 = "";
+    }}/modules/age-home.nix"
+  ];
+}
+```
+
 #### Install CLI via fetchTarball
 
 To install the `agenix` binary:
@@ -191,6 +239,24 @@ To install the `agenix` binary:
       modules = [
         ./configuration.nix
         agenix.nixosModules.default
+      ];
+    };
+  };
+}
+```
+
+#### Install home-manager module via Flakes
+
+```nix
+{
+  inputs.agenix.url = "github:ryantm/agenix";
+
+  outputs = { self, nixpkgs, agenix, home-manager }: {
+    homeConfigurations."username" = home-manager.lib.homeManagerConfiguration {
+      # ...
+      modules = [
+        agenix.homeManagerModules.default
+        # ...
       ];
     };
   };
@@ -250,7 +316,7 @@ e.g. inside your `flake.nix` file:
    $ cd secrets
    $ touch secrets.nix
    ```
-   This `secrets.nix` file is **not** imported into your NixOS configuration. 
+   This `secrets.nix` file is **not** imported into your NixOS configuration.
    It's only used for the `agenix` CLI tool (example below) to know which public keys to use for encryption.
 3. Add public keys to your `secrets.nix` file:
    ```nix
@@ -269,7 +335,7 @@ e.g. inside your `flake.nix` file:
    }
    ```
    These are the users and systems that will be able to decrypt the `.age` files later with their corresponding private keys.
-   You can obtain the public keys from 
+   You can obtain the public keys from
    * your local computer usually in `~/.ssh`, e.g. `~/.ssh/id_ed25519.pub`.
    * from a running target machine with `ssh-keyscan`:
      ```ShellSession
@@ -290,7 +356,7 @@ e.g. inside your `flake.nix` file:
      age.secrets.secret1.file = ../secrets/secret1.age;
    }
    ```
-   When the `age.secrets` attribute set contains a secret, the `agenix` NixOS module will later automatically decrypt and mount that secret under the default path `/run/agenix/secret1`. 
+   When the `age.secrets` attribute set contains a secret, the `agenix` NixOS module will later automatically decrypt and mount that secret under the default path `/run/agenix/secret1`.
    Here the `secret1.age` file becomes part of your NixOS deployment, i.e. moves into the Nix store.
 
 6. Reference the secrets' mount path in your config:
@@ -304,20 +370,53 @@ e.g. inside your `flake.nix` file:
    ```
    You can reference the mount path to the (later) unencrypted secret already in your other configuration.
    So `config.age.secrets.secret1.path` will contain the path `/run/agenix/secret1` by default.
-7. Use `nixos-rebuild` or [another deployment tool](https://nixos.wiki/wiki/Applications#Deployment") of choice as usual.
+7. Use `nixos-rebuild` or [another deployment tool](https://wiki.nixos.org/wiki/Applications#Deployment") of choice as usual.
 
-   The `secret1.age` file will be copied over to the target machine like any other Nix package. 
+   The `secret1.age` file will be copied over to the target machine like any other Nix package.
    Then it will be decrypted and mounted as described before.
 8. Edit secret files:
    ```ShellSession
    $ agenix -e secret1.age
    ```
-   It assumes your SSH private key is in `~/.ssh/`. 
-   In order to decrypt and open a `.age` file for editing you need the private key of one of the public keys 
+   It assumes your SSH private key is in `~/.ssh/`.
+   In order to decrypt and open a `.age` file for editing you need the private key of one of the public keys
    it was encrypted with. You can pass the private key you want to use explicitly with `-i`, e.g.
    ```ShellSession
    $ agenix -e secret1.age -i ~/.ssh/id_ed25519
    ```
+
+### Using agenix with home-manager
+
+The home-manager module follows the same general principles as the NixOS module but is scoped to a single user. Here's how to use it:
+
+1. Add the home-manager module to your configuration as shown in the Installation section.
+2. Define your SSH identities and secrets:
+
+```nix
+{
+  age = {
+    identityPaths = [ "~/.ssh/id_ed25519" ];
+    secrets = {
+      example-secret = {
+        file = ../secrets/example-secret.age;
+      };
+    };
+  };
+}
+```
+
+3. Reference your secrets in your home configuration:
+
+```nix
+{
+  programs.some-program = {
+    enable = true;
+    passwordFile = config.age.secrets.example-secret.path;
+  };
+}
+```
+
+When you run `home-manager switch`, your secrets will be decrypted to a user-specific directory (usually `$XDG_RUNTIME_DIR/agenix` on Linux or a temporary directory on Darwin) and can be referenced in your configuration.
 
 ## Reference
 
@@ -542,6 +641,54 @@ Overriding `age.secretsMountPoint` example:
     age.secretsMountPoint = "/run/secret-generations";
 }
 ```
+
+### `age-home` module reference
+
+The home-manager module provides options similar to the NixOS module but scoped to a single user.
+
+#### `age.secrets`
+
+`age.secrets` attrset of secrets. You always need to use this
+configuration option. Defaults to `{}`.
+
+#### `age.secrets.<name>.file`
+
+`age.secrets.<name>.file` is the path to the encrypted `.age` for this
+secret. This is the only required secret option.
+
+#### `age.secrets.<name>.path`
+
+`age.secrets.<name>.path` is the path where the secret is decrypted
+to. Defaults to `$XDG_RUNTIME_DIR/agenix/<name>` on Linux and
+`$(getconf DARWIN_USER_TEMP_DIR)/agenix/<name>` on Darwin.
+
+#### `age.secrets.<name>.mode`
+
+`age.secrets.<name>.mode` is permissions mode of the decrypted secret
+in a format understood by chmod.
+
+#### `age.secrets.<name>.symlink`
+
+`age.secrets.<name>.symlink` is a boolean. If true (the default),
+secrets are symlinked to `age.secrets.<name>.path`. If false, secrets
+are copied to `age.secrets.<name>.path`.
+
+#### `age.identityPaths`
+
+`age.identityPaths` is a list of paths to SSH private keys to use for decryption.
+This is a required option; there is no default value.
+
+#### `age.secretsDir`
+
+`age.secretsDir` is the directory where secrets are symlinked to by
+default. Defaults to `$XDG_RUNTIME_DIR/agenix` on Linux and
+`$(getconf DARWIN_USER_TEMP_DIR)/agenix` on Darwin.
+
+#### `age.secretsMountPoint`
+
+`age.secretsMountPoint` is the directory where the secret generations
+are created before they are symlinked. Defaults to `$XDG_RUNTIME_DIR/agenix.d`
+on Linux and `$(getconf DARWIN_USER_TEMP_DIR)/agenix.d` on Darwin.
 
 ### agenix CLI reference
 

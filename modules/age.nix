@@ -257,7 +257,7 @@ in {
       assertions = [
         {
           assertion = cfg.identityPaths != [];
-          message = "age.identityPaths must be set.";
+          message = "age.identityPaths must be set, for example by enabling openssh.";
         }
       ];
     }
