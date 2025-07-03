@@ -151,7 +151,7 @@ with lib; let
 
   userDirectoryDescription = dir:
     literalExpression ''
-      "${XDG_RUNTIME_DIR}"/${dir} on linux or "$(getconf DARWIN_USER_TEMP_DIR)"/${dir} on darwin.
+      "''${XDG_RUNTIME_DIR}"/''${dir} on linux or "$(getconf DARWIN_USER_TEMP_DIR)"/''${dir} on darwin.
     '';
 in {
   options.age = {
