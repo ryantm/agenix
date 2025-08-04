@@ -134,6 +134,18 @@ with lib; let
     ++ (map chownSecret (builtins.attrValues cfg.secrets))
   );
 
+  substituteSecret = secretType:
+    builtins.concatStringsSep "\n" (builtins.map (file: ''
+        echo "substituting secret from '${secretType.path}' into '${file}'..."
+        ${pkgs.gnused}/bin/sed -i "s#@${secretType.name}@#$(cat ${secretType.path})#" ${file}
+      '')
+      secretType.substitutions);
+
+  substituteSecrets = builtins.concatStringsSep "\n" (
+    ["echo '[agenix] substituting secrets...'"]
+    ++ (map substituteSecret (builtins.attrValues cfg.secrets))
+  );
+
   secretType = types.submodule ({config, ...}: {
     options = {
       name = mkOption {
@@ -158,6 +170,13 @@ with lib; let
         '';
         description = ''
           Path where the decrypted secret is installed.
+        '';
+      };
+      substitutions = mkOption {
+        type = types.listOf types.str;
+        default = [];
+        description = ''
+          List of files to substitute the secret into.
         '';
       };
       mode = mkOption {
@@ -324,6 +343,12 @@ in {
           text = "";
           deps = ["agenixChown"];
         };
+      };
+
+      # Substitute secrets into files.
+      system.activationScripts.agenixSubstitute = {
+        text = substituteSecrets;
+        deps = ["agenix" "etc"];
       };
     })
 
