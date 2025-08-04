@@ -14,6 +14,11 @@ with lib; let
 
   users = config.users.users;
 
+  sysusersEnabled =
+    if isDarwin
+    then false
+    else options.systemd ? sysusers && (config.systemd.sysusers.enable || config.services.userborn.enable);
+
   mountCommand =
     if isDarwin
     then ''
@@ -261,44 +266,67 @@ in {
         }
       ];
     }
-
     (optionalAttrs (!isDarwin) {
+      # When using sysusers we no longer be started as an activation script
+      # because those are started in initrd while sysusers is started later.
+      systemd.services.agenix-install-secrets = mkIf sysusersEnabled {
+        wantedBy = ["sysinit.target"];
+        after = ["systemd-sysusers.service"];
+        unitConfig.DefaultDependencies = "no";
+
+        path = [pkgs.mount];
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStart = pkgs.writeShellScript "agenix-install" (
+            concatLines [
+              newGeneration
+              installSecrets
+              chownSecrets
+            ]
+          );
+          RemainAfterExit = true;
+        };
+      };
+
       # Create a new directory full of secrets for symlinking (this helps
       # ensure removed secrets are actually removed, or at least become
       # invalid symlinks).
-      system.activationScripts.agenixNewGeneration = {
-        text = newGeneration;
-        deps = [
-          "specialfs"
-        ];
-      };
+      system.activationScripts = mkIf (!sysusersEnabled) {
+        agenixNewGeneration = {
+          text = newGeneration;
+          deps = [
+            "specialfs"
+          ];
+        };
 
-      system.activationScripts.agenixInstall = {
-        text = installSecrets;
-        deps = [
-          "agenixNewGeneration"
-          "specialfs"
-        ];
-      };
+        agenixInstall = {
+          text = installSecrets;
+          deps = [
+            "agenixNewGeneration"
+            "specialfs"
+          ];
+        };
 
-      # So user passwords can be encrypted.
-      system.activationScripts.users.deps = ["agenixInstall"];
+        # So user passwords can be encrypted.
+        users.deps = ["agenixInstall"];
 
-      # Change ownership and group after users and groups are made.
-      system.activationScripts.agenixChown = {
-        text = chownSecrets;
-        deps = [
-          "users"
-          "groups"
-        ];
-      };
+        # Change ownership and group after users and groups are made.
+        agenixChown = {
+          text = chownSecrets;
+          deps = [
+            "users"
+            "groups"
+          ];
+        };
 
-      # So other activation scripts can depend on agenix being done.
-      system.activationScripts.agenix = {
-        text = "";
-        deps = ["agenixChown"];
+        # So other activation scripts can depend on agenix being done.
+        agenix = {
+          text = "";
+          deps = ["agenixChown"];
+        };
       };
     })
+
     (optionalAttrs isDarwin {
       launchd.daemons.activate-agenix = {
         script = ''
