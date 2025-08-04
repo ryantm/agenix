@@ -5,7 +5,8 @@
   pkgs,
   ...
 }:
-with lib; let
+with lib;
+let
   cfg = config.age;
 
   ageBin = lib.getExe config.age.package;
@@ -22,13 +23,14 @@ with lib; let
 
   setTruePath = secretType: ''
     ${
-      if secretType.symlink
-      then ''
-        _truePath="${cfg.secretsMountPoint}/$_agenix_generation/${secretType.name}"
-      ''
-      else ''
-        _truePath="${secretType.path}"
-      ''
+      if secretType.symlink then
+        ''
+          _truePath="${cfg.secretsMountPoint}/$_agenix_generation/${secretType.name}"
+        ''
+      else
+        ''
+          _truePath="${secretType.path}"
+        ''
     }
   '';
 
@@ -54,7 +56,9 @@ with lib; let
       umask u=r,g=,o=
       test -f "${secretType.file}" || echo '[agenix] WARNING: encrypted file ${secretType.file} does not exist!'
       test -d "$(dirname "$TMP_FILE")" || echo "[agenix] WARNING: $(dirname "$TMP_FILE") does not exist!"
-      LANG=${config.i18n.defaultLocale or "C"} ${ageBin} --decrypt "''${IDENTITIES[@]}" -o "$TMP_FILE" "${secretType.file}"
+      LANG=${
+        config.i18n.defaultLocale or "C"
+      } ${ageBin} --decrypt "''${IDENTITIES[@]}" -o "$TMP_FILE" "${secretType.file}"
     )
     chmod ${secretType.mode} "$TMP_FILE"
     mv -f "$TMP_FILE" "$_truePath"
@@ -65,12 +69,9 @@ with lib; let
     ''}
   '';
 
-  testIdentities =
-    map
-    (path: ''
-      test -f ${path} || echo '[agenix] WARNING: config.age.identityPaths entry ${path} not present!'
-    '')
-    cfg.identityPaths;
+  testIdentities = map (path: ''
+    test -f ${path} || echo '[agenix] WARNING: config.age.identityPaths entry ${path} not present!'
+  '') cfg.identityPaths;
 
   cleanupAndLink = ''
     _agenix_generation="$(basename "$(readlink "${cfg.secretsDir}")" || echo 0)"
@@ -85,81 +86,89 @@ with lib; let
   '';
 
   installSecrets = builtins.concatStringsSep "\n" (
-    ["echo '[agenix] decrypting secrets...'"]
+    [ "echo '[agenix] decrypting secrets...'" ]
     ++ testIdentities
     ++ (map installSecret (builtins.attrValues cfg.secrets))
-    ++ [cleanupAndLink]
+    ++ [ cleanupAndLink ]
   );
 
-  secretType = types.submodule ({
-    config,
-    name,
-    ...
-  }: {
-    options = {
-      name = mkOption {
-        type = types.str;
-        default = name;
-        description = ''
-          Name of the file used in ''${cfg.secretsDir}
-        '';
+  secretType = types.submodule (
+    {
+      config,
+      name,
+      ...
+    }:
+    {
+      options = {
+        name = mkOption {
+          type = types.str;
+          default = name;
+          description = ''
+            Name of the file used in ''${cfg.secretsDir}
+          '';
+        };
+        file = mkOption {
+          type = types.path;
+          description = ''
+            Age file the secret is loaded from.
+          '';
+        };
+        path = mkOption {
+          type = types.str;
+          default = "${cfg.secretsDir}/${config.name}";
+          description = ''
+            Path where the decrypted secret is installed.
+          '';
+        };
+        mode = mkOption {
+          type = types.str;
+          default = "0400";
+          description = ''
+            Permissions mode of the decrypted secret in a format understood by chmod.
+          '';
+        };
+        symlink = mkEnableOption "symlinking secrets to their destination" // {
+          default = true;
+        };
       };
-      file = mkOption {
-        type = types.path;
-        description = ''
-          Age file the secret is loaded from.
-        '';
-      };
-      path = mkOption {
-        type = types.str;
-        default = "${cfg.secretsDir}/${config.name}";
-        description = ''
-          Path where the decrypted secret is installed.
-        '';
-      };
-      mode = mkOption {
-        type = types.str;
-        default = "0400";
-        description = ''
-          Permissions mode of the decrypted secret in a format understood by chmod.
-        '';
-      };
-      symlink = mkEnableOption "symlinking secrets to their destination" // {default = true;};
-    };
-  });
+    }
+  );
 
-  mountingScript = let
-    app = pkgs.writeShellApplication {
-      name = "agenix-home-manager-mount-secrets";
-      runtimeInputs = with pkgs; [coreutils];
-      text = ''
-        ${newGeneration}
-        ${installSecrets}
-        exit 0
-      '';
-    };
-  in
+  mountingScript =
+    let
+      app = pkgs.writeShellApplication {
+        name = "agenix-home-manager-mount-secrets";
+        runtimeInputs = with pkgs; [ coreutils ];
+        text = ''
+          ${newGeneration}
+          ${installSecrets}
+          exit 0
+        '';
+      };
+    in
     lib.getExe app;
 
-  userDirectory = dir: let
-    inherit (pkgs.stdenv.hostPlatform) isDarwin;
-    baseDir =
-      if isDarwin
-      then "$(getconf DARWIN_USER_TEMP_DIR)"
-      else "\${XDG_RUNTIME_DIR}";
-  in "${baseDir}/${dir}";
+  userDirectory =
+    dir:
+    let
+      inherit (pkgs.stdenv.hostPlatform) isDarwin;
+      baseDir = if isDarwin then "$(getconf DARWIN_USER_TEMP_DIR)" else "\${XDG_RUNTIME_DIR}";
+    in
+    "${baseDir}/${dir}";
 
-  userDirectoryDescription = dir:
+  userDirectoryDescription =
+    dir:
     literalExpression ''
       "''${XDG_RUNTIME_DIR}"/''${dir} on linux or "$(getconf DARWIN_USER_TEMP_DIR)"/''${dir} on darwin.
     '';
-in {
+in
+{
   options.age = {
-    package = mkPackageOption pkgs "age" {};
+    package = mkPackageOption pkgs "age" { };
 
     secrets = mkOption {
       type = types.attrsOf secretType;
-      default = {};
+      default = { };
       description = ''
         Attrset of secrets.
       '';
@@ -200,10 +209,10 @@ in {
     };
   };
 
-  config = mkIf (cfg.secrets != {}) {
+  config = mkIf (cfg.secrets != { }) {
     assertions = [
       {
-        assertion = cfg.identityPaths != [];
+        assertion = cfg.identityPaths != [ ];
         message = "age.identityPaths must be set.";
       }
     ];
@@ -216,13 +225,13 @@ in {
         Type = "oneshot";
         ExecStart = mountingScript;
       };
-      Install.WantedBy = ["default.target"];
+      Install.WantedBy = [ "default.target" ];
     };
 
     launchd.agents.activate-agenix = {
       enable = true;
       config = {
-        ProgramArguments = [mountingScript];
+        ProgramArguments = [ mountingScript ];
         KeepAlive = {
           Crashed = false;
           SuccessfulExit = false;

@@ -1,6 +1,7 @@
 # Do not copy this! It is insecure. This is only okay because we are testing.
-{config, ...}: {
-  system.activationScripts.agenixInstall.deps = ["installSSHHostKeys"];
+{ config, ... }:
+{
+  system.activationScripts.agenixInstall.deps = [ "installSSHHostKeys" ];
 
   system.activationScripts.installSSHHostKeys.text = ''
     USER1_UID="${toString config.users.users.user1.uid}"
