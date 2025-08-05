@@ -14,7 +14,7 @@ jobs:
           extra-experimental-features = recursive-nix nix-command flakes
     - run: nix build
     - run: nix build .#doc
-    - run: nix fmt . -- --check
+    - run: nix fmt . -- --ci
     - run: nix flake check
   tests-darwin:
     runs-on: macos-latest
@@ -27,7 +27,7 @@ jobs:
           extra-experimental-features = recursive-nix nix-command flakes
     - run: nix build
     - run: nix build .#doc
-    - run: nix fmt . -- --check
+    - run: nix fmt . -- --ci
     - run: nix flake check
     - name: "Install nix-darwin module"
       run: |

@@ -369,7 +369,7 @@ e.g. inside your `flake.nix` file:
    {
      users.users.user1 = {
        isNormalUser = true;
-       passwordFile = config.age.secrets.secret1.path;
+       hashedPasswordFile = config.age.secrets.secret1.path;
      };
    }
    ```
@@ -416,7 +416,7 @@ The home-manager module follows the same general principles as the NixOS module 
 {
   programs.some-program = {
     enable = true;
-    passwordFile = config.age.secrets.example-secret.path;
+    hashedPasswordFile = config.age.secrets.example-secret.path;
   };
 }
 ```
@@ -471,7 +471,7 @@ Example referring to path:
 {
   users.users.ryantm = {
     isNormalUser = true;
-    passwordFile = config.age.secrets.passwordfile-ryantm.path;
+    hashedPasswordFile = config.age.secrets.passwordfile-ryantm.path;
   };
 }
 ```

@@ -1,3 +1,3 @@
 final: prev: {
-  agenix = prev.callPackage ./pkgs/agenix.nix {};
+  agenix = prev.callPackage ./pkgs/agenix.nix { };
 }
