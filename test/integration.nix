@@ -42,7 +42,7 @@ pkgs.nixosTest {
         users = {
           user1 = {
             isNormalUser = true;
-            passwordFile = config.age.secrets.passwordfile-user1.path;
+            hashedPasswordFile = config.age.secrets.passwordfile-user1.path;
             uid = 1000;
           };
         };

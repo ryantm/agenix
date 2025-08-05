@@ -46,7 +46,7 @@
    {
      users.users.user1 = {
        isNormalUser = true;
-       passwordFile = config.age.secrets.secret1.path;
+       hashedPasswordFile = config.age.secrets.secret1.path;
      };
    }
    ```
