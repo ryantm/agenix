@@ -40,7 +40,7 @@ let
     TMP_FILE="$_truePath.tmp"
 
     IDENTITIES=()
-    # shellcheck disable=2043
+    # shellcheck disable=SC2043 # If only one path is set in identityPaths it will fail shellcheck
     for identity in ${toString cfg.identityPaths}; do
       test -r "$identity" || continue
       IDENTITIES+=(-i)
