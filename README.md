@@ -364,6 +364,19 @@ e.g. inside your `flake.nix` file:
    When the `age.secrets` attribute set contains a secret, the `agenix` NixOS module will later automatically decrypt and mount that secret under the default path `/run/agenix/secret1`.
    Here the `secret1.age` file becomes part of your NixOS deployment, i.e. moves into the Nix store.
 
+   You may also generate them based on the `secrets.nix` file with no extra options:
+   ```nix
+   { lib, ... }:
+
+   {
+     age.secrets =
+       lib.genAttrs (lib.map (lib.removeSuffix ".age") (lib.attrNames (import ./secrets.nix)))
+         (name: {
+           file = ./${name}.age;
+         });
+   }
+   ```
+
 6. Reference the secrets' mount path in your config:
    ```nix
    {
