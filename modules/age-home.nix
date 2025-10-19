@@ -152,7 +152,8 @@ let
     dir:
     let
       inherit (pkgs.stdenv.hostPlatform) isDarwin;
-      baseDir = if isDarwin then "$(getconf DARWIN_USER_TEMP_DIR)" else "\${XDG_RUNTIME_DIR}";
+      baseDir =
+        if isDarwin then "$(${lib.getExe pkgs.getconf} DARWIN_USER_TEMP_DIR)" else "\${XDG_RUNTIME_DIR}";
     in
     "${baseDir}/${dir}";
 
