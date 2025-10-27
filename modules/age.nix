@@ -36,6 +36,9 @@ let
         grep -q "${cfg.secretsMountPoint} ramfs" /proc/mounts ||
           mount -t ramfs none "${cfg.secretsMountPoint}" -o nodev,nosuid,mode=0751
       '';
+  currentGeneration = ''
+    _agenix_generation="$(basename "$(readlink ${cfg.secretsDir})" || echo 0)"
+  '';
   newGeneration = ''
     _agenix_generation="$(basename "$(readlink ${cfg.secretsDir})" || echo 0)"
     (( ++_agenix_generation ))
@@ -282,7 +285,8 @@ in
       # because those are started in initrd while sysusers is started later.
       systemd.services.agenix-install-secrets = mkIf sysusersEnabled {
         wantedBy = [ "sysinit.target" ];
-        after = [ "systemd-sysusers.service" ];
+        # So user passwords can be encrypted.
+        before = [ "systemd-sysusers.service" ];
         unitConfig.DefaultDependencies = "no";
 
         path = [ pkgs.mount ];
@@ -291,7 +295,26 @@ in
           ExecStart = pkgs.writeShellScript "agenix-install" (concatLines [
             newGeneration
             installSecrets
+            # Don't fail the systemd unit if our script ended with a failing test.
+            "true"
+          ]);
+          RemainAfterExit = true;
+        };
+      };
+
+      systemd.services.agenix-chown = mkIf sysusersEnabled {
+        wantedBy = [ "sysinit.target" ];
+        # Change ownership and group after users and groups are made.
+        after = [ "systemd-sysusers.service" ];
+        unitConfig.DefaultDependencies = "no";
+
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStart = pkgs.writeShellScript "agenix-chown" (concatLines [
+            currentGeneration
             chownSecrets
+            # Don't fail the systemd unit if our script ended with a failing test.
+            "true"
           ]);
           RemainAfterExit = true;
         };
