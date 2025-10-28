@@ -305,7 +305,11 @@ in
       systemd.services.agenix-chown = mkIf sysusersEnabled {
         wantedBy = [ "sysinit.target" ];
         # Change ownership and group after users and groups are made.
-        after = [ "systemd-sysusers.service" ];
+        # (And after secrets are created, just in case systemd-sysusers.service is disabled.)
+        after = [
+          "systemd-sysusers.service"
+          "agenix-install-secrets.service"
+        ];
         unitConfig.DefaultDependencies = "no";
 
         serviceConfig = {
