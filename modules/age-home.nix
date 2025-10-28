@@ -233,10 +233,7 @@ in
       enable = true;
       config = {
         ProgramArguments = [ mountingScript ];
-        KeepAlive = {
-          Crashed = false;
-          SuccessfulExit = false;
-        };
+        KeepAlive.SuccessfulExit = false;
         RunAtLoad = true;
         ProcessType = "Background";
         StandardOutPath = "${config.home.homeDirectory}/Library/Logs/agenix/stdout";
