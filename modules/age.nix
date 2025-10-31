@@ -310,6 +310,8 @@ in
           "systemd-sysusers.service"
           "agenix-install-secrets.service"
         ];
+        # We should get restarted when agenix-install-secrets is (to chown the new secrets).
+        requires = [ "agenix-install-secrets.service" ];
         unitConfig.DefaultDependencies = "no";
 
         serviceConfig = {
