@@ -68,7 +68,6 @@ let
   '';
 
   installSecret = secretType: ''
-    (
     ${setTruePath secretType}
     echo "decrypting '${secretType.file}' to '$_truePath'..."
     TMP_FILE="$_truePath.tmp"
@@ -99,7 +98,6 @@ let
     ${optionalString secretType.symlink ''
       [ "${secretType.path}" != "${cfg.secretsDir}/${secretType.name}" ] && ln -sfT "${cfg.secretsDir}/${secretType.name}" "${secretType.path}"
     ''}
-    ) &
   '';
 
   testIdentities = map (path: ''
@@ -122,7 +120,6 @@ let
     [ "echo '[agenix] decrypting secrets...'" ]
     ++ testIdentities
     ++ (map installSecret (builtins.attrValues cfg.secrets))
-    ++ [ "wait" ]
     ++ [ cleanupAndLink ]
   );
 
