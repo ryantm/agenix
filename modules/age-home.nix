@@ -221,6 +221,7 @@ in
     systemd.user.services.agenix = lib.mkIf pkgs.stdenv.hostPlatform.isLinux {
       Unit = {
         Description = "agenix activation";
+        After = "basic.target"  # “basic boot-up,” includes impermanence's bind mounts
       };
       Service = {
         Type = "oneshot";
