@@ -2,6 +2,8 @@ use anyhow::{Context, Result, anyhow};
 use serde_json::Value;
 use std::process::Command;
 
+pub const NIX_INSTANTIATE: &str = "nix-instantiate";
+
 /// Get public keys for a file from the rules
 pub fn get_public_keys(nix_instantiate: &str, rules_path: &str, file: &str) -> Result<Vec<String>> {
     let nix_expr = format!("(let rules = import {rules_path}; in rules.\"{file}\".publicKeys)");
@@ -99,41 +101,37 @@ pub fn get_all_files(nix_instantiate: &str, rules_path: &str) -> Result<Vec<Stri
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::Config;
 
-    fn create_test_config() -> Config {
-        Config {
-            nix_instantiate: "nix-instantiate".to_string(),
-            ..Config::default()
-        }
+    fn create_nix() -> &'static str {
+        NIX_INSTANTIATE
     }
 
     #[test]
     fn test_get_public_keys_with_nonexistent_rules() {
-        let config = create_test_config();
+        let nix = create_nix();
         let rules = "/nonexistent/rules.nix";
 
-        let result = get_public_keys(&config.nix_instantiate, rules, "test.age");
+        let result = get_public_keys(nix, rules, "test.age");
         assert!(result.is_err());
         // Should fail because rules file doesn't exist
     }
 
     #[test]
     fn test_should_armor_with_nonexistent_rules() {
-        let config = create_test_config();
+        let nix = create_nix();
         let rules = "/nonexistent/rules.nix";
 
-        let result = should_armor(&config.nix_instantiate, rules, "test.age");
+        let result = should_armor(nix, rules, "test.age");
         // Should return false (default) when rules file doesn't exist
         assert!(!result.unwrap_or(false));
     }
 
     #[test]
     fn test_get_all_files_with_nonexistent_rules() {
-        let config = create_test_config();
+        let nix = create_nix();
         let rules = "/nonexistent/rules.nix";
 
-        let result = get_all_files(&config.nix_instantiate, rules);
+        let result = get_all_files(nix, rules);
         assert!(result.is_err());
         // Should fail because rules file doesn't exist
     }
@@ -141,9 +139,9 @@ mod tests {
     #[test]
     fn test_nix_expr_format_get_public_keys() {
         // Test that the Nix expression is formatted correctly
-        let config = create_test_config();
+        let nix = create_nix();
         let rules = "./test_secrets.nix";
-        let result = get_public_keys(&config.nix_instantiate, rules, "test.age");
+        let result = get_public_keys(nix, rules, "test.age");
 
         // This will fail in most test environments due to missing nix-instantiate
         // but we can at least test that the function doesn't panic
@@ -162,9 +160,9 @@ mod tests {
 
     #[test]
     fn test_nix_expr_format_should_armor() {
-        let config = create_test_config();
+        let nix = create_nix();
         let rules = "./test_secrets.nix";
-        let result = should_armor(&config.nix_instantiate, rules, "test.age");
+        let result = should_armor(nix, rules, "test.age");
 
         // This will likely fail in test environments, but shouldn't panic
         match result {
@@ -180,9 +178,9 @@ mod tests {
 
     #[test]
     fn test_nix_expr_format_get_all_files() {
-        let config = create_test_config();
+        let nix = create_nix();
         let rules = "./test_secrets.nix";
-        let result = get_all_files(&config.nix_instantiate, rules);
+        let result = get_all_files(nix, rules);
 
         // This will likely fail in test environments, but shouldn't panic
         match result {

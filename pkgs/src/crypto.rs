@@ -3,14 +3,11 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
-use crate::config::Config;
+/// Age binary name
+pub const AGE_BIN: &str = "age";
 
 /// Decrypt a file to another file
-pub fn decrypt_to_file<P: AsRef<Path>>(
-    config: &Config,
-    input_file: &str,
-    output_file: P,
-) -> Result<()> {
+pub fn decrypt_to_file<P: AsRef<Path>>(input_file: &str, output_file: P) -> Result<()> {
     let mut args = vec!["--decrypt".to_string()];
 
     // Add default identities
@@ -26,7 +23,7 @@ pub fn decrypt_to_file<P: AsRef<Path>>(
         input_file.to_string(),
     ]);
 
-    let status = Command::new(&config.age_bin)
+    let status = Command::new(AGE_BIN)
         .args(&args)
         .status()
         .context("Failed to run age decrypt")?;
@@ -39,7 +36,7 @@ pub fn decrypt_to_file<P: AsRef<Path>>(
 }
 
 /// Decrypt a file to stdout
-pub fn decrypt_to_stdout(config: &Config, input_file: &str) -> Result<()> {
+pub fn decrypt_to_stdout(input_file: &str) -> Result<()> {
     let mut args = vec!["--decrypt".to_string()];
 
     // Add default identities
@@ -50,7 +47,7 @@ pub fn decrypt_to_stdout(config: &Config, input_file: &str) -> Result<()> {
 
     args.extend_from_slice(&["--".to_string(), input_file.to_string()]);
 
-    let status = Command::new(&config.age_bin)
+    let status = Command::new(AGE_BIN)
         .args(&args)
         .status()
         .context("Failed to run age decrypt")?;
@@ -68,7 +65,6 @@ pub fn encrypt_from_file(
     output_file: &str,
     recipients: &[String],
     armor: bool,
-    config: &Config,
 ) -> Result<()> {
     let mut args = Vec::new();
 
@@ -87,7 +83,7 @@ pub fn encrypt_from_file(
         input_file.to_string(),
     ]);
 
-    let status = Command::new(&config.age_bin)
+    let status = Command::new(AGE_BIN)
         .args(&args)
         .status()
         .context("Failed to run age encrypt")?;

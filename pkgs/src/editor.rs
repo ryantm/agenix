@@ -6,8 +6,8 @@ use std::path::Path;
 use std::process::Command;
 use tempfile::TempDir;
 
-use crate::config::Config;
 use crate::crypto::{decrypt_to_file, decrypt_to_stdout, encrypt_from_file, files_equal};
+use crate::nix::NIX_INSTANTIATE;
 use crate::nix::{get_all_files, get_public_keys, should_armor};
 
 /// Get the editor command to use
@@ -27,9 +27,9 @@ pub fn get_editor_command() -> String {
 }
 
 /// Edit a file with encryption/decryption
-pub fn edit_file(config: &Config, rules_path: &str, file: &str) -> Result<()> {
-    let public_keys = get_public_keys(&config.nix_instantiate, rules_path, file)?;
-    let armor = should_armor(&config.nix_instantiate, rules_path, file)?;
+pub fn edit_file(rules_path: &str, file: &str) -> Result<()> {
+    let public_keys = get_public_keys(NIX_INSTANTIATE, rules_path, file)?;
+    let armor = should_armor(NIX_INSTANTIATE, rules_path, file)?;
 
     if public_keys.is_empty() {
         return Err(anyhow!("No public keys found for file: {file}"));
@@ -41,7 +41,7 @@ pub fn edit_file(config: &Config, rules_path: &str, file: &str) -> Result<()> {
 
     // Decrypt if file exists
     if Path::new(file).exists() {
-        decrypt_to_file(config, file, &cleartext_file)?;
+        decrypt_to_file(file, &cleartext_file)?;
     }
 
     // Create backup
@@ -79,40 +79,29 @@ pub fn edit_file(config: &Config, rules_path: &str, file: &str) -> Result<()> {
     }
 
     // Encrypt the file
-    encrypt_from_file(
-        &cleartext_file.to_string_lossy(),
-        file,
-        &public_keys,
-        armor,
-        config,
-    )?;
+    encrypt_from_file(&cleartext_file.to_string_lossy(), file, &public_keys, armor)?;
 
     Ok(())
 }
 
 /// Decrypt a file to stdout or another location
-pub fn decrypt_file(
-    config: &Config,
-    rules_path: &str,
-    file: &str,
-    output: Option<&str>,
-) -> Result<()> {
-    let public_keys = get_public_keys(&config.nix_instantiate, rules_path, file)?;
+pub fn decrypt_file(rules_path: &str, file: &str, output: Option<&str>) -> Result<()> {
+    let public_keys = get_public_keys(NIX_INSTANTIATE, rules_path, file)?;
     if public_keys.is_empty() {
         return Err(anyhow!("No public keys found for file: {file}"));
     }
 
     match output {
-        Some(out_file) => decrypt_to_file(config, file, Path::new(out_file))?,
-        None => decrypt_to_stdout(config, file)?,
+        Some(out_file) => decrypt_to_file(file, Path::new(out_file))?,
+        None => decrypt_to_stdout(file)?,
     }
 
     Ok(())
 }
 
 /// Rekey all files in the rules
-pub fn rekey_all_files(config: &Config, rules_path: &str) -> Result<()> {
-    let files = get_all_files(&config.nix_instantiate, rules_path)?;
+pub fn rekey_all_files(rules_path: &str) -> Result<()> {
+    let files = get_all_files(NIX_INSTANTIATE, rules_path)?;
 
     for file in files {
         eprintln!("Rekeying {file}...");
@@ -123,7 +112,7 @@ pub fn rekey_all_files(config: &Config, rules_path: &str) -> Result<()> {
             env::set_var("EDITOR", ":");
         }
 
-        let result = edit_file(config, rules_path, &file);
+        let result = edit_file(rules_path, &file);
 
         // Restore original EDITOR
         match old_editor {
@@ -190,17 +179,15 @@ mod tests {
 
     #[test]
     fn test_edit_file_no_keys() {
-        let config = Config::default();
         let rules = "./test_secrets.nix";
-        let result = edit_file(&config, rules, "nonexistent.age");
+        let result = edit_file(rules, "nonexistent.age");
         assert!(result.is_err());
     }
 
     #[test]
     fn test_decrypt_file_no_keys() {
-        let config = Config::default();
         let rules = "./test_secrets.nix";
-        let result = decrypt_file(&config, rules, "nonexistent.age", None);
+        let result = decrypt_file(rules, "nonexistent.age", None);
         assert!(result.is_err());
     }
 

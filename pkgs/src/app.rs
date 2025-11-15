@@ -1,24 +1,40 @@
 use anyhow::{Context, Result};
 use std::env;
+use std::process::Command;
 
 use crate::cli::Args;
-use crate::config::{Config, validate_dependencies};
+use crate::crypto::AGE_BIN;
 use crate::editor::{decrypt_file, edit_file, rekey_all_files};
+use crate::nix::NIX_INSTANTIATE;
 
 /// Main application that orchestrates all the components
-pub struct AgenixApp {
-    config: Config,
-}
+pub struct AgenixApp {}
 
 impl AgenixApp {
     pub fn new() -> Self {
-        Self {
-            config: Config::default(),
-        }
+        Self {}
     }
 
-    pub fn with_config(config: Config) -> Self {
-        Self { config }
+    pub fn with_config(_config: ()) -> Self {
+        Self {}
+    }
+
+    fn validate_dependencies(&self) -> Result<(), Vec<String>> {
+        let mut missing = Vec::new();
+
+        let binaries = [(AGE_BIN, "age"), (NIX_INSTANTIATE, "nix-instantiate")];
+
+        for (path, name) in &binaries {
+            if Command::new(path).arg("--version").output().is_err() {
+                missing.push(format!("{} ({})", name, path));
+            }
+        }
+
+        if missing.is_empty() {
+            Ok(())
+        } else {
+            Err(missing)
+        }
     }
 
     /// Run the application with the given command-line arguments
@@ -31,7 +47,7 @@ impl AgenixApp {
         }
 
         // Validate dependencies first
-        if let Err(missing) = validate_dependencies(&self.config) {
+        if let Err(missing) = self.validate_dependencies() {
             eprintln!("Missing required dependencies:");
             for dep in missing {
                 eprintln!("  - {dep}");
@@ -41,17 +57,16 @@ impl AgenixApp {
 
         // Handle different commands
         if args.rekey {
-            return rekey_all_files(&self.config, &args.rules).context("Failed to rekey files");
+            return rekey_all_files(&args.rules).context("Failed to rekey files");
         }
 
         if let Some(file) = &args.decrypt {
-            return decrypt_file(&self.config, &args.rules, file, None)
+            return decrypt_file(&args.rules, file, None)
                 .with_context(|| format!("Failed to decrypt {file}"));
         }
 
         if let Some(file) = &args.edit {
-            return edit_file(&self.config, &args.rules, file)
-                .with_context(|| format!("Failed to edit {file}"));
+            return edit_file(&args.rules, file).with_context(|| format!("Failed to edit {file}"));
         }
 
         Ok(())
@@ -68,35 +83,28 @@ impl Default for AgenixApp {
 mod tests {
     use super::*;
 
-    fn create_test_config() -> Config {
-        Config {
-            ..Config::default()
-        }
-    }
-
     #[test]
     fn test_app_creation() {
-        let app = AgenixApp::new();
-        assert_eq!(app.config.age_bin, "age");
+        let _app = AgenixApp::new();
+        // No config anymore; just ensure creation succeeds
     }
 
     #[test]
     fn test_app_with_config() {
-        let config = create_test_config();
-        let app = AgenixApp::with_config(config);
-        assert_eq!(app.config.age_bin, "age");
+        let _app = AgenixApp::with_config(());
+        // No config; ensure creation with placeholder succeeds
     }
 
     #[test]
     fn test_app_default() {
-        let app = AgenixApp::default();
-        assert_eq!(app.config.age_bin, "age");
+        let _app = AgenixApp::default();
+        // creation ok
     }
 
     #[test]
     fn test_config_access() {
-        let app = AgenixApp::new();
-        assert_eq!(app.config.age_bin, "age");
+        let _app = AgenixApp::new();
+        // no config access
     }
 
     #[test]
@@ -141,8 +149,7 @@ mod tests {
 
     #[test]
     fn test_handle_edit_nonexistent_file() {
-        let config = create_test_config();
-        let app = AgenixApp::with_config(config.clone());
+        let app = AgenixApp::new();
 
         let args = Args {
             edit: Some("nonexistent.age".to_string()),
@@ -160,8 +167,7 @@ mod tests {
 
     #[test]
     fn test_handle_decrypt_nonexistent_file() {
-        let config = create_test_config();
-        let app = AgenixApp::with_config(config);
+        let app = AgenixApp::new();
 
         let args = Args {
             edit: None,
@@ -179,8 +185,7 @@ mod tests {
 
     #[test]
     fn test_handle_rekey_nonexistent_rules() {
-        let config = create_test_config();
-        let app = AgenixApp::with_config(config);
+        let app = AgenixApp::new();
 
         let args = Args {
             edit: None,
