@@ -10,7 +10,6 @@ fn create_mock_config() -> Config {
     Config {
         age_bin: "echo".to_string(), // Mock with echo
         nix_instantiate: "echo".to_string(),
-        mktemp_bin: "mktemp".to_string(),
         diff_bin: "diff".to_string(),
         rules_path: "./test_secrets.nix".to_string(),
     }
@@ -53,10 +52,10 @@ fn test_full_workflow_with_mocks() {
 #[test]
 fn test_config_validation() {
     let config = Config::default();
-    
+
     // This will likely fail in CI/test environments without the actual tools
-    let result = config.validate_dependencies();
-    
+    let result = agenix::config::validate_dependencies(&config);
+
     match result {
         Ok(()) => {
             // All dependencies available - great!
@@ -72,7 +71,7 @@ fn test_config_validation() {
 
 #[test]
 fn test_default_identities() {
-    let identities = Config::get_default_identities();
+    let identities = agenix::crypto::get_default_identities();
     // Should return 0-2 identity files depending on system
     assert!(identities.len() <= 2);
 }
@@ -100,7 +99,7 @@ fn test_verbose_mode() {
 
     // Even if this fails due to dependencies, verbose flag should be set
     let _ = app.run(args);
-    
+
     // Check if RUST_LOG was set (might be set by the run method)
     // This is more of a smoke test since the actual behavior depends on logging setup
 }
@@ -114,8 +113,9 @@ fn test_cli_parsing_edge_cases() {
         "--edit",
         "secret.age",
         "--identity",
-        "/path/to/key"
-    ]).unwrap();
+        "/path/to/key",
+    ])
+    .unwrap();
 
     assert!(args.verbose);
     assert_eq!(args.edit, Some("secret.age".to_string()));
@@ -127,11 +127,8 @@ fn test_cli_parsing_edge_cases() {
 #[test]
 fn test_cli_parsing_conflicts() {
     // Test that we can have both edit and decrypt (though the app logic handles precedence)
-    let args = Args::try_parse_from(&[
-        "agenix",
-        "--edit", "file1.age",
-        "--decrypt", "file2.age"
-    ]).unwrap();
+    let args =
+        Args::try_parse_from(&["agenix", "--edit", "file1.age", "--decrypt", "file2.age"]).unwrap();
 
     assert_eq!(args.edit, Some("file1.age".to_string()));
     assert_eq!(args.decrypt, Some("file2.age".to_string()));

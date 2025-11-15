@@ -33,7 +33,7 @@ impl Args {
     pub fn show_help() {
         const PACKAGE: &str = "agenix";
         const VERSION: &str = env!("CARGO_PKG_VERSION");
-        
+
         println!("{} - edit and rekey age secret files", PACKAGE);
         println!(" ");
         println!("{} -e FILE [-i PRIVATE_KEY]", PACKAGE);
@@ -55,17 +55,16 @@ impl Args {
         println!(" ");
         println!("If STDIN is not interactive, EDITOR will be set to \"cp /dev/stdin\"");
         println!(" ");
-        println!("RULES environment variable with path to Nix file specifying recipient public keys.");
+        println!(
+            "RULES environment variable with path to Nix file specifying recipient public keys."
+        );
         println!("Defaults to './secrets.nix'");
         println!(" ");
         println!("agenix version: {}", VERSION);
         println!("age binary path: age");
-        
+
         // Try to get age version
-        if let Ok(output) = std::process::Command::new("age")
-            .arg("--version")
-            .output() 
-        {
+        if let Ok(output) = std::process::Command::new("age").arg("--version").output() {
             if let Ok(version) = String::from_utf8(output.stdout) {
                 println!("age version: {}", version.trim());
             }
@@ -96,7 +95,8 @@ mod tests {
 
     #[test]
     fn test_decrypt_with_identity() {
-        let args = Args::try_parse_from(&["agenix", "-d", "secret.age", "-i", "/path/to/key"]).unwrap();
+        let args =
+            Args::try_parse_from(&["agenix", "-d", "secret.age", "-i", "/path/to/key"]).unwrap();
         assert_eq!(args.decrypt, Some("secret.age".to_string()));
         assert_eq!(args.identity, Some("/path/to/key".to_string()));
     }

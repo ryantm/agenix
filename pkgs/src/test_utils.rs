@@ -41,7 +41,6 @@ pub fn create_mock_config() -> crate::config::Config {
     crate::config::Config {
         age_bin: "echo".to_string(), // Use echo as a mock for testing
         nix_instantiate: "echo".to_string(),
-        mktemp_bin: "mktemp".to_string(),
         diff_bin: "diff".to_string(),
         rules_path: "./test_secrets.nix".to_string(),
     }

@@ -1,269 +1,189 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
+use std::fs;
 use std::path::Path;
-use std::process::{Command, Stdio};
-use std::io::Write;
+use std::process::Command;
 
 use crate::config::Config;
 
-/// Handles age encryption and decryption operations
-#[derive(Debug)]
-pub struct CryptoManager {
-    config: Config,
-    identities: Vec<String>,
+/// Decrypt a file to another file
+pub fn decrypt_to_file<P: AsRef<Path>>(
+    config: &Config,
+    input_file: &str,
+    output_file: P,
+) -> Result<()> {
+    let mut args = vec!["--decrypt".to_string()];
+
+    // Add default identities
+    let identities = get_default_identities();
+    for identity in identities {
+        args.extend_from_slice(&["--identity".to_string(), identity]);
+    }
+
+    args.extend_from_slice(&[
+        "-o".to_string(),
+        output_file.as_ref().to_string_lossy().to_string(),
+        "--".to_string(),
+        input_file.to_string(),
+    ]);
+
+    let status = Command::new(&config.age_bin)
+        .args(&args)
+        .status()
+        .context("Failed to run age decrypt")?;
+
+    if !status.success() {
+        return Err(anyhow::anyhow!("Failed to decrypt {}", input_file));
+    }
+
+    Ok(())
 }
 
-impl CryptoManager {
-    pub fn new(config: Config) -> Self {
-        Self {
-            config,
-            identities: Vec::new(),
+/// Decrypt a file to stdout
+pub fn decrypt_to_stdout(config: &Config, input_file: &str) -> Result<()> {
+    let mut args = vec!["--decrypt".to_string()];
+
+    // Add default identities
+    let identities = get_default_identities();
+    for identity in identities {
+        args.extend_from_slice(&["--identity".to_string(), identity]);
+    }
+
+    args.extend_from_slice(&["--".to_string(), input_file.to_string()]);
+
+    let status = Command::new(&config.age_bin)
+        .args(&args)
+        .status()
+        .context("Failed to run age decrypt")?;
+
+    if !status.success() {
+        return Err(anyhow::anyhow!("Failed to decrypt {}", input_file));
+    }
+
+    Ok(())
+}
+
+/// Encrypt from a file to another file
+pub fn encrypt_from_file(
+    input_file: &str,
+    output_file: &str,
+    recipients: &[String],
+    armor: bool,
+    config: &Config,
+) -> Result<()> {
+    let mut args = Vec::new();
+
+    if armor {
+        args.push("--armor".to_string());
+    }
+
+    for recipient in recipients {
+        args.extend_from_slice(&["--recipient".to_string(), recipient.clone()]);
+    }
+
+    args.extend_from_slice(&[
+        "-o".to_string(),
+        output_file.to_string(),
+        "--".to_string(),
+        input_file.to_string(),
+    ]);
+
+    let status = Command::new(&config.age_bin)
+        .args(&args)
+        .status()
+        .context("Failed to run age encrypt")?;
+
+    if !status.success() {
+        return Err(anyhow::anyhow!("Failed to encrypt to {}", output_file));
+    }
+
+    Ok(())
+}
+
+/// Get default SSH identity files
+pub fn get_default_identities() -> Vec<String> {
+    let mut identities = Vec::new();
+
+    if let Ok(home) = std::env::var("HOME") {
+        let id_rsa = format!("{}/.ssh/id_rsa", home);
+        let id_ed25519 = format!("{}/.ssh/id_ed25519", home);
+
+        if Path::new(&id_rsa).exists() {
+            identities.push(id_rsa);
+        }
+        if Path::new(&id_ed25519).exists() {
+            identities.push(id_ed25519);
         }
     }
 
-    /// Add an identity file for decryption
-    pub fn add_identity<P: AsRef<Path>>(&mut self, identity_path: P) {
-        self.identities.push(identity_path.as_ref().to_string_lossy().to_string());
+    identities
+}
+
+/// Check if two files have the same content
+pub fn files_equal(file1: &str, file2: &str) -> Result<bool> {
+    if !Path::new(file1).exists() || !Path::new(file2).exists() {
+        return Ok(false);
     }
 
-    /// Get all configured identities, including defaults if none specified
-    fn get_identities(&self) -> Vec<String> {
-        if self.identities.is_empty() {
-            Config::get_default_identities()
-                .into_iter()
-                .map(|p| p.to_string_lossy().to_string())
-                .collect()
-        } else {
-            self.identities.clone()
-        }
-    }
-
-    /// Decrypt a file to the specified output path or stdout
-    pub fn decrypt<P: AsRef<Path>>(&self, input_file: P, output_path: Option<P>) -> Result<()> {
-        let input_file = input_file.as_ref();
-        
-        if !input_file.exists() {
-            return Err(anyhow!("Input file does not exist: {}", input_file.display()));
-        }
-
-        let identities = self.get_identities();
-        if identities.is_empty() {
-            let home = std::env::var("HOME").unwrap_or_default();
-            return Err(anyhow!(
-                "No identity found to decrypt {}. Try adding an SSH key at {}/.ssh/id_rsa or {}/.ssh/id_ed25519 or using the --identity flag to specify a file.",
-                input_file.display(), home, home
-            ));
-        }
-
-        let mut cmd = Command::new(&self.config.age_bin);
-        cmd.arg("--decrypt");
-
-        // Add identity arguments
-        for identity in &identities {
-            cmd.args(&["--identity", identity]);
-        }
-
-        // Add output argument if specified
-        if let Some(output) = output_path {
-            cmd.args(&["-o", &output.as_ref().to_string_lossy()]);
-        } else {
-            cmd.args(&["-o", "-"]); // stdout
-        }
-
-        cmd.arg("--").arg(input_file);
-
-        let status = cmd.status().context("Failed to run age decrypt")?;
-
-        if !status.success() {
-            return Err(anyhow!("Failed to decrypt {}", input_file.display()));
-        }
-
-        Ok(())
-    }
-
-    /// Encrypt data to a file with the specified recipients
-    pub fn encrypt<P: AsRef<Path>>(
-        &self,
-        input_data: &[u8],
-        output_file: P,
-        recipients: &[String],
-        armor: bool,
-    ) -> Result<()> {
-        let output_file = output_file.as_ref();
-
-        if recipients.is_empty() {
-            return Err(anyhow!("No recipients specified for encryption"));
-        }
-
-        let mut cmd = Command::new(&self.config.age_bin);
-
-        if armor {
-            cmd.arg("--armor");
-        }
-
-        // Add recipients
-        for recipient in recipients {
-            if !recipient.is_empty() {
-                cmd.args(&["--recipient", recipient]);
-            }
-        }
-
-        cmd.args(&["-o", &output_file.to_string_lossy()]);
-        cmd.stdin(Stdio::piped());
-
-        let mut child = cmd.spawn().context("Failed to spawn age encrypt")?;
-
-        if let Some(stdin) = child.stdin.as_mut() {
-            stdin.write_all(input_data).context("Failed to write to age stdin")?;
-        }
-
-        let status = child.wait().context("Failed to wait for age encrypt")?;
-
-        if !status.success() {
-            return Err(anyhow!("Failed to encrypt to {}", output_file.display()));
-        }
-
-        Ok(())
-    }
-
-    /// Check if two files have the same content (used to detect changes)
-    pub fn files_equal<P: AsRef<Path>>(&self, file1: P, file2: P) -> Result<bool> {
-        let file1 = file1.as_ref();
-        let file2 = file2.as_ref();
-
-        if !file1.exists() || !file2.exists() {
-            return Ok(false);
-        }
-
-        let status = Command::new(&self.config.diff_bin)
-            .args(&["-q", "--"])
-            .arg(file1)
-            .arg(file2)
-            .status()
-            .context("Failed to run diff")?;
-
-        Ok(status.success())
-    }
+    let content1 = fs::read(file1).context("Failed to read first file")?;
+    let content2 = fs::read(file2).context("Failed to read second file")?;
+    Ok(content1 == content2)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::NamedTempFile;
-    use std::io::Write as IoWrite;
-
-    fn create_test_config() -> Config {
-        Config {
-            age_bin: "age".to_string(),
-            diff_bin: "diff".to_string(),
-            ..Config::default()
-        }
-    }
 
     #[test]
-    fn test_crypto_manager_creation() {
-        let config = create_test_config();
-        let manager = CryptoManager::new(config);
-        assert_eq!(manager.identities.len(), 0);
-    }
-
-    #[test]
-    fn test_add_identity() {
-        let config = create_test_config();
-        let mut manager = CryptoManager::new(config);
-        
-        manager.add_identity("/path/to/key");
-        assert_eq!(manager.identities.len(), 1);
-        assert_eq!(manager.identities[0], "/path/to/key");
-    }
-
-    #[test]
-    fn test_get_identities_with_custom() {
-        let config = create_test_config();
-        let mut manager = CryptoManager::new(config);
-        
-        manager.add_identity("/custom/key");
-        let identities = manager.get_identities();
-        assert_eq!(identities, vec!["/custom/key"]);
-    }
-
-    #[test]
-    fn test_get_identities_default() {
-        let config = create_test_config();
-        let manager = CryptoManager::new(config);
-        
-        // This will return system defaults, which may be empty
-        let identities = manager.get_identities();
-        assert!(identities.len() <= 2); // At most id_rsa and id_ed25519
+    fn test_get_default_identities() {
+        let identities = get_default_identities();
+        // Should return 0-2 identities depending on system
+        assert!(identities.len() <= 2);
     }
 
     #[test]
     fn test_files_equal_nonexistent() {
-        let config = create_test_config();
-        let manager = CryptoManager::new(config);
-        
-        let result = manager.files_equal("/nonexistent1", "/nonexistent2");
+        let result = files_equal("nonexistent1", "nonexistent2");
         assert!(result.is_ok());
         assert!(!result.unwrap());
     }
 
     #[test]
     fn test_files_equal_same_content() -> Result<()> {
-        let config = create_test_config();
-        let manager = CryptoManager::new(config);
-        
+        use std::io::Write;
+        use tempfile::NamedTempFile;
+
         let mut file1 = NamedTempFile::new()?;
         let mut file2 = NamedTempFile::new()?;
-        
-        let content = b"test content";
-        file1.write_all(content)?;
-        file2.write_all(content)?;
-        file1.flush()?;
-        file2.flush()?;
-        
-        let result = manager.files_equal(file1.path(), file2.path())?;
+
+        writeln!(file1, "test content")?;
+        writeln!(file2, "test content")?;
+
+        let result = files_equal(
+            file1.path().to_str().unwrap(),
+            file2.path().to_str().unwrap(),
+        )?;
         assert!(result);
-        
+
         Ok(())
     }
 
     #[test]
     fn test_files_equal_different_content() -> Result<()> {
-        let config = create_test_config();
-        let manager = CryptoManager::new(config);
-        
+        use std::io::Write;
+        use tempfile::NamedTempFile;
+
         let mut file1 = NamedTempFile::new()?;
         let mut file2 = NamedTempFile::new()?;
-        
-        file1.write_all(b"content1")?;
-        file2.write_all(b"content2")?;
-        file1.flush()?;
-        file2.flush()?;
-        
-        let result = manager.files_equal(file1.path(), file2.path())?;
+
+        writeln!(file1, "content 1")?;
+        writeln!(file2, "content 2")?;
+
+        let result = files_equal(
+            file1.path().to_str().unwrap(),
+            file2.path().to_str().unwrap(),
+        )?;
         assert!(!result);
-        
+
         Ok(())
-    }
-
-    #[test]
-    fn test_decrypt_nonexistent_file() {
-        let config = create_test_config();
-        let manager = CryptoManager::new(config);
-        
-        let result = manager.decrypt("/nonexistent/file.age", None::<&str>);
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("does not exist"));
-    }
-
-    #[test]
-    fn test_encrypt_no_recipients() {
-        let config = create_test_config();
-        let manager = CryptoManager::new(config);
-        
-        let temp_file = NamedTempFile::new().unwrap();
-        let result = manager.encrypt(b"test", temp_file.path(), &[], false);
-        
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("No recipients"));
     }
 }
