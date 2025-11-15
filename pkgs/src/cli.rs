@@ -1,4 +1,14 @@
 use clap::Parser;
+use isatty::stdin_isatty;
+use std::env;
+
+fn default_editor() -> String {
+    if stdin_isatty() {
+        "vi".to_string()
+    } else {
+        "cp -- /dev/stdin".to_string()
+    }
+}
 
 #[derive(Parser, Debug)]
 #[command(
@@ -32,6 +42,10 @@ pub struct Args {
     )]
     pub rules: String,
 
+    /// Editor to use (can also be set via EDITOR env var; defaults depend on TTY)
+    #[arg(long, env = "EDITOR", value_name = "EDITOR", default_value_t = default_editor())]
+    pub editor: String,
+
     /// Verbose output
     #[arg(short, long)]
     pub verbose: bool,
@@ -40,6 +54,9 @@ pub struct Args {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{Mutex, OnceLock};
+
+    pub static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
     #[test]
     fn test_args_parsing() {
@@ -74,6 +91,63 @@ mod tests {
     }
 
     #[test]
+    fn test_args_parsing_default_editor() {
+        use std::env;
+        let _g = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
+        let orig = env::var("EDITOR").ok();
+        unsafe { env::remove_var("EDITOR") };
+        let args = Args::try_parse_from(["agenix", "-e", "test.age"]).unwrap();
+        assert_eq!(args.edit, Some("test.age".to_string()));
+        assert_eq!(args.editor, default_editor());
+        match orig {
+            Some(v) => unsafe { env::set_var("EDITOR", v) },
+            None => unsafe { env::remove_var("EDITOR") },
+        }
+    }
+
+    #[test]
+    fn test_editor_env_overrides_default() {
+        use std::env;
+        let _g = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
+        let orig = env::var("EDITOR").ok();
+        unsafe { env::set_var("EDITOR", "nano") };
+        let args = Args::try_parse_from(["agenix"]).unwrap();
+        assert_eq!(args.editor, "nano");
+        match orig {
+            Some(v) => unsafe { env::set_var("EDITOR", v) },
+            None => unsafe { env::remove_var("EDITOR") },
+        }
+    }
+
+    #[test]
+    fn test_editor_flag_overrides_env() {
+        use std::env;
+        let _g = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
+        let orig = env::var("EDITOR").ok();
+        unsafe { env::set_var("EDITOR", "nano") };
+        let args = Args::try_parse_from(["agenix", "--editor", "vim"]).unwrap();
+        assert_eq!(args.editor, "vim");
+        match orig {
+            Some(v) => unsafe { env::set_var("EDITOR", v) },
+            None => unsafe { env::remove_var("EDITOR") },
+        }
+    }
+
+    #[test]
+    fn test_editor_flag_without_env() {
+        use std::env;
+        let _g = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
+        let orig = env::var("EDITOR").ok();
+        unsafe { env::remove_var("EDITOR") };
+        let args = Args::try_parse_from(["agenix", "--editor", "micro"]).unwrap();
+        assert_eq!(args.editor, "micro");
+        match orig {
+            Some(v) => unsafe { env::set_var("EDITOR", v) },
+            None => unsafe { env::remove_var("EDITOR") },
+        }
+    }
+
+    #[test]
     fn test_rules_env_var() {
         use std::env;
         let original = env::var("RULES").ok();
@@ -93,18 +167,28 @@ mod tests {
     #[test]
     fn test_help_contains_version() {
         use clap::CommandFactory;
-        
+
         let mut cmd = Args::command();
         let help = cmd.render_help().to_string();
-        
+
         // Check that help contains the version information at the end
         let expected_version_line = format!("agenix version: {}", env!("CARGO_PKG_VERSION"));
-        assert!(help.contains(&expected_version_line), 
-               "Help output should contain version line: {}", expected_version_line);
-        
+        assert!(
+            help.contains(&expected_version_line),
+            "Help output should contain version line: {}",
+            expected_version_line
+        );
+
         // Also verify it's near the end (after the options section)
-        let options_pos = help.find("Options:").expect("Help should contain Options section");
-        let version_pos = help.find(&expected_version_line).expect("Help should contain version line");
-        assert!(version_pos > options_pos, "Version line should appear after Options section");
+        let options_pos = help
+            .find("Options:")
+            .expect("Help should contain Options section");
+        let version_pos = help
+            .find(&expected_version_line)
+            .expect("Help should contain version line");
+        assert!(
+            version_pos > options_pos,
+            "Version line should appear after Options section"
+        );
     }
 }

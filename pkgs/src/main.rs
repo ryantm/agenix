@@ -60,7 +60,8 @@ fn run(args: &Args) -> Result<()> {
     }
 
     if let Some(file) = &args.edit {
-        return edit_file(&args.rules, file).with_context(|| format!("Failed to edit {file}"));
+        return edit_file(&args.rules, file, &args.editor)
+            .with_context(|| format!("Failed to edit {file}"));
     }
 
     Ok(())
@@ -78,10 +79,9 @@ mod tests {
             rekey: false,
             decrypt: None,
             rules: "./test_secrets.nix".to_string(),
+            editor: "vi".to_string(),
             verbose: false,
         };
-
-        // This should succeed and show help
         let result = run(&args);
         assert!(result.is_ok());
     }
@@ -94,11 +94,10 @@ mod tests {
             rekey: false,
             decrypt: None,
             rules: "./test_secrets.nix".to_string(),
+            editor: "vi".to_string(),
             verbose: true,
         };
-
         let result = run(&args);
-        // Should succeed (verbose flag is accepted but doesn't affect behavior)
         assert!(result.is_ok());
     }
 
@@ -110,11 +109,10 @@ mod tests {
             rekey: false,
             decrypt: None,
             rules: "./test_secrets.nix".to_string(),
+            editor: "vi".to_string(),
             verbose: false,
         };
-
         let result = run(&args);
-        // Should fail because rules file doesn't exist
         assert!(result.is_err());
     }
 
@@ -126,11 +124,10 @@ mod tests {
             rekey: false,
             decrypt: Some("nonexistent.age".to_string()),
             rules: "./test_secrets.nix".to_string(),
+            editor: "vi".to_string(),
             verbose: false,
         };
-
         let result = run(&args);
-        // Should fail because rules file doesn't exist
         assert!(result.is_err());
     }
 
@@ -142,11 +139,10 @@ mod tests {
             rekey: true,
             decrypt: None,
             rules: "./test_secrets.nix".to_string(),
+            editor: "vi".to_string(),
             verbose: false,
         };
-
         let result = run(&args);
-        // Should fail because rules file doesn't exist
         assert!(result.is_err());
     }
 }
