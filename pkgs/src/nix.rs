@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use serde_json::Value;
 use std::process::Command;
 
@@ -38,7 +38,7 @@ pub fn get_public_keys(config: &Config, file: &str) -> Result<Vec<String>> {
         _ => {
             return Err(anyhow!(
                 "Expected JSON array for public keys, got: {json_value}"
-            ))
+            ));
         }
     };
 
@@ -98,7 +98,7 @@ pub fn get_all_files(config: &Config) -> Result<Vec<String>> {
         _ => {
             return Err(anyhow!(
                 "Expected JSON array for file names, got: {json_value}"
-            ))
+            ));
         }
     };
 

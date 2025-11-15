@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use isatty::stdin_isatty;
 use std::env;
 use std::fs;
@@ -114,14 +114,16 @@ pub fn rekey_all_files(config: &Config) -> Result<()> {
 
         // Set EDITOR to : (no-op) for rekeying
         let old_editor = env::var("EDITOR").ok();
-        env::set_var("EDITOR", ":");
+        unsafe {
+            env::set_var("EDITOR", ":");
+        }
 
         let result = edit_file(config, &file);
 
         // Restore original EDITOR
         match old_editor {
-            Some(editor) => env::set_var("EDITOR", editor),
-            None => env::remove_var("EDITOR"),
+            Some(editor) => unsafe { env::set_var("EDITOR", editor) },
+            None => unsafe { env::remove_var("EDITOR") },
         }
 
         result?;
@@ -144,7 +146,9 @@ mod tests {
         let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
 
         let original = env::var("EDITOR").ok();
-        env::set_var("EDITOR", "nano");
+        unsafe {
+            env::set_var("EDITOR", "nano");
+        }
 
         if stdin_isatty() {
             let editor = get_editor_command();
@@ -153,8 +157,8 @@ mod tests {
 
         // Restore original value
         match original {
-            Some(val) => env::set_var("EDITOR", val),
-            None => env::remove_var("EDITOR"),
+            Some(val) => unsafe { env::set_var("EDITOR", val) },
+            None => unsafe { env::remove_var("EDITOR") },
         }
     }
 
@@ -163,7 +167,9 @@ mod tests {
         let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
 
         let original = env::var("EDITOR").ok();
-        env::remove_var("EDITOR");
+        unsafe {
+            env::remove_var("EDITOR");
+        }
 
         if stdin_isatty() {
             let editor = get_editor_command();
@@ -172,8 +178,8 @@ mod tests {
 
         // Restore original value
         match original {
-            Some(val) => env::set_var("EDITOR", val),
-            None => env::remove_var("EDITOR"),
+            Some(val) => unsafe { env::set_var("EDITOR", val) },
+            None => unsafe { env::remove_var("EDITOR") },
         }
     }
 
@@ -197,15 +203,17 @@ mod tests {
 
         // Ensure EDITOR is preferred regardless of tty state
         let original = env::var("EDITOR").ok();
-        env::set_var("EDITOR", "emacs");
+        unsafe {
+            env::set_var("EDITOR", "emacs");
+        }
 
         let editor = get_editor_command();
         assert_eq!(editor, "emacs");
 
         // Restore original value
         match original {
-            Some(val) => env::set_var("EDITOR", val),
-            None => env::remove_var("EDITOR"),
+            Some(val) => unsafe { env::set_var("EDITOR", val) },
+            None => unsafe { env::remove_var("EDITOR") },
         }
     }
 }

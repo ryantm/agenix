@@ -58,9 +58,9 @@ mod tests {
 
     #[test]
     fn test_config_with_rules_env() {
-        env::set_var("RULES", "/custom/path/secrets.nix");
+        unsafe { env::set_var("RULES", "/custom/path/secrets.nix") };
         let config = Config::default();
         assert_eq!(config.rules_path, "/custom/path/secrets.nix");
-        env::remove_var("RULES");
+        unsafe { env::remove_var("RULES") };
     }
 }

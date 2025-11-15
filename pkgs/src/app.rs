@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use std::env;
 
 use crate::cli::Args;
-use crate::config::{validate_dependencies, Config};
+use crate::config::{Config, validate_dependencies};
 use crate::editor::{decrypt_file, edit_file, rekey_all_files};
 
 /// Main application that orchestrates all the components
@@ -25,7 +25,9 @@ impl AgenixApp {
     pub fn run(&self, args: &Args) -> Result<()> {
         // Set verbose mode if requested
         if args.verbose {
-            env::set_var("RUST_LOG", "debug");
+            unsafe {
+                env::set_var("RUST_LOG", "debug");
+            }
         }
 
         // Validate dependencies first
