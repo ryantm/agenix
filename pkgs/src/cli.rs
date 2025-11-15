@@ -4,6 +4,7 @@ use clap::Parser;
 #[command(
     version = env!("CARGO_PKG_VERSION"),
     about = "edit and rekey age secret files",
+    after_help = concat!("agenix version: ", env!("CARGO_PKG_VERSION"))
 )]
 pub struct Args {
     /// Edit FILE using $EDITOR
@@ -87,5 +88,23 @@ mod tests {
             Some(val) => unsafe { env::set_var("RULES", val) },
             None => unsafe { env::remove_var("RULES") },
         }
+    }
+
+    #[test]
+    fn test_help_contains_version() {
+        use clap::CommandFactory;
+        
+        let mut cmd = Args::command();
+        let help = cmd.render_help().to_string();
+        
+        // Check that help contains the version information at the end
+        let expected_version_line = format!("agenix version: {}", env!("CARGO_PKG_VERSION"));
+        assert!(help.contains(&expected_version_line), 
+               "Help output should contain version line: {}", expected_version_line);
+        
+        // Also verify it's near the end (after the options section)
+        let options_pos = help.find("Options:").expect("Help should contain Options section");
+        let version_pos = help.find(&expected_version_line).expect("Help should contain version line");
+        assert!(version_pos > options_pos, "Version line should appear after Options section");
     }
 }
