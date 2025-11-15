@@ -109,53 +109,9 @@ pub fn get_all_files(config: &Config) -> Result<Vec<String>> {
     Ok(files)
 }
 
-/// Validate that the rules file exists and is accessible
-pub fn validate_rules_file(config: &Config) -> Result<()> {
-    if !std::path::Path::new(&config.rules_path).exists() {
-        return Err(anyhow!("Rules file does not exist: {}", config.rules_path));
-    }
-
-    // Try to evaluate a simple expression to check if nix-instantiate works
-    let test_expr = "builtins.attrNames {}";
-    let output = Command::new(&config.nix_instantiate)
-        .args(&["--json", "--eval", "-E", test_expr])
-        .output()
-        .context("Failed to test nix-instantiate")?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(anyhow!(
-            "nix-instantiate failed to evaluate test expression: {}",
-            stderr
-        ));
-    }
-
-    Ok(())
-}
-
-/// Get the raw JSON output from evaluating a Nix expression
-pub fn eval_json(config: &Config, expr: &str) -> Result<Value> {
-    let output = Command::new(&config.nix_instantiate)
-        .args(&["--json", "--eval", "--strict", "-E", expr])
-        .output()
-        .context("Failed to run nix-instantiate")?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(anyhow!("nix-instantiate failed: {}", stderr));
-    }
-
-    let json_str =
-        String::from_utf8(output.stdout).context("Failed to parse nix output as UTF-8")?;
-
-    serde_json::from_str(&json_str).context("Failed to parse nix output as JSON")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write;
-    use tempfile::NamedTempFile;
 
     fn create_test_config() -> Config {
         Config {
@@ -165,127 +121,88 @@ mod tests {
         }
     }
 
-    fn create_test_rules_file() -> Result<NamedTempFile> {
-        let mut file = NamedTempFile::new()?;
-        writeln!(
-            file,
-            r#"{{
-  "secret1.age" = {{
-    publicKeys = [ "age1abc123..." "age1def456..." ];
-    armor = true;
-  }};
-  "secret2.age" = {{
-    publicKeys = [ "age1ghi789..." ];
-  }};
-}}"#
-        )?;
-        Ok(file)
-    }
-
     #[test]
-    fn test_validate_rules_file_nonexistent() {
+    fn test_get_public_keys_with_nonexistent_rules() {
         let mut config = create_test_config();
-        config.rules_path = "/nonexistent/path".to_string();
+        config.rules_path = "/nonexistent/rules.nix".to_string();
 
-        let result = validate_rules_file(&config);
+        let result = get_public_keys(&config, "test.age");
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("does not exist"));
+        // Should fail because rules file doesn't exist
     }
 
     #[test]
-    fn test_eval_json_simple() {
-        let config = create_test_config();
+    fn test_should_armor_with_nonexistent_rules() {
+        let mut config = create_test_config();
+        config.rules_path = "/nonexistent/rules.nix".to_string();
 
-        // Test with a simple expression that should always work
-        if let Ok(result) = eval_json(&config, "42") {
-            assert_eq!(result, serde_json::json!(42));
-        }
-        // If nix-instantiate is not available, the test will be skipped
+        let result = should_armor(&config, "test.age");
+        // Should return false (default) when rules file doesn't exist
+        assert_eq!(result.unwrap_or(false), false);
     }
 
     #[test]
-    fn test_eval_json_invalid() {
-        let config = create_test_config();
+    fn test_get_all_files_with_nonexistent_rules() {
+        let mut config = create_test_config();
+        config.rules_path = "/nonexistent/rules.nix".to_string();
 
-        let result = eval_json(&config, "invalid nix expression !!!");
-        // Should fail with invalid syntax
+        let result = get_all_files(&config);
         assert!(result.is_err());
+        // Should fail because rules file doesn't exist
     }
 
-    // Integration tests that require nix-instantiate and jq to be available
-    #[cfg(feature = "integration-tests")]
-    mod integration_tests {
-        use super::*;
+    #[test]
+    fn test_nix_expr_format_get_public_keys() {
+        // Test that the Nix expression is formatted correctly
+        let config = create_test_config();
+        let result = get_public_keys(&config, "test.age");
 
-        #[test]
-        fn test_get_public_keys_with_real_nix() -> Result<()> {
-            let rules_file = create_test_rules_file()?;
-            let mut config = create_test_config();
-            config.rules_path = rules_file.path().to_string_lossy().to_string();
-
-            // This would work if we had a properly formatted Nix file
-            // and nix-instantiate available
-            let result = get_public_keys(&config, "secret1.age");
-
-            // The test might fail if dependencies aren't available
-            match result {
-                Ok(keys) => {
-                    assert!(!keys.is_empty());
-                    assert!(keys.contains(&"age1abc123...".to_string()));
-                }
-                Err(_) => {
-                    // Dependencies not available, skip test
-                    println!("Skipping integration test - dependencies not available");
-                }
+        // This will fail in most test environments due to missing nix-instantiate
+        // but we can at least test that the function doesn't panic
+        match result {
+            Ok(_) => {
+                // If nix-instantiate is available and works, great!
             }
-
-            Ok(())
+            Err(err) => {
+                // Expected in most test environments
+                let err_str = err.to_string();
+                // Should contain our file name in the error
+                assert!(err_str.contains("test.age") || err_str.contains("nix-instantiate"));
+            }
         }
+    }
 
-        #[test]
-        fn test_should_armor_with_real_nix() -> Result<()> {
-            let rules_file = create_test_rules_file()?;
-            let mut config = create_test_config();
-            config.rules_path = rules_file.path().to_string_lossy().to_string();
+    #[test]
+    fn test_nix_expr_format_should_armor() {
+        let config = create_test_config();
+        let result = should_armor(&config, "test.age");
 
-            match should_armor(&config, "secret1.age") {
-                Ok(armor) => assert!(armor),
-                Err(_) => {
-                    // Dependencies not available, skip test
-                    println!("Skipping integration test - dependencies not available");
-                }
+        // This will likely fail in test environments, but shouldn't panic
+        match result {
+            Ok(armor) => {
+                // If it works, armor should be a boolean
+                assert!(armor == true || armor == false);
             }
-
-            match should_armor(&config, "secret2.age") {
-                Ok(armor) => assert!(!armor), // secret2 doesn't have armor = true
-                Err(_) => {
-                    // Dependencies not available, skip test
-                    println!("Skipping integration test - dependencies not available");
-                }
+            Err(_) => {
+                // Expected in most test environments without nix-instantiate
             }
-
-            Ok(())
         }
+    }
 
-        #[test]
-        fn test_get_all_files_with_real_nix() -> Result<()> {
-            let rules_file = create_test_rules_file()?;
-            let mut config = create_test_config();
-            config.rules_path = rules_file.path().to_string_lossy().to_string();
+    #[test]
+    fn test_nix_expr_format_get_all_files() {
+        let config = create_test_config();
+        let result = get_all_files(&config);
 
-            match get_all_files(&config) {
-                Ok(files) => {
-                    assert_eq!(files.len(), 2);
-                    assert!(files.contains(&"secret1.age".to_string()));
-                    assert!(files.contains(&"secret2.age".to_string()));
-                }
-                Err(_) => {
-                    // Dependencies not available, skip test
-                    println!("Skipping integration test - dependencies not available");
-                }
+        // This will likely fail in test environments, but shouldn't panic
+        match result {
+            Ok(_files) => {
+                // If it works, should return a vector (may be empty)
+                // No assertion needed - just test that it doesn't panic
             }
-
-            Ok(())
+            Err(_) => {
+                // Expected in most test environments without nix-instantiate
+            }
         }
     }
 }

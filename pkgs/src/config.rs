@@ -1,12 +1,10 @@
 use std::env;
-use std::path::PathBuf;
 
 /// Simple configuration struct
 #[derive(Debug, Clone)]
 pub struct Config {
     pub age_bin: String,
     pub nix_instantiate: String,
-    pub diff_bin: String,
     pub rules_path: String,
 }
 
@@ -15,29 +13,9 @@ impl Default for Config {
         Self {
             age_bin: "age".to_string(),
             nix_instantiate: "nix-instantiate".to_string(),
-            diff_bin: "diff".to_string(),
             rules_path: env::var("RULES").unwrap_or_else(|_| "./secrets.nix".to_string()),
         }
     }
-}
-
-/// Get default SSH identity file paths
-pub fn get_default_identities() -> Vec<PathBuf> {
-    let mut identities = Vec::new();
-
-    if let Ok(home) = env::var("HOME") {
-        let id_rsa = PathBuf::from(&home).join(".ssh/id_rsa");
-        let id_ed25519 = PathBuf::from(&home).join(".ssh/id_ed25519");
-
-        if id_rsa.exists() {
-            identities.push(id_rsa);
-        }
-        if id_ed25519.exists() {
-            identities.push(id_ed25519);
-        }
-    }
-
-    identities
 }
 
 /// Check if required dependencies are available
@@ -76,7 +54,6 @@ mod tests {
         let config = Config::default();
         assert_eq!(config.age_bin, "age");
         assert_eq!(config.nix_instantiate, "nix-instantiate");
-        assert_eq!(config.diff_bin, "diff");
     }
 
     #[test]
@@ -85,11 +62,5 @@ mod tests {
         let config = Config::default();
         assert_eq!(config.rules_path, "/custom/path/secrets.nix");
         env::remove_var("RULES");
-    }
-
-    #[test]
-    fn test_get_default_identities() {
-        let identities = get_default_identities();
-        assert!(identities.len() <= 2);
     }
 }

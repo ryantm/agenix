@@ -56,11 +56,6 @@ impl AgenixApp {
         Args::show_help();
         Ok(())
     }
-
-    /// Get the configuration
-    pub fn config(&self) -> &Config {
-        &self.config
-    }
 }
 
 impl Default for AgenixApp {
@@ -102,8 +97,7 @@ mod tests {
     #[test]
     fn test_config_access() {
         let app = AgenixApp::new();
-        let config = app.config();
-        assert_eq!(config.age_bin, "age");
+        assert_eq!(app.config.age_bin, "age");
     }
 
     #[test]
