@@ -15,10 +15,3 @@ anyhow = "1.0"
 tempfile = "3.8"
 serde_json = "1.0"
 isatty = "0.1"
-
-[dev-dependencies]
-tempfile = "3.8"
-
-[features]
-default = []
-integration-tests = []
