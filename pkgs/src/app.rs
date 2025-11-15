@@ -6,91 +6,59 @@ use crate::crypto::AGE_BIN;
 use crate::editor::{decrypt_file, edit_file, rekey_all_files};
 use crate::nix::NIX_INSTANTIATE;
 
-/// Main application that orchestrates all the components
-pub struct AgenixApp {}
+/// Validate that required dependencies are available
+fn validate_dependencies() -> Result<(), Vec<String>> {
+    let mut missing = Vec::new();
 
-impl AgenixApp {
-    pub fn new() -> Self {
-        Self {}
-    }
+    let binaries = [(AGE_BIN, "age"), (NIX_INSTANTIATE, "nix-instantiate")];
 
-    fn validate_dependencies() -> Result<(), Vec<String>> {
-        let mut missing = Vec::new();
-
-        let binaries = [(AGE_BIN, "age"), (NIX_INSTANTIATE, "nix-instantiate")];
-
-        for (path, name) in &binaries {
-            if Command::new(path).arg("--version").output().is_err() {
-                missing.push(format!("{name} ({path})"));
-            }
-        }
-
-        if missing.is_empty() {
-            Ok(())
-        } else {
-            Err(missing)
+    for (path, name) in &binaries {
+        if Command::new(path).arg("--version").output().is_err() {
+            missing.push(format!("{name} ({path})"));
         }
     }
 
-    /// Run the application with the given command-line arguments
-    pub fn run(args: &Args) -> Result<()> {
-        // Note: verbose flag is kept for compatibility with bash version
-        // but doesn't affect output in this implementation
-
-        // Validate dependencies first
-        if let Err(missing) = Self::validate_dependencies() {
-            eprintln!("Missing required dependencies:");
-            for dep in missing {
-                eprintln!("  - {dep}");
-            }
-            return Err(anyhow::anyhow!("Required dependencies are missing"));
-        }
-
-        // Handle different commands
-        if args.rekey {
-            return rekey_all_files(&args.rules).context("Failed to rekey files");
-        }
-
-        if let Some(file) = &args.decrypt {
-            return decrypt_file(&args.rules, file, None)
-                .with_context(|| format!("Failed to decrypt {file}"));
-        }
-
-        if let Some(file) = &args.edit {
-            return edit_file(&args.rules, file).with_context(|| format!("Failed to edit {file}"));
-        }
-
+    if missing.is_empty() {
         Ok(())
+    } else {
+        Err(missing)
     }
 }
 
-impl Default for AgenixApp {
-    fn default() -> Self {
-        Self::new()
+/// Run the application with the given command-line arguments
+pub fn run(args: &Args) -> Result<()> {
+    // Note: verbose flag is kept for compatibility with bash version
+    // but doesn't affect output in this implementation
+
+    // Validate dependencies first
+    if let Err(missing) = validate_dependencies() {
+        eprintln!("Missing required dependencies:");
+        for dep in missing {
+            eprintln!("  - {dep}");
+        }
+        return Err(anyhow::anyhow!("Required dependencies are missing"));
     }
+
+    // Handle different commands
+    if args.rekey {
+        return rekey_all_files(&args.rules).context("Failed to rekey files");
+    }
+
+    if let Some(file) = &args.decrypt {
+        return decrypt_file(&args.rules, file, None)
+            .with_context(|| format!("Failed to decrypt {file}"));
+    }
+
+    if let Some(file) = &args.edit {
+        return edit_file(&args.rules, file).with_context(|| format!("Failed to edit {file}"));
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_app_creation() {
-        let _app = AgenixApp::new();
-        // No config anymore; just ensure creation succeeds
-    }
-
-    #[test]
-    fn test_app_default() {
-        let _app = AgenixApp::default();
-        // creation ok
-    }
-
-    #[test]
-    fn test_config_access() {
-        let _app = AgenixApp::new();
-        // no config access
-    }
 
     #[test]
     fn test_run_no_args_shows_help() {
@@ -104,7 +72,7 @@ mod tests {
         };
 
         // This should succeed and show help
-        let result = AgenixApp::run(&args);
+        let result = run(&args);
         assert!(result.is_ok());
     }
 
@@ -119,7 +87,7 @@ mod tests {
             verbose: true,
         };
 
-        let result = AgenixApp::run(&args);
+        let result = run(&args);
         // Should succeed (verbose flag is accepted but doesn't affect behavior)
         assert!(result.is_ok());
     }
@@ -135,7 +103,7 @@ mod tests {
             verbose: false,
         };
 
-        let result = AgenixApp::run(&args);
+        let result = run(&args);
         // Should fail because rules file doesn't exist
         assert!(result.is_err());
     }
@@ -151,7 +119,7 @@ mod tests {
             verbose: false,
         };
 
-        let result = AgenixApp::run(&args);
+        let result = run(&args);
         // Should fail because rules file doesn't exist
         assert!(result.is_err());
     }
@@ -167,7 +135,7 @@ mod tests {
             verbose: false,
         };
 
-        let result = AgenixApp::run(&args);
+        let result = run(&args);
         // Should fail because rules file doesn't exist
         assert!(result.is_err());
     }

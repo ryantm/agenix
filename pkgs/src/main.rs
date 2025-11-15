@@ -9,5 +9,5 @@ use clap::Parser;
 
 fn main() -> Result<()> {
     let args = cli::Args::parse_from(std::env::args());
-    app::AgenixApp::run(&args)
+    app::run(&args)
 }
