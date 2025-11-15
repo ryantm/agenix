@@ -1,5 +1,16 @@
+mod app;
+mod cli;
+mod config;
+mod crypto;
+mod editor;
+mod nix;
+
 use anyhow::Result;
+use clap::Parser;
 
 fn main() -> Result<()> {
-    agenix::run()
+    let args = cli::Args::try_parse_from(std::env::args())?;
+    let config = config::Config::default();
+    let app = app::AgenixApp::with_config(config);
+    app.run(args)
 }

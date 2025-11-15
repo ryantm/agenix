@@ -9,10 +9,6 @@ repository = "https://github.com/zebreus/agenix"
 keywords = ["age", "encryption", "nix", "secrets", "cli"]
 categories = ["command-line-utilities", "cryptography"]
 
-[lib]
-name = "agenix"
-path = "src/lib.rs"
-
 [[bin]]
 name = "agenix"
 path = "src/main.rs"

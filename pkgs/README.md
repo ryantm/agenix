@@ -17,7 +17,7 @@ Pure Rust port of agenix - edit and rekey age secret files using Nix expressions
 
 ```bash
 agenix -e secret.age    # Edit
-agenix -d secret.age    # Decrypt  
+agenix -d secret.age    # Decrypt
 agenix -r              # Rekey all
 ```
 
