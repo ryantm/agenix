@@ -12,10 +12,17 @@ use crate::nix::{get_all_files, get_public_keys, should_armor};
 
 /// Get the editor command to use
 pub fn get_editor_command() -> String {
-    if !stdin_isatty() {
-        "cp -- /dev/stdin".to_string()
+    // If EDITOR is explicitly set, prefer that
+    if let Ok(editor) = env::var("EDITOR") {
+        return editor;
+    }
+
+    if stdin_isatty() {
+        // Default editor when attached to a terminal
+        "vi".to_string()
     } else {
-        env::var("EDITOR").unwrap_or_else(|_| "vi".to_string())
+        // When not attached to a tty, read from stdin
+        "cp -- /dev/stdin".to_string()
     }
 }
 
@@ -25,7 +32,7 @@ pub fn edit_file(config: &Config, file: &str) -> Result<()> {
     let armor = should_armor(config, file)?;
 
     if public_keys.is_empty() {
-        return Err(anyhow!("No public keys found for file: {}", file));
+        return Err(anyhow!("No public keys found for file: {file}"));
     }
 
     // Create temporary directory for cleartext
@@ -58,7 +65,7 @@ pub fn edit_file(config: &Config, file: &str) -> Result<()> {
     }
 
     if !cleartext_file.exists() {
-        eprintln!("Warning: {} wasn't created", file);
+        eprintln!("Warning: {file} wasn't created");
         return Ok(());
     }
 
@@ -67,7 +74,7 @@ pub fn edit_file(config: &Config, file: &str) -> Result<()> {
         && editor != ":"
         && files_equal(&backup_file, &cleartext_file.to_string_lossy())?
     {
-        eprintln!("Warning: {} wasn't changed, skipping re-encryption", file);
+        eprintln!("Warning: {file} wasn't changed, skipping re-encryption");
         return Ok(());
     }
 
@@ -87,7 +94,7 @@ pub fn edit_file(config: &Config, file: &str) -> Result<()> {
 pub fn decrypt_file(config: &Config, file: &str, output: Option<&str>) -> Result<()> {
     let public_keys = get_public_keys(config, file)?;
     if public_keys.is_empty() {
-        return Err(anyhow!("No public keys found for file: {}", file));
+        return Err(anyhow!("No public keys found for file: {file}"));
     }
 
     match output {
@@ -103,7 +110,7 @@ pub fn rekey_all_files(config: &Config) -> Result<()> {
     let files = get_all_files(config)?;
 
     for file in files {
-        eprintln!("Rekeying {}...", file);
+        eprintln!("Rekeying {file}...");
 
         // Set EDITOR to : (no-op) for rekeying
         let old_editor = env::var("EDITOR").ok();
@@ -126,9 +133,16 @@ pub fn rekey_all_files(config: &Config) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{Mutex, OnceLock};
+
+    // Global lock to serialize tests that modify environment variables.
+    static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
     #[test]
     fn test_get_editor_command_with_env() {
+        // Serialize env changes
+        let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
+
         let original = env::var("EDITOR").ok();
         env::set_var("EDITOR", "nano");
 
@@ -146,11 +160,20 @@ mod tests {
 
     #[test]
     fn test_get_editor_command_default() {
+        let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
+
+        let original = env::var("EDITOR").ok();
         env::remove_var("EDITOR");
 
         if stdin_isatty() {
             let editor = get_editor_command();
             assert_eq!(editor, "vi");
+        }
+
+        // Restore original value
+        match original {
+            Some(val) => env::set_var("EDITOR", val),
+            None => env::remove_var("EDITOR"),
         }
     }
 
@@ -166,5 +189,23 @@ mod tests {
         let config = Config::default();
         let result = decrypt_file(&config, "nonexistent.age", None);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_get_editor_command_prefers_env() {
+        let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
+
+        // Ensure EDITOR is preferred regardless of tty state
+        let original = env::var("EDITOR").ok();
+        env::set_var("EDITOR", "emacs");
+
+        let editor = get_editor_command();
+        assert_eq!(editor, "emacs");
+
+        // Restore original value
+        match original {
+            Some(val) => env::set_var("EDITOR", val),
+            None => env::remove_var("EDITOR"),
+        }
     }
 }

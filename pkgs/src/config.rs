@@ -33,7 +33,7 @@ pub fn validate_dependencies(config: &Config) -> Result<(), Vec<String>> {
             .output()
             .is_err()
         {
-            missing.push(format!("{} ({})", name, path));
+            missing.push(format!("{name} ({path})"));
         }
     }
 

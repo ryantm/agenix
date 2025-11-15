@@ -32,7 +32,7 @@ pub fn decrypt_to_file<P: AsRef<Path>>(
         .context("Failed to run age decrypt")?;
 
     if !status.success() {
-        return Err(anyhow::anyhow!("Failed to decrypt {}", input_file));
+        return Err(anyhow::anyhow!("Failed to decrypt {input_file}"));
     }
 
     Ok(())
@@ -56,7 +56,7 @@ pub fn decrypt_to_stdout(config: &Config, input_file: &str) -> Result<()> {
         .context("Failed to run age decrypt")?;
 
     if !status.success() {
-        return Err(anyhow::anyhow!("Failed to decrypt {}", input_file));
+        return Err(anyhow::anyhow!("Failed to decrypt {input_file}"));
     }
 
     Ok(())
@@ -93,7 +93,7 @@ pub fn encrypt_from_file(
         .context("Failed to run age encrypt")?;
 
     if !status.success() {
-        return Err(anyhow::anyhow!("Failed to encrypt to {}", output_file));
+        return Err(anyhow::anyhow!("Failed to encrypt to {output_file}"));
     }
 
     Ok(())
@@ -104,8 +104,8 @@ pub fn get_default_identities() -> Vec<String> {
     let mut identities = Vec::new();
 
     if let Ok(home) = std::env::var("HOME") {
-        let id_rsa = format!("{}/.ssh/id_rsa", home);
-        let id_ed25519 = format!("{}/.ssh/id_ed25519", home);
+        let id_rsa = format!("{home}/.ssh/id_rsa");
+        let id_ed25519 = format!("{home}/.ssh/id_ed25519");
 
         if Path::new(&id_rsa).exists() {
             identities.push(id_rsa);

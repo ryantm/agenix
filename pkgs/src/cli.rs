@@ -34,10 +34,10 @@ impl Args {
         const PACKAGE: &str = "agenix";
         const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-        println!("{} - edit and rekey age secret files", PACKAGE);
+        println!("{PACKAGE} - edit and rekey age secret files");
         println!(" ");
-        println!("{} -e FILE [-i PRIVATE_KEY]", PACKAGE);
-        println!("{} -r [-i PRIVATE_KEY]", PACKAGE);
+        println!("{PACKAGE} -e FILE [-i PRIVATE_KEY]");
+        println!("{PACKAGE} -r [-i PRIVATE_KEY]");
         println!(" ");
         println!("options:");
         println!("-h, --help                show help");
@@ -60,7 +60,7 @@ impl Args {
         );
         println!("Defaults to './secrets.nix'");
         println!(" ");
-        println!("agenix version: {}", VERSION);
+        println!("agenix version: {VERSION}");
         println!("age binary path: age");
 
         // Try to get age version

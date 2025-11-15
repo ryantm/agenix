@@ -22,7 +22,7 @@ impl AgenixApp {
     }
 
     /// Run the application with the given command-line arguments
-    pub fn run(&self, args: Args) -> Result<()> {
+    pub fn run(&self, args: &Args) -> Result<()> {
         // Set verbose mode if requested
         if args.verbose {
             env::set_var("RUST_LOG", "debug");
@@ -32,7 +32,7 @@ impl AgenixApp {
         if let Err(missing) = validate_dependencies(&self.config) {
             eprintln!("Missing required dependencies:");
             for dep in missing {
-                eprintln!("  - {}", dep);
+                eprintln!("  - {dep}");
             }
             return Err(anyhow::anyhow!("Required dependencies are missing"));
         }
@@ -44,12 +44,11 @@ impl AgenixApp {
 
         if let Some(file) = &args.decrypt {
             return decrypt_file(&self.config, file, None)
-                .with_context(|| format!("Failed to decrypt {}", file));
+                .with_context(|| format!("Failed to decrypt {file}"));
         }
 
         if let Some(file) = &args.edit {
-            return edit_file(&self.config, file)
-                .with_context(|| format!("Failed to edit {}", file));
+            return edit_file(&self.config, file).with_context(|| format!("Failed to edit {file}"));
         }
 
         // If no command specified, show help
@@ -112,7 +111,7 @@ mod tests {
         };
 
         // This should succeed and show help
-        let result = app.run(args);
+        let result = app.run(&args);
         assert!(result.is_ok());
     }
 
@@ -127,7 +126,7 @@ mod tests {
             verbose: true,
         };
 
-        let result = app.run(args);
+        let result = app.run(&args);
         // Should succeed (just shows help with verbose flag set)
         assert!(result.is_ok());
 
@@ -149,7 +148,7 @@ mod tests {
             verbose: false,
         };
 
-        let result = app.run(args);
+        let result = app.run(&args);
         // Should fail because rules file doesn't exist
         assert!(result.is_err());
     }
@@ -167,7 +166,7 @@ mod tests {
             verbose: false,
         };
 
-        let result = app.run(args);
+        let result = app.run(&args);
         // Should fail because rules file doesn't exist
         assert!(result.is_err());
     }
@@ -185,7 +184,7 @@ mod tests {
             verbose: false,
         };
 
-        let result = app.run(args);
+        let result = app.run(&args);
         // Should fail because rules file doesn't exist
         assert!(result.is_err());
     }

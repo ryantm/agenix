@@ -19,9 +19,7 @@ pub fn get_public_keys(config: &Config, file: &str) -> Result<Vec<String>> {
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(anyhow!(
-            "Failed to get keys for file: {}, nix error: {}",
-            file,
-            stderr
+            "Failed to get keys for file: {file}, nix error: {stderr}"
         ));
     }
 
@@ -35,12 +33,11 @@ pub fn get_public_keys(config: &Config, file: &str) -> Result<Vec<String>> {
     let keys = match json_value {
         Value::Array(arr) => arr
             .into_iter()
-            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+            .filter_map(|v| v.as_str().map(str::to_string))
             .collect(),
         _ => {
             return Err(anyhow!(
-                "Expected JSON array for public keys, got: {}",
-                json_value
+                "Expected JSON array for public keys, got: {json_value}"
             ))
         }
     };
@@ -83,7 +80,7 @@ pub fn get_all_files(config: &Config) -> Result<Vec<String>> {
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(anyhow!("Failed to get file list from rules: {}", stderr));
+        return Err(anyhow!("Failed to get file list from rules: {stderr}"));
     }
 
     let json_str =
@@ -96,12 +93,11 @@ pub fn get_all_files(config: &Config) -> Result<Vec<String>> {
     let files = match json_value {
         Value::Array(arr) => arr
             .into_iter()
-            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+            .filter_map(|v| v.as_str().map(str::to_string))
             .collect(),
         _ => {
             return Err(anyhow!(
-                "Expected JSON array for file names, got: {}",
-                json_value
+                "Expected JSON array for file names, got: {json_value}"
             ))
         }
     };
