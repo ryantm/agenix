@@ -1,5 +1,4 @@
 use anyhow::{Context, Result};
-use std::env;
 use std::process::Command;
 
 use crate::cli::Args;
@@ -35,12 +34,8 @@ impl AgenixApp {
 
     /// Run the application with the given command-line arguments
     pub fn run(args: &Args) -> Result<()> {
-        // Set verbose mode if requested
-        if args.verbose {
-            unsafe {
-                env::set_var("RUST_LOG", "debug");
-            }
-        }
+        // Note: verbose flag is kept for compatibility with bash version
+        // but doesn't affect output in this implementation
 
         // Validate dependencies first
         if let Err(missing) = Self::validate_dependencies() {
@@ -125,14 +120,8 @@ mod tests {
         };
 
         let result = AgenixApp::run(&args);
-        // Should succeed (just shows help with verbose flag set)
+        // Should succeed (verbose flag is accepted but doesn't affect behavior)
         assert!(result.is_ok());
-
-        // Check if RUST_LOG was set
-        assert_eq!(env::var("RUST_LOG").unwrap_or_default(), "debug");
-        unsafe {
-            env::remove_var("RUST_LOG");
-        } // Clean up
     }
 
     #[test]
