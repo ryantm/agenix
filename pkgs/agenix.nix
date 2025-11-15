@@ -1,33 +1,32 @@
 {
   lib,
-  stdenv,
   age,
-  jq,
   nix,
-  mktemp,
-  diffutils,
-  replaceVars,
-  ageBin ? "${age}/bin/age",
-  shellcheck,
+  rustPlatform,
 }:
 let
   bin = "${placeholder "out"}/bin/agenix";
 in
-stdenv.mkDerivation rec {
+rustPlatform.buildRustPackage rec {
   pname = "agenix";
-  version = "0.15.0";
-  src = replaceVars ./agenix.sh {
-    inherit ageBin version;
-    jqBin = "${jq}/bin/jq";
-    nixInstantiate = "${nix}/bin/nix-instantiate";
-    mktempBin = "${mktemp}/bin/mktemp";
-    diffBin = "${diffutils}/bin/diff";
-  };
-  dontUnpack = true;
+  version = "0.1.0";
+  src = ./.;
+  cargoLock.lockFile = ./Cargo.lock;
   doInstallCheck = true;
-  installCheckInputs = [ shellcheck ];
+
+  buildInputs = [
+    age
+    nix
+  ];
+
+  postPatch = ''
+    # Hardcode dependencies into the rust code, until we use
+    # the respective pure rust implementations.
+    sed -i 's|= "nix-instantiate"|= "${nix}/bin/nix-instantiate"|' src/nix.rs
+    sed -i 's|= "age"|= "${lib.getExe age}"|' src/crypto.rs
+  '';
+
   postInstallCheck = ''
-    shellcheck ${bin}
     ${bin} -h | grep ${version}
 
     test_tmp=$(mktemp -d 2>/dev/null || mktemp -d -t 'mytmpdir')
@@ -56,10 +55,6 @@ stdenv.mkDerivation rec {
 
     cd $HOME/secrets
     test $(${bin} -d secret1.age) = "hello"
-  '';
-
-  installPhase = ''
-    install -D $src ${bin}
   '';
 
   meta.description = "age-encrypted secrets for NixOS";
