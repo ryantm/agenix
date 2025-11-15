@@ -108,6 +108,9 @@ pkgs.nixosTest {
 
       assert "${hyphen-secret}" in system1.succeed("cat /run/agenix/leading-hyphen")
 
+      userDir = "/tmp/secrets"
+      userDo = lambda input : f"sudo -u user1 -- bash -c 'set -eou pipefail; cd {userDir}; {input}'"
+
       userDo = lambda input : f"sudo -u user1 -- bash -c 'set -eou pipefail; cd /tmp/secrets; {input}'"
 
       before_hash = system1.succeed(userDo('sha256sum passwordfile-user1.age')).split()
@@ -138,5 +141,13 @@ pkgs.nixosTest {
 
       # finally, the plain text should not linger around anywhere in the filesystem.
       system1.fail("grep -r secret1234 /tmp")
+
+      # user1 can make a one-way secret, but cannot see the contents, and host can decrypt
+      userDir = "/tmp/secrets-one-way"
+      system1.succeed(userDo("echo eye1234 | agenix -e one-way.age"))
+      system1.fail(userDo("EDITOR=cat agenix -e one-way.age"))
+      assert "eye1234" in system1.succeed(f"cd {userDir};EDITOR=cat agenix -e one-way.age -i /etc/ssh/ssh_host_ed25519_key")
+      system1.succeed(userDo("echo nose1234 | agenix -e one-way.age"))
+      assert "nose1234" in system1.succeed(f"cd {userDir};EDITOR=cat agenix -e one-way.age -i /etc/ssh/ssh_host_ed25519_key")
     '';
 }
