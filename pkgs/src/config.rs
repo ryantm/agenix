@@ -1,11 +1,8 @@
-use std::env;
-
 /// Simple configuration struct
 #[derive(Debug, Clone)]
 pub struct Config {
     pub age_bin: String,
     pub nix_instantiate: String,
-    pub rules_path: String,
 }
 
 impl Default for Config {
@@ -13,7 +10,6 @@ impl Default for Config {
         Self {
             age_bin: "age".to_string(),
             nix_instantiate: "nix-instantiate".to_string(),
-            rules_path: env::var("RULES").unwrap_or_else(|_| "./secrets.nix".to_string()),
         }
     }
 }
@@ -47,20 +43,11 @@ pub fn validate_dependencies(config: &Config) -> Result<(), Vec<String>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
 
     #[test]
     fn test_config_default() {
         let config = Config::default();
         assert_eq!(config.age_bin, "age");
         assert_eq!(config.nix_instantiate, "nix-instantiate");
-    }
-
-    #[test]
-    fn test_config_with_rules_env() {
-        unsafe { env::set_var("RULES", "/custom/path/secrets.nix") };
-        let config = Config::default();
-        assert_eq!(config.rules_path, "/custom/path/secrets.nix");
-        unsafe { env::remove_var("RULES") };
     }
 }

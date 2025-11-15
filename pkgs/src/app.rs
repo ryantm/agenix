@@ -41,16 +41,17 @@ impl AgenixApp {
 
         // Handle different commands
         if args.rekey {
-            return rekey_all_files(&self.config).context("Failed to rekey files");
+            return rekey_all_files(&self.config, &args.rules).context("Failed to rekey files");
         }
 
         if let Some(file) = &args.decrypt {
-            return decrypt_file(&self.config, file, None)
+            return decrypt_file(&self.config, &args.rules, file, None)
                 .with_context(|| format!("Failed to decrypt {file}"));
         }
 
         if let Some(file) = &args.edit {
-            return edit_file(&self.config, file).with_context(|| format!("Failed to edit {file}"));
+            return edit_file(&self.config, &args.rules, file)
+                .with_context(|| format!("Failed to edit {file}"));
         }
 
         Ok(())
@@ -69,7 +70,6 @@ mod tests {
 
     fn create_test_config() -> Config {
         Config {
-            rules_path: "./test_secrets.nix".to_string(),
             ..Config::default()
         }
     }
@@ -84,7 +84,7 @@ mod tests {
     fn test_app_with_config() {
         let config = create_test_config();
         let app = AgenixApp::with_config(config);
-        assert_eq!(app.config.rules_path, "./test_secrets.nix");
+        assert_eq!(app.config.age_bin, "age");
     }
 
     #[test]
@@ -107,6 +107,7 @@ mod tests {
             identity: None,
             rekey: false,
             decrypt: None,
+            rules: "./test_secrets.nix".to_string(),
             verbose: false,
         };
 
@@ -123,6 +124,7 @@ mod tests {
             identity: None,
             rekey: false,
             decrypt: None,
+            rules: "./test_secrets.nix".to_string(),
             verbose: true,
         };
 
@@ -132,7 +134,9 @@ mod tests {
 
         // Check if RUST_LOG was set
         assert_eq!(env::var("RUST_LOG").unwrap_or_default(), "debug");
-        env::remove_var("RUST_LOG"); // Clean up
+        unsafe {
+            env::remove_var("RUST_LOG");
+        } // Clean up
     }
 
     #[test]
@@ -145,6 +149,7 @@ mod tests {
             identity: None,
             rekey: false,
             decrypt: None,
+            rules: "./test_secrets.nix".to_string(),
             verbose: false,
         };
 
@@ -163,6 +168,7 @@ mod tests {
             identity: None,
             rekey: false,
             decrypt: Some("nonexistent.age".to_string()),
+            rules: "./test_secrets.nix".to_string(),
             verbose: false,
         };
 
@@ -181,6 +187,7 @@ mod tests {
             identity: None,
             rekey: true,
             decrypt: None,
+            rules: "./test_secrets.nix".to_string(),
             verbose: false,
         };
 

@@ -27,9 +27,9 @@ pub fn get_editor_command() -> String {
 }
 
 /// Edit a file with encryption/decryption
-pub fn edit_file(config: &Config, file: &str) -> Result<()> {
-    let public_keys = get_public_keys(config, file)?;
-    let armor = should_armor(config, file)?;
+pub fn edit_file(config: &Config, rules_path: &str, file: &str) -> Result<()> {
+    let public_keys = get_public_keys(&config.nix_instantiate, rules_path, file)?;
+    let armor = should_armor(&config.nix_instantiate, rules_path, file)?;
 
     if public_keys.is_empty() {
         return Err(anyhow!("No public keys found for file: {file}"));
@@ -91,8 +91,13 @@ pub fn edit_file(config: &Config, file: &str) -> Result<()> {
 }
 
 /// Decrypt a file to stdout or another location
-pub fn decrypt_file(config: &Config, file: &str, output: Option<&str>) -> Result<()> {
-    let public_keys = get_public_keys(config, file)?;
+pub fn decrypt_file(
+    config: &Config,
+    rules_path: &str,
+    file: &str,
+    output: Option<&str>,
+) -> Result<()> {
+    let public_keys = get_public_keys(&config.nix_instantiate, rules_path, file)?;
     if public_keys.is_empty() {
         return Err(anyhow!("No public keys found for file: {file}"));
     }
@@ -106,8 +111,8 @@ pub fn decrypt_file(config: &Config, file: &str, output: Option<&str>) -> Result
 }
 
 /// Rekey all files in the rules
-pub fn rekey_all_files(config: &Config) -> Result<()> {
-    let files = get_all_files(config)?;
+pub fn rekey_all_files(config: &Config, rules_path: &str) -> Result<()> {
+    let files = get_all_files(&config.nix_instantiate, rules_path)?;
 
     for file in files {
         eprintln!("Rekeying {file}...");
@@ -118,7 +123,7 @@ pub fn rekey_all_files(config: &Config) -> Result<()> {
             env::set_var("EDITOR", ":");
         }
 
-        let result = edit_file(config, &file);
+        let result = edit_file(config, rules_path, &file);
 
         // Restore original EDITOR
         match old_editor {
@@ -186,14 +191,16 @@ mod tests {
     #[test]
     fn test_edit_file_no_keys() {
         let config = Config::default();
-        let result = edit_file(&config, "nonexistent.age");
+        let rules = "./test_secrets.nix";
+        let result = edit_file(&config, rules, "nonexistent.age");
         assert!(result.is_err());
     }
 
     #[test]
     fn test_decrypt_file_no_keys() {
         let config = Config::default();
-        let result = decrypt_file(&config, "nonexistent.age", None);
+        let rules = "./test_secrets.nix";
+        let result = decrypt_file(&config, rules, "nonexistent.age", None);
         assert!(result.is_err());
     }
 

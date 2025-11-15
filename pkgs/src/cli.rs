@@ -22,6 +22,15 @@ pub struct Args {
     #[arg(short, long, value_name = "FILE")]
     pub decrypt: Option<String>,
 
+    /// Path to Nix rules file (can also be set via RULES env var)
+    #[arg(
+        long,
+        env = "RULES",
+        value_name = "FILE",
+        default_value = "./secrets.nix"
+    )]
+    pub rules: String,
+
     /// Verbose output
     #[arg(short, long)]
     pub verbose: bool,
@@ -61,5 +70,22 @@ mod tests {
         let args = Args::try_parse_from(["agenix", "-v", "-e", "test.age"]).unwrap();
         assert!(args.verbose);
         assert_eq!(args.edit, Some("test.age".to_string()));
+    }
+
+    #[test]
+    fn test_rules_env_var() {
+        use std::env;
+        let original = env::var("RULES").ok();
+        unsafe {
+            env::set_var("RULES", "/custom/path/secrets.nix");
+        }
+
+        let args = Args::try_parse_from(["agenix"]).unwrap();
+        assert_eq!(args.rules, "/custom/path/secrets.nix");
+
+        match original {
+            Some(val) => unsafe { env::set_var("RULES", val) },
+            None => unsafe { env::remove_var("RULES") },
+        }
     }
 }
