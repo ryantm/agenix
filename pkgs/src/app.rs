@@ -15,18 +15,14 @@ impl AgenixApp {
         Self {}
     }
 
-    pub fn with_config(_config: ()) -> Self {
-        Self {}
-    }
-
-    fn validate_dependencies(&self) -> Result<(), Vec<String>> {
+    fn validate_dependencies() -> Result<(), Vec<String>> {
         let mut missing = Vec::new();
 
         let binaries = [(AGE_BIN, "age"), (NIX_INSTANTIATE, "nix-instantiate")];
 
         for (path, name) in &binaries {
             if Command::new(path).arg("--version").output().is_err() {
-                missing.push(format!("{} ({})", name, path));
+                missing.push(format!("{name} ({path})"));
             }
         }
 
@@ -38,7 +34,7 @@ impl AgenixApp {
     }
 
     /// Run the application with the given command-line arguments
-    pub fn run(&self, args: &Args) -> Result<()> {
+    pub fn run(args: &Args) -> Result<()> {
         // Set verbose mode if requested
         if args.verbose {
             unsafe {
@@ -47,7 +43,7 @@ impl AgenixApp {
         }
 
         // Validate dependencies first
-        if let Err(missing) = self.validate_dependencies() {
+        if let Err(missing) = Self::validate_dependencies() {
             eprintln!("Missing required dependencies:");
             for dep in missing {
                 eprintln!("  - {dep}");
@@ -90,12 +86,6 @@ mod tests {
     }
 
     #[test]
-    fn test_app_with_config() {
-        let _app = AgenixApp::with_config(());
-        // No config; ensure creation with placeholder succeeds
-    }
-
-    #[test]
     fn test_app_default() {
         let _app = AgenixApp::default();
         // creation ok
@@ -109,7 +99,6 @@ mod tests {
 
     #[test]
     fn test_run_no_args_shows_help() {
-        let app = AgenixApp::new();
         let args = Args {
             edit: None,
             identity: None,
@@ -120,13 +109,12 @@ mod tests {
         };
 
         // This should succeed and show help
-        let result = app.run(&args);
+        let result = AgenixApp::run(&args);
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_run_with_verbose() {
-        let app = AgenixApp::new();
         let args = Args {
             edit: None,
             identity: None,
@@ -136,7 +124,7 @@ mod tests {
             verbose: true,
         };
 
-        let result = app.run(&args);
+        let result = AgenixApp::run(&args);
         // Should succeed (just shows help with verbose flag set)
         assert!(result.is_ok());
 
@@ -149,8 +137,6 @@ mod tests {
 
     #[test]
     fn test_handle_edit_nonexistent_file() {
-        let app = AgenixApp::new();
-
         let args = Args {
             edit: Some("nonexistent.age".to_string()),
             identity: None,
@@ -160,15 +146,13 @@ mod tests {
             verbose: false,
         };
 
-        let result = app.run(&args);
+        let result = AgenixApp::run(&args);
         // Should fail because rules file doesn't exist
         assert!(result.is_err());
     }
 
     #[test]
     fn test_handle_decrypt_nonexistent_file() {
-        let app = AgenixApp::new();
-
         let args = Args {
             edit: None,
             identity: None,
@@ -178,15 +162,13 @@ mod tests {
             verbose: false,
         };
 
-        let result = app.run(&args);
+        let result = AgenixApp::run(&args);
         // Should fail because rules file doesn't exist
         assert!(result.is_err());
     }
 
     #[test]
     fn test_handle_rekey_nonexistent_rules() {
-        let app = AgenixApp::new();
-
         let args = Args {
             edit: None,
             identity: None,
@@ -196,7 +178,7 @@ mod tests {
             verbose: false,
         };
 
-        let result = app.run(&args);
+        let result = AgenixApp::run(&args);
         // Should fail because rules file doesn't exist
         assert!(result.is_err());
     }
