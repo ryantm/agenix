@@ -12,7 +12,7 @@ pub fn get_public_keys(config: &Config, file: &str) -> Result<Vec<String>> {
     );
 
     let output = Command::new(&config.nix_instantiate)
-        .args(&["--json", "--eval", "--strict", "-E", &nix_expr])
+        .args(["--json", "--eval", "--strict", "-E", &nix_expr])
         .output()
         .context("Failed to run nix-instantiate")?;
 
@@ -56,7 +56,7 @@ pub fn should_armor(config: &Config, file: &str) -> Result<bool> {
     );
 
     let output = Command::new(&config.nix_instantiate)
-        .args(&["--json", "--eval", "--strict", "-E", &nix_expr])
+        .args(["--json", "--eval", "--strict", "-E", &nix_expr])
         .output()
         .context("Failed to run nix-instantiate for armor check")?;
 
@@ -77,7 +77,7 @@ pub fn get_all_files(config: &Config) -> Result<Vec<String>> {
     );
 
     let output = Command::new(&config.nix_instantiate)
-        .args(&["--json", "--eval", "-E", &nix_expr])
+        .args(["--json", "--eval", "-E", &nix_expr])
         .output()
         .context("Failed to run nix-instantiate")?;
 
@@ -138,7 +138,7 @@ mod tests {
 
         let result = should_armor(&config, "test.age");
         // Should return false (default) when rules file doesn't exist
-        assert_eq!(result.unwrap_or(false), false);
+        assert!(!result.unwrap_or(false));
     }
 
     #[test]
@@ -181,7 +181,7 @@ mod tests {
         match result {
             Ok(armor) => {
                 // If it works, armor should be a boolean
-                assert!(armor == true || armor == false);
+                assert!(armor || !armor);
             }
             Err(_) => {
                 // Expected in most test environments without nix-instantiate

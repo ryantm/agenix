@@ -78,7 +78,7 @@ mod tests {
 
     #[test]
     fn test_args_parsing() {
-        let args = Args::try_parse_from(&["agenix", "-e", "test.age"]).unwrap();
+        let args = Args::try_parse_from(["agenix", "-e", "test.age"]).unwrap();
         assert_eq!(args.edit, Some("test.age".to_string()));
         assert!(!args.rekey);
         assert_eq!(args.decrypt, None);
@@ -88,7 +88,7 @@ mod tests {
 
     #[test]
     fn test_rekey_flag() {
-        let args = Args::try_parse_from(&["agenix", "-r"]).unwrap();
+        let args = Args::try_parse_from(["agenix", "-r"]).unwrap();
         assert!(args.rekey);
         assert_eq!(args.edit, None);
     }
@@ -96,14 +96,14 @@ mod tests {
     #[test]
     fn test_decrypt_with_identity() {
         let args =
-            Args::try_parse_from(&["agenix", "-d", "secret.age", "-i", "/path/to/key"]).unwrap();
+            Args::try_parse_from(["agenix", "-d", "secret.age", "-i", "/path/to/key"]).unwrap();
         assert_eq!(args.decrypt, Some("secret.age".to_string()));
         assert_eq!(args.identity, Some("/path/to/key".to_string()));
     }
 
     #[test]
     fn test_verbose_flag() {
-        let args = Args::try_parse_from(&["agenix", "-v", "-e", "test.age"]).unwrap();
+        let args = Args::try_parse_from(["agenix", "-v", "-e", "test.age"]).unwrap();
         assert!(args.verbose);
         assert_eq!(args.edit, Some("test.age".to_string()));
     }

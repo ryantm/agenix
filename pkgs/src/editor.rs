@@ -46,7 +46,7 @@ pub fn edit_file(config: &Config, file: &str) -> Result<()> {
     // Edit the file
     let editor = get_editor_command();
     let status = Command::new("sh")
-        .args(&[
+        .args([
             "-c",
             &format!("{} '{}'", editor, cleartext_file.to_string_lossy()),
         ])
@@ -63,11 +63,12 @@ pub fn edit_file(config: &Config, file: &str) -> Result<()> {
     }
 
     // Check if file changed
-    if Path::new(&backup_file).exists() && editor != ":" {
-        if files_equal(&backup_file, &cleartext_file.to_string_lossy())? {
-            eprintln!("Warning: {} wasn't changed, skipping re-encryption", file);
-            return Ok(());
-        }
+    if Path::new(&backup_file).exists()
+        && editor != ":"
+        && files_equal(&backup_file, &cleartext_file.to_string_lossy())?
+    {
+        eprintln!("Warning: {} wasn't changed, skipping re-encryption", file);
+        return Ok(());
     }
 
     // Encrypt the file
