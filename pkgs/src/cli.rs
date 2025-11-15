@@ -2,10 +2,8 @@ use clap::Parser;
 
 #[derive(Parser, Debug)]
 #[command(
-    name = "agenix",
     version = env!("CARGO_PKG_VERSION"),
     about = "edit and rekey age secret files",
-    long_about = None
 )]
 pub struct Args {
     /// Edit FILE using $EDITOR
@@ -27,49 +25,6 @@ pub struct Args {
     /// Verbose output
     #[arg(short, long)]
     pub verbose: bool,
-}
-
-impl Args {
-    pub fn show_help() {
-        const PACKAGE: &str = "agenix";
-        const VERSION: &str = env!("CARGO_PKG_VERSION");
-
-        println!("{PACKAGE} - edit and rekey age secret files");
-        println!(" ");
-        println!("{PACKAGE} -e FILE [-i PRIVATE_KEY]");
-        println!("{PACKAGE} -r [-i PRIVATE_KEY]");
-        println!(" ");
-        println!("options:");
-        println!("-h, --help                show help");
-        println!("-e, --edit FILE           edits FILE using $EDITOR");
-        println!("-r, --rekey               re-encrypts all secrets with specified recipients");
-        println!("-d, --decrypt FILE        decrypts FILE to STDOUT");
-        println!("-i, --identity            identity to use when decrypting");
-        println!("-v, --verbose             verbose output");
-        println!(" ");
-        println!("FILE an age-encrypted file");
-        println!(" ");
-        println!("PRIVATE_KEY a path to a private SSH key used to decrypt file");
-        println!(" ");
-        println!("EDITOR environment variable of editor to use when editing FILE");
-        println!(" ");
-        println!("If STDIN is not interactive, EDITOR will be set to \"cp /dev/stdin\"");
-        println!(" ");
-        println!(
-            "RULES environment variable with path to Nix file specifying recipient public keys."
-        );
-        println!("Defaults to './secrets.nix'");
-        println!(" ");
-        println!("agenix version: {VERSION}");
-        println!("age binary path: age");
-
-        // Try to get age version
-        if let Ok(output) = std::process::Command::new("age").arg("--version").output() {
-            if let Ok(version) = String::from_utf8(output.stdout) {
-                println!("age version: {}", version.trim());
-            }
-        }
-    }
 }
 
 #[cfg(test)]

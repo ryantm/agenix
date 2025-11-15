@@ -51,8 +51,6 @@ impl AgenixApp {
             return edit_file(&self.config, file).with_context(|| format!("Failed to edit {file}"));
         }
 
-        // If no command specified, show help
-        Args::show_help();
         Ok(())
     }
 }
