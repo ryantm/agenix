@@ -2,19 +2,15 @@
 name = "agenix"
 version = "0.1.0"
 edition = "2021"
-description = "Edit and rekey age secret files using Nix expressions (pure Rust implementation)"
-authors = ["Agenix Contributors"]
-license = "MIT"
+description = "Edit and rekey age secret files using Nix expressions"
+authors = ["zebreus"]
+license = "AGPL-3.0-only"
 repository = "https://github.com/zebreus/agenix"
 keywords = ["age", "encryption", "nix", "secrets", "cli"]
 categories = ["command-line-utilities", "cryptography"]
 
-[[bin]]
-name = "agenix"
-path = "src/main.rs"
-
 [dependencies]
-clap = { version = "4.4", features = ["derive"] }
+clap = { version = "4.4", features = ["derive", "color"] }
 anyhow = "1.0"
 tempfile = "3.8"
 serde_json = "1.0"
