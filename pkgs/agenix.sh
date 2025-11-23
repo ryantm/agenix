@@ -6,8 +6,8 @@ PACKAGE="agenix"
 function show_help () {
   echo "$PACKAGE - edit and rekey age secret files"
   echo " "
-  echo "$PACKAGE -e FILE [-i PRIVATE_KEY]"
-  echo "$PACKAGE -r [-i PRIVATE_KEY]"
+  echo "$PACKAGE -e FILE [-i PRIVATE_KEY] [-j PLUGIN]"
+  echo "$PACKAGE -r [-i PRIVATE_KEY] [-j PLUGIN]"
   echo ' '
   echo 'options:'
   echo '-h, --help                show help'
@@ -16,6 +16,7 @@ function show_help () {
   echo '-r, --rekey               re-encrypts all secrets with specified recipients'
   echo '-d, --decrypt FILE        decrypts FILE to STDOUT'
   echo '-i, --identity            identity to use when decrypting'
+  echo '-j PLUGIN                 decrypt using the data-less plugin PLUGIN'
   echo '-v, --verbose             verbose output'
   echo ' '
   echo 'FILE an age-encrypted file'
@@ -71,6 +72,16 @@ while test $# -gt 0; do
         DEFAULT_DECRYPT+=(--identity "$1")
       else
         echo "no PRIVATE_KEY specified"
+        exit 1
+      fi
+      shift
+      ;;
+    -j)
+      shift
+      if test $# -gt 0; then
+        DEFAULT_DECRYPT+=(-j "$1")
+      else
+        echo "no PLUGIN specified"
         exit 1
       fi
       shift

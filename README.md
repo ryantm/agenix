@@ -700,8 +700,8 @@ on Linux and `$(getconf DARWIN_USER_TEMP_DIR)/agenix.d` on Darwin.
 ```
 agenix - edit and rekey age secret files
 
-agenix -e FILE [-i PRIVATE_KEY]
-agenix -r [-i PRIVATE_KEY]
+agenix -e FILE [-i PRIVATE_KEY] [-j PLUGIN]
+agenix -r [-i PRIVATE_KEY] [-j PLUGIN]
 
 options:
 -h, --help                show help
@@ -709,6 +709,7 @@ options:
 -r, --rekey               re-encrypts all secrets with specified recipients
 -d, --decrypt FILE        decrypts FILE to STDOUT
 -i, --identity            identity to use when decrypting
+-j PLUGIN                 decrypt using the data-less plugin PLUGIN
 -v, --verbose             verbose output
 
 FILE an age-encrypted file
