@@ -162,16 +162,19 @@ function edit {
 
     [ ! -f "$CLEARTEXT_FILE" ] || cp -- "$CLEARTEXT_FILE" "$CLEARTEXT_FILE.before"
 
-    [ -t 0 ] || EDITOR='cp -- /dev/stdin'
+    # only edit if we're not rekeying
+    if [ "${EDITOR:-}" != ":" ]; then
+      [ -t 0 ] || EDITOR='cp -- /dev/stdin'
 
-    $EDITOR "$CLEARTEXT_FILE"
+      $EDITOR "$CLEARTEXT_FILE"
+    fi
 
     if [ ! -f "$CLEARTEXT_FILE" ]
     then
       warn "$FILE wasn't created."
       return
     fi
-    [ -f "$FILE" ] && [ "$EDITOR" != ":" ] && @diffBin@ -q -- "$CLEARTEXT_FILE.before" "$CLEARTEXT_FILE" && warn "$FILE wasn't changed, skipping re-encryption." && return
+    [ -f "$FILE" ] && [ "${EDITOR:-}" != ":" ] && @diffBin@ -q -- "$CLEARTEXT_FILE.before" "$CLEARTEXT_FILE" && warn "$FILE wasn't changed, skipping re-encryption." && return
 
     ENCRYPT=()
     if [[ "$ARMOR" == "true" ]]; then
