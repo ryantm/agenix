@@ -46,7 +46,7 @@ Example referring to path:
 {
   users.users.ryantm = {
     isNormalUser = true;
-    passwordFile = config.age.secrets.passwordfile-ryantm.path;
+    hashedPasswordFile = config.age.secrets.passwordfile-ryantm.path;
   };
 }
 ```

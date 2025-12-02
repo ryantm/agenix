@@ -1,3 +1,6 @@
-{pkgs ? import <nixpkgs> {}}: {
-  agenix = pkgs.callPackage ./pkgs/agenix.nix {};
+{
+  pkgs ? import <nixpkgs> { },
+}:
+{
+  agenix = pkgs.callPackage ./pkgs/agenix.nix { };
 }

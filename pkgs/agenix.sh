@@ -120,17 +120,21 @@ RULES=${RULES:-./secrets.nix}
 function cleanup {
     if [ -n "${CLEARTEXT_DIR+x}" ]
     then
-        rm -rf "$CLEARTEXT_DIR"
+        rm -rf -- "$CLEARTEXT_DIR"
     fi
     if [ -n "${REENCRYPTED_DIR+x}" ]
     then
-        rm -rf "$REENCRYPTED_DIR"
+        rm -rf -- "$REENCRYPTED_DIR"
     fi
 }
 trap "cleanup" 0 2 3 15
 
 function keys {
     (@nixInstantiate@ --json --eval --strict -E "(let rules = import $RULES; in rules.\"$1\".publicKeys)" | @jqBin@ -r .[]) || exit 1
+}
+
+function armor {
+    (@nixInstantiate@ --json --eval --strict -E "(let rules = import $RULES; in (builtins.hasAttr \"armor\" rules.\"$1\" && rules.\"$1\".armor))") || exit 1
 }
 
 function decrypt {
@@ -156,29 +160,30 @@ function decrypt {
           err "No identity found to decrypt $FILE. Try adding an SSH key at $HOME/.ssh/id_rsa or $HOME/.ssh/id_ed25519 or using the --identity flag to specify a file."
         fi
 
-        @ageBin@ "${DECRYPT[@]}" "$FILE" || exit 1
+        @ageBin@ "${DECRYPT[@]}" -- "$FILE" || exit 1
     fi
 }
 
 function edit {
     FILE=$1
     KEYS=$(keys "$FILE") || exit 1
+    ARMOR=$(armor "$FILE") || exit 1
 
     CLEARTEXT_DIR=$(@mktempBin@ -d)
-    CLEARTEXT_FILE="$CLEARTEXT_DIR/$(basename "$FILE")"
+    CLEARTEXT_FILE="$CLEARTEXT_DIR/$(basename -- "$FILE")"
     DEFAULT_DECRYPT+=(-o "$CLEARTEXT_FILE")
 
     # Decrypt file
     if [ $ENCRYPT_ONLY -eq 0 ]
     then
       decrypt "$FILE" "$KEYS" || exit 1
-      [ ! -f "$CLEARTEXT_FILE" ] || cp "$CLEARTEXT_FILE" "$CLEARTEXT_FILE.before"
+      [ ! -f "$CLEARTEXT_FILE" ] || cp -- "$CLEARTEXT_FILE" "$CLEARTEXT_FILE.before"
     else
       touch "$CLEARTEXT_FILE.before"
     fi
 
     # Prompt file edit
-    [ -t 0 ] || EDITOR='cp /dev/stdin'
+    [ -t 0 ] || EDITOR='cp -- /dev/stdin'
     $EDITOR "$CLEARTEXT_FILE"
 
     # Check file status
@@ -187,9 +192,12 @@ function edit {
       warn "$FILE wasn't created."
       return
     fi
-    [ $ENCRYPT_ONLY -eq 0 ] && [ -f "$FILE" ] && [ "$EDITOR" != ":" ] && @diffBin@ -q "$CLEARTEXT_FILE.before" "$CLEARTEXT_FILE" && warn "$FILE wasn't changed, skipping re-encryption." && return
+    [ $ENCRYPT_ONLY -eq 0 ] && [ -f "$FILE" ] && [ "$EDITOR" != ":" ] && @diffBin@ -q -- "$CLEARTEXT_FILE.before" "$CLEARTEXT_FILE" && warn "$FILE wasn't changed, skipping re-encryption." && return
 
     ENCRYPT=()
+    if [[ "$ARMOR" == "true" ]]; then
+        ENCRYPT+=(--armor)
+    fi
     # Build recipient list
     while IFS= read -r key
     do
@@ -199,15 +207,15 @@ function edit {
     done <<< "$KEYS"
 
     REENCRYPTED_DIR=$(@mktempBin@ -d)
-    REENCRYPTED_FILE="$REENCRYPTED_DIR/$(basename "$FILE")"
+    REENCRYPTED_FILE="$REENCRYPTED_DIR/$(basename -- "$FILE")"
 
     ENCRYPT+=(-o "$REENCRYPTED_FILE")
 
     @ageBin@ "${ENCRYPT[@]}" <"$CLEARTEXT_FILE" || exit 1
 
-    mkdir -p "$(dirname "$FILE")"
+    mkdir -p -- "$(dirname -- "$FILE")"
 
-    mv -f "$REENCRYPTED_FILE" "$FILE"
+    mv -f -- "$REENCRYPTED_FILE" "$FILE"
 }
 
 function rekey {

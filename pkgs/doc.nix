@@ -6,6 +6,6 @@
 stdenvNoCC.mkDerivation rec {
   name = "agenix-doc";
   src = ../doc;
-  phases = ["mmdocPhase"];
+  phases = [ "mmdocPhase" ];
   mmdocPhase = "${mmdoc}/bin/mmdoc agenix $src $out";
 }
