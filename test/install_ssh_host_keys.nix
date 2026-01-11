@@ -22,8 +22,20 @@
       chown $USER1_UID:$USERS_GID /home/user1/.ssh/id_ed25519
       touch /etc/ssh/ssh_host_rsa_key
     )
+    (
+      umask u=rw,g=,o=
+      cp ${../example_keys/user1-pq.age} /home/user1/.ssh/age.key
+      chown $USER1_UID:$USERS_GID /home/user1/.ssh/age.key
+    )
     cp -r "${../example}" /tmp/secrets
     chmod -R u+rw /tmp/secrets
     chown -R $USER1_UID:$USERS_GID /tmp/secrets
+
+    # Create secrets.nix without post-quantum secrets for rekey test
+    # The rekey test uses -i with only the ed25519 key, so it cannot decrypt
+    # secrets encrypted only to the PQ key. Excluding PQ secrets here allows
+    # the rekey test to succeed with just the ed25519 identity.
+    cp /tmp/secrets/secrets.nix /tmp/secrets/secrets-rekey.nix
+    sed -i '/secret-pq.age/,+3d' /tmp/secrets/secrets-rekey.nix
   '';
 }

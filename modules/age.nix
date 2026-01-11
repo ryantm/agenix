@@ -245,11 +245,13 @@ in
           [
             "/etc/ssh/ssh_host_ed25519_key"
             "/etc/ssh/ssh_host_rsa_key"
+            "/etc/ssh/age.key"
           ]
         else if (config.services.openssh.enable or false) then
           map (e: e.path) (
             lib.filter (e: e.type == "rsa" || e.type == "ed25519") config.services.openssh.hostKeys
           )
+          ++ [ "/etc/ssh/age.key" ]
         else
           [ ];
       defaultText = literalExpression ''
@@ -257,13 +259,17 @@ in
         then [
           "/etc/ssh/ssh_host_ed25519_key"
           "/etc/ssh/ssh_host_rsa_key"
+          "/etc/ssh/age.key"
         ]
         else if (config.services.openssh.enable or false)
-        then map (e: e.path) (lib.filter (e: e.type == "rsa" || e.type == "ed25519") config.services.openssh.hostKeys)
+        then map (e: e.path) (lib.filter (e: e.type == "rsa" || e.type == "ed25519") config.services.openssh.hostKeys) ++ [ "/etc/ssh/age.key" ]
         else [];
       '';
       description = ''
         Path to SSH keys to be used as identities in age decryption.
+        Also supports age identity files (e.g., /etc/ssh/age.key generated with age-keygen or age-keygen -pq for post-quantum keys).
+        The agenix CLI also auto-discovers keys in ~/.config/age/*.key, but for module-based decryption
+        you must add those paths explicitly here if you use that location.
       '';
     };
   };

@@ -70,6 +70,10 @@ pkgs.testers.nixosTest {
             secrets.armored-secret = {
               file = ../example/armored-secret.age;
             };
+            secrets.secret-pq = {
+              # Decrypted by user1's post-quantum key
+              file = ../example/secret-pq.age;
+            };
           };
         };
     };
@@ -108,10 +112,16 @@ pkgs.testers.nixosTest {
 
       assert "${hyphen-secret}" in system1.succeed("cat /run/agenix/leading-hyphen")
 
+      # Test post-quantum secret decryption (must run as user1 to access home-manager secret)
+      system1.send_chars("cat /run/user/$(id -u)/agenix/secret-pq > /tmp/4\n")
+      system1.wait_for_file("/tmp/4")
+      assert "post-quantum secret test" in system1.succeed("cat /tmp/4")
+
       userDo = lambda input : f"sudo -u user1 -- bash -c 'set -eou pipefail; cd /tmp/secrets; {input}'"
 
       before_hash = system1.succeed(userDo('sha256sum passwordfile-user1.age')).split()
-      print(system1.succeed(userDo('agenix -r -i /home/user1/.ssh/id_ed25519')))
+      # Don't pass -i so agenix auto-discovers all available keys (ed25519 + PQ)
+      print(system1.succeed(userDo('agenix -r')))
       after_hash = system1.succeed(userDo('sha256sum passwordfile-user1.age')).split()
 
       # Ensure we actually have hashes
@@ -135,6 +145,12 @@ pkgs.testers.nixosTest {
 
       # and get it back out via --decrypt
       assert "secret1234" in system1.succeed(userDo("agenix -d passwordfile-user1.age"))
+
+      # Test CLI auto-discovery of post-quantum keys in ~/.ssh/age.key
+      # Remove SSH keys to ensure only the PQ key is used for decryption
+      system1.succeed(userDo("mv ~/.ssh/id_ed25519 ~/.ssh/id_ed25519.bak"))
+      assert "post-quantum secret test" in system1.succeed(userDo("agenix -d secret-pq.age"))
+      system1.succeed(userDo("mv ~/.ssh/id_ed25519.bak ~/.ssh/id_ed25519"))
 
       # finally, the plain text should not linger around anywhere in the filesystem.
       system1.fail("grep -r secret1234 /tmp")
