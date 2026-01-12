@@ -7,7 +7,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    - uses: cachix/install-nix-action@v22
+    - uses: cachix/install-nix-action@v31
       with:
         extra_nix_config: |
           system-features = nixos-test recursive-nix benchmark big-parallel kvm
@@ -20,7 +20,7 @@ jobs:
     runs-on: macos-latest
     steps:
     - uses: actions/checkout@v3
-    - uses: cachix/install-nix-action@v30
+    - uses: cachix/install-nix-action@v31
       with:
         extra_nix_config: |
           system-features = nixos-test recursive-nix benchmark big-parallel kvm
@@ -39,14 +39,27 @@ jobs:
         # https://github.com/ryantm/agenix/pull/230#issuecomment-1867025385
 
         sudo mv /etc/nix/nix.conf{,.bak}
+
+        # nix-darwin 25.11 requires these files to be moved before activation
+        sudo mv /etc/bashrc{,.before-nix-darwin} 2>/dev/null || true
+        sudo mv /etc/zshrc{,.before-nix-darwin} 2>/dev/null || true
+
         nix \
           --extra-experimental-features 'nix-command flakes' \
           build .#checks."${ARCH}"-darwin.integration
 
-        ./result/activate-user
+        # nix-darwin 25.11: activation now runs entirely as root, no more activate-user
         sudo ./result/activate
     - name: "Test nix-darwin module"
       run: |
+        # Wait for agenix launchd daemon to decrypt secrets (runs asynchronously after activation)
+        for i in $(seq 1 30); do
+          if [ -f /run/agenix/system-secret ]; then
+            break
+          fi
+          echo "Waiting for agenix secrets to be decrypted... ($i/30)"
+          sleep 1
+        done
         sudo /run/current-system/sw/bin/agenix-integration
     - name: "Test home-manager module"
       run: |
