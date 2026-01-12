@@ -383,12 +383,14 @@ e.g. inside your `flake.nix` file:
    ```ShellSession
    $ agenix -e secret1.age
    ```
-   It assumes your SSH private key is in `~/.ssh/`.
-   In order to decrypt and open a `.age` file for editing you need the private key of one of the public keys
+   It assumes your SSH private key or age identity is in `~/.ssh/`.
+   In order to decrypt and open a `.age` file for editing you need the private key or age identity of one of the public keys
    it was encrypted with. You can pass the private key you want to use explicitly with `-i`, e.g.
    ```ShellSession
    $ agenix -e secret1.age -i ~/.ssh/id_ed25519
    ```
+
+   For post-quantum age keys generated with `age-keygen -pq`, the default identity location is `~/.ssh/age.key`.
 
 ### Using agenix with home-manager
 
@@ -770,7 +772,7 @@ authentication code (MAC) like other implementations like GPG or
 [sops](https://github.com/Mic92/sops-nix) have, however this was left
 out for simplicity in `age`.
 
-Additionally you should only encrypt secrets that you are able to make useless in the event that they are decrypted in the future and be ready to rotate them periodically as [age](https://github.com/FiloSottile/age) is [as of 19th June 2024 NOT Post-Quantum Safe](https://github.com/FiloSottile/age/discussions/231#discussioncomment-3092773) and so in case the threat actor can access your encrypted keys e.g. via their use in a public repository then they can utilize the strategy of [Harvest Now, Decrypt Later](https://en.wikipedia.org/wiki/Harvest_now,_decrypt_later) to store your keys now for later decryption including the case where a major vulnerability is found that would expose the secrets. See https://github.com/FiloSottile/age/issues/578 for details.
+Additionally you should only encrypt secrets that you are able to make useless in the event that they are decrypted in the future and be ready to rotate them periodically. As of age v1.3.0, [age supports post-quantum hybrid encryption](https://github.com/FiloSottile/age/releases/tag/v1.3.0) via `age-keygen -pq` for generating post-quantum keys (starting with `age1pq1...` recipients). To use post-quantum encryption, generate keys with `age-keygen -pq` and use the resulting public key in your `secrets.nix`. Traditional keys remain vulnerable to quantum attacks, so consider using post-quantum keys for long-term secrets. See https://github.com/FiloSottile/age/issues/578 for details.
 
 ## Contributing
 

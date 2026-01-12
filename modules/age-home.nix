@@ -180,15 +180,20 @@ in
       default = [
         "${config.home.homeDirectory}/.ssh/id_ed25519"
         "${config.home.homeDirectory}/.ssh/id_rsa"
+        "${config.home.homeDirectory}/.ssh/age.key"
       ];
       defaultText = literalExpression ''
         [
           "''${config.home.homeDirectory}/.ssh/id_ed25519"
           "''${config.home.homeDirectory}/.ssh/id_rsa"
+          "''${config.home.homeDirectory}/.ssh/age.key"
         ]
       '';
       description = ''
         Path to SSH keys to be used as identities in age decryption.
+        Also supports age identity files (e.g., ~/.ssh/age.key generated with age-keygen or age-keygen -pq for post-quantum keys).
+        The agenix CLI also auto-discovers keys in ~/.config/age/*.key, but for module-based decryption
+        you must add those paths explicitly here if you use that location.
       '';
     };
 

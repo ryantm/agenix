@@ -240,7 +240,7 @@ options:
 
 FILE an age-encrypted file
 
-PRIVATE_KEY a path to a private SSH key used to decrypt file
+PRIVATE_KEY a path to a private key used to decrypt file (SSH keys or age identity files)
 
 EDITOR environment variable of editor to use when editing FILE
 

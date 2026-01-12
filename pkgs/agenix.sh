@@ -140,9 +140,19 @@ function decrypt {
             if [ -f "$HOME/.ssh/id_ed25519" ]; then
                 DECRYPT+=(--identity "$HOME/.ssh/id_ed25519")
             fi
+            if [ -f "$HOME/.ssh/age.key" ]; then
+                DECRYPT+=(--identity "$HOME/.ssh/age.key")
+            fi
+            if [ -d "$HOME/.config/age" ]; then
+                for key in "$HOME"/.config/age/*; do
+                    if [ -f "$key" ] && grep -qE 'AGE-SECRET-KEY' "$key" 2>/dev/null; then
+                        DECRYPT+=(--identity "$key")
+                    fi
+                done
+            fi
         fi
         if [[ "${DECRYPT[*]}" != *"--identity"* ]]; then
-          err "No identity found to decrypt $FILE. Try adding an SSH key at $HOME/.ssh/id_rsa or $HOME/.ssh/id_ed25519 or using the --identity flag to specify a file."
+          err "No identity found to decrypt $FILE. Try adding an SSH key at $HOME/.ssh/id_rsa or $HOME/.ssh/id_ed25519, an age identity at $HOME/.ssh/age.key or $HOME/.config/age/, or using the --identity flag to specify a file."
         fi
 
         @ageBin@ "${DECRYPT[@]}" -- "$FILE" || exit 1
