@@ -75,6 +75,11 @@
             pkgs = nixpkgs.legacyPackages.x86_64-linux;
             system = "x86_64-linux";
           };
+          x86_64-linux.integration-systemd = import ./test/integration_systemd.nix {
+            inherit nixpkgs;
+            pkgs = nixpkgs.legacyPackages.x86_64-linux;
+            system = "x86_64-linux";
+          };
         };
 
       darwinConfigurations.integration-x86_64.system = self.checks.x86_64-darwin.integration;
