@@ -20,6 +20,7 @@ This project contains two parts:
   * [fetchTarball](#install-via-fetchtarball)
   * [flakes](#install-via-flakes)
 * [Tutorial](#tutorial)
+* [Systemd Service Integration](#systemd-service-integration)
 * [Reference](#reference)
   * [`age` module reference](#age-module-reference)
   * [`age-home` module reference](#age-home-module-reference)
@@ -423,6 +424,58 @@ The home-manager module follows the same general principles as the NixOS module 
 
 When you run `home-manager switch`, your secrets will be decrypted to a user-specific directory (usually `$XDG_RUNTIME_DIR/agenix` on Linux or a temporary directory on Darwin) and can be referenced in your configuration.
 
+## Systemd Service Integration
+
+On Linux, when secrets are defined (`age.secrets` is non-empty), agenix provides a systemd service (`agenix-install-secrets.service`) that other services can depend on. The behavior of this service depends on `age.installationMode`:
+
+- **`"activation"` mode (default)**: Secrets are decrypted during NixOS activation. The systemd service acts as a barrier that verifies secrets exist and provides a dependency point for other services.
+
+- **`"systemd"` mode**: Secrets are decrypted by the systemd service itself. Use this when your decryption key requires external resources (USB drive, network mount).
+
+### Basic Usage
+
+Other systemd services can depend on agenix:
+
+```nix
+{
+  systemd.services.my-service = {
+    after = [ "agenix-install-secrets.service" ];
+    wants = [ "agenix-install-secrets.service" ];
+    serviceConfig = {
+      ExecStart = "${pkgs.my-service}/bin/my-service --config ${config.age.secrets.my-secret.path}";
+    };
+  };
+}
+```
+
+### Waiting for External Resources
+
+If your decryption key is on a USB drive or network mount, use `"systemd"` mode:
+
+```nix
+{
+  age.installationMode = "systemd";
+
+  systemd.services.agenix-install-secrets = {
+    after = [ "mnt-usb.mount" ];
+    requires = [ "mnt-usb.mount" ];
+  };
+
+  age.identityPaths = [ "/mnt/usb/age-key" ];
+}
+```
+
+**Important**: With `"systemd"` mode, an assertion will fail if you try to use `hashedPasswordFile` with agenix secrets, since user passwords must be set during activation before systemd starts.
+
+### Installation Modes Summary
+
+| Mode | When Are Secrets Decrypted | Systemd Service Role | `hashedPasswordFile` |
+|------|---------------------------|---------------------|---------------------|
+| `"activation"` (default) | During NixOS activation | Barrier/verification | Supported |
+| `"systemd"` | By systemd service | Actual decryption | Not supported (assertion fails) |
+
+**Note**: When `systemd.sysusers.enable` or `services.userborn.enable` is active, you MUST use `"systemd"` mode because activation scripts run before sysusers creates users.
+
 ## Reference
 
 ### `age` module reference
@@ -644,6 +697,36 @@ Overriding `age.secretsMountPoint` example:
 ```nix
 {
     age.secretsMountPoint = "/run/secret-generations";
+}
+```
+
+#### `age.installationMode`
+
+`age.installationMode` controls when secrets are decrypted. Defaults
+to `"activation"`.
+
+| Value | Behavior |
+|-------|----------|
+| `"activation"` | Secrets are decrypted during NixOS activation. A systemd service (`agenix-install-secrets.service`) acts as a barrier for other services to depend on. This is compatible with `hashedPasswordFile`. |
+| `"systemd"` | Secrets are ONLY decrypted by the systemd service, not during activation. Use this when your decryption key requires external resources (USB drive, network mount). **Note**: An assertion will fail if you try to use this with `hashedPasswordFile`. |
+
+**Important**: When `systemd.sysusers.enable` or `services.userborn.enable` is
+active, you MUST use `"systemd"` mode because activation scripts run before
+sysusers creates users.
+
+Example for USB-mounted keys:
+
+```nix
+{
+  age.installationMode = "systemd";
+
+  # Make agenix wait for the USB mount
+  systemd.services.agenix-install-secrets = {
+    after = [ "mnt-usb.mount" ];
+    requires = [ "mnt-usb.mount" ];
+  };
+
+  age.identityPaths = [ "/mnt/usb/secret-key" ];
 }
 ```
 
