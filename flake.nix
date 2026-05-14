@@ -11,7 +11,6 @@
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    systems.url = "github:nix-systems/default";
   };
 
   outputs =
@@ -20,10 +19,9 @@
       nixpkgs,
       darwin,
       home-manager,
-      systems,
     }:
     let
-      eachSystem = nixpkgs.lib.genAttrs (import systems);
+      eachSystem = nixpkgs.lib.genAttrs nixpkgs.lib.systems.flakeExposed;
     in
     {
       nixosModules.age = ./modules/age.nix;
