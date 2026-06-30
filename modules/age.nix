@@ -83,7 +83,7 @@ let
     test "''${#IDENTITIES[@]}" -eq 0 && echo "[agenix] WARNING: no readable identities found!"
 
     mkdir -p "$(dirname "$_truePath")"
-    [ "${secretType.path}" != "${cfg.secretsDir}/${secretType.name}" ] && mkdir -p "$(dirname "${secretType.path}")"
+    mkdir -p "$(dirname "${secretType.path}")"
     (
       umask u=r,g=,o=
       test -f "${secretType.file}" || echo '[agenix] WARNING: encrypted file ${secretType.file} does not exist!'
@@ -96,7 +96,7 @@ let
     mv -f "$TMP_FILE" "$_truePath"
 
     ${optionalString secretType.symlink ''
-      [ "${secretType.path}" != "${cfg.secretsDir}/${secretType.name}" ] && ln -sfT "${cfg.secretsDir}/${secretType.name}" "${secretType.path}"
+      ln -sfT "${cfg.secretsDir}/${secretType.name}" "${secretType.path}"
     ''}
   '';
 
