@@ -178,9 +178,9 @@ let
         };
         group = mkOption {
           type = types.str;
-          default = users.${config.owner}.group or "0";
+          default = (findFirst (u: u.name == config.owner) { group = "0"; } (attrValues users)).group;
           defaultText = literalExpression ''
-            users.''${config.owner}.group or "0"
+            (findFirst (u: u.name == config.owner) { group = "0"; } (attrValues users)).group
           '';
           description = ''
             Group of the decrypted secret.
