@@ -40,8 +40,8 @@ let
     TMP_FILE="$_truePath.tmp"
 
     IDENTITIES=()
-    # shellcheck disable=2043
-    for identity in ${toString cfg.identityPaths}; do
+    _agenix_identity_paths=( ${toString cfg.identityPaths} )
+    for identity in "''${_agenix_identity_paths[@]}"; do
       test -r "$identity" || continue
       IDENTITIES+=(-i)
       IDENTITIES+=("$identity")
