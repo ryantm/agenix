@@ -43,6 +43,7 @@ let
     mkdir -p "${cfg.secretsMountPoint}"
     chmod 0751 "${cfg.secretsMountPoint}"
     ${mountCommand}
+    rm -rf -- "${cfg.secretsMountPoint}/$_agenix_generation"
     mkdir -p "${cfg.secretsMountPoint}/$_agenix_generation"
     chmod 0751 "${cfg.secretsMountPoint}/$_agenix_generation"
   '';
@@ -67,10 +68,14 @@ let
     }
   '';
 
+  setStagedPath = secretType: ''
+    _stagedPath="${cfg.secretsMountPoint}/$_agenix_generation/${secretType.name}"
+  '';
+
   installSecret = secretType: ''
-    ${setTruePath secretType}
-    echo "decrypting '${secretType.file}' to '$_truePath'..."
-    TMP_FILE="$_truePath.tmp"
+    ${setStagedPath secretType}
+    echo "decrypting '${secretType.file}' to '${secretType.path}'..."
+    TMP_FILE="$_stagedPath.tmp"
 
     IDENTITIES=()
     for identity in ${toString cfg.identityPaths}; do
@@ -82,7 +87,7 @@ let
 
     test "''${#IDENTITIES[@]}" -eq 0 && echo "[agenix] WARNING: no readable identities found!"
 
-    mkdir -p "$(dirname "$_truePath")"
+    mkdir -p "$(dirname "$_stagedPath")"
     [ "${secretType.path}" != "${cfg.secretsDir}/${secretType.name}" ] && mkdir -p "$(dirname "${secretType.path}")"
     (
       umask u=r,g=,o=
@@ -93,34 +98,56 @@ let
       } ${ageBin} --decrypt "''${IDENTITIES[@]}" -o "$TMP_FILE" "${secretType.file}"
     )
     chmod ${secretType.mode} "$TMP_FILE"
-    mv -f "$TMP_FILE" "$_truePath"
-
-    ${optionalString secretType.symlink ''
-      [ "${secretType.path}" != "${cfg.secretsDir}/${secretType.name}" ] && ln -sfT "${cfg.secretsDir}/${secretType.name}" "${secretType.path}"
-    ''}
+    mv -f "$TMP_FILE" "$_stagedPath"
   '';
+
+  publishSecret = secretType: ''
+    ${
+      if secretType.symlink then
+        optionalString (secretType.path != "${cfg.secretsDir}/${secretType.name}") ''
+          ln -sfT "${cfg.secretsDir}/${secretType.name}" "${secretType.path}"
+        ''
+      else
+        ''
+          ${setStagedPath secretType}
+          _targetTemp="$(mktemp "${secretType.path}.XXXXXX")"
+          if ! cp -p -- "$_stagedPath" "$_targetTemp"; then
+            rm -f -- "$_targetTemp"
+            exit 1
+          fi
+          if ! mv -f -- "$_targetTemp" "${secretType.path}"; then
+            rm -f -- "$_targetTemp"
+            exit 1
+          fi
+          rm -f -- "$_stagedPath"
+        ''
+    }
+  '';
+
+  publishSecrets = builtins.concatStringsSep "\n" (
+    map publishSecret (builtins.attrValues cfg.secrets)
+  );
 
   testIdentities = map (path: ''
     test -f ${path} || echo '[agenix] WARNING: config.age.identityPaths entry ${path} not present!'
   '') cfg.identityPaths;
 
-  cleanupAndLink = ''
-    _agenix_generation="$(basename "$(readlink ${cfg.secretsDir})" || echo 0)"
-    (( ++_agenix_generation ))
+  linkNewGeneration = ''
     echo "[agenix] symlinking new secrets to ${cfg.secretsDir} (generation $_agenix_generation)..."
     ln -sfT "${cfg.secretsMountPoint}/$_agenix_generation" ${cfg.secretsDir}
+  '';
 
-    (( _agenix_generation > 1 )) && {
-    echo "[agenix] removing old secrets (generation $(( _agenix_generation - 1 )))..."
-    rm -rf "${cfg.secretsMountPoint}/$(( _agenix_generation - 1 ))"
-    }
+  cleanupOldGeneration = ''
+    if (( _agenix_generation > 1 )); then
+      echo "[agenix] removing old secrets (generation $(( _agenix_generation - 1 )))..."
+      rm -rf -- "${cfg.secretsMountPoint}/$(( _agenix_generation - 1 ))"
+    fi
   '';
 
   installSecrets = builtins.concatStringsSep "\n" (
     [ "echo '[agenix] decrypting secrets...'" ]
     ++ testIdentities
     ++ (map installSecret (builtins.attrValues cfg.secrets))
-    ++ [ cleanupAndLink ]
   );
 
   chownSecret = secretType: ''
@@ -132,6 +159,15 @@ let
     [ "echo '[agenix] chowning...'" ]
     ++ [ chownMountPoint ]
     ++ (map chownSecret (builtins.attrValues cfg.secrets))
+  );
+
+  chownStagedSecrets = builtins.concatStringsSep "\n" (
+    [ "echo '[agenix] chowning staged secrets...'" ]
+    ++ [ chownMountPoint ]
+    ++ (map (secretType: ''
+      ${setStagedPath secretType}
+      chown ${secretType.owner}:${secretType.group} "$_stagedPath"
+    '') (builtins.attrValues cfg.secrets))
   );
 
   secretType = types.submodule (
@@ -289,9 +325,13 @@ in
         serviceConfig = {
           Type = "oneshot";
           ExecStart = pkgs.writeShellScript "agenix-install" (concatLines [
+            "set -e"
             newGeneration
             installSecrets
-            chownSecrets
+            chownStagedSecrets
+            publishSecrets
+            linkNewGeneration
+            cleanupOldGeneration
           ]);
           RemainAfterExit = true;
         };
@@ -309,7 +349,11 @@ in
         };
 
         agenixInstall = {
-          text = installSecrets;
+          text = concatLines [
+            installSecrets
+            publishSecrets
+            linkNewGeneration
+          ];
           deps = [
             "agenixNewGeneration"
             "specialfs"
@@ -321,7 +365,10 @@ in
 
         # Change ownership and group after users and groups are made.
         agenixChown = {
-          text = chownSecrets;
+          text = concatLines [
+            chownSecrets
+            cleanupOldGeneration
+          ];
           deps = [
             "users"
             "groups"
@@ -344,7 +391,10 @@ in
           export PATH="${pkgs.gnugrep}/bin:${pkgs.coreutils}/bin:@out@/sw/bin:/usr/bin:/bin:/usr/sbin:/sbin"
           ${newGeneration}
           ${installSecrets}
-          ${chownSecrets}
+          ${chownStagedSecrets}
+          ${publishSecrets}
+          ${linkNewGeneration}
+          ${cleanupOldGeneration}
           exit 0
         '';
         serviceConfig = {
