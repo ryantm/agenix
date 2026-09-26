@@ -21,17 +21,21 @@
       home-manager,
     }:
     let
-      # nixfmt-tree and agenix's shellcheck install check need GHC, which
-      # nixpkgs cannot bootstrap on these systems.
-      supportedSystems = nixpkgs.lib.filter (
-        system:
-        !(builtins.elem system [
-          "armv6l-linux"
-          "riscv64-linux"
-          "x86_64-freebsd"
-        ])
+      # nixpkgs cannot bootstrap GHC on these systems. Omit nixfmt-tree and
+      # agenix's shellcheck install check there.
+      noGhcSystems = [
+        "armv6l-linux"
+        "riscv64-linux"
+        "x86_64-freebsd"
+      ];
+      # age also needs a Go bootstrap that nixpkgs cannot provide on FreeBSD.
+      packageSystems = nixpkgs.lib.filter (
+        system: system != "x86_64-freebsd"
       ) nixpkgs.lib.systems.flakeExposed;
-      eachSystem = nixpkgs.lib.genAttrs supportedSystems;
+      eachSystem = nixpkgs.lib.genAttrs packageSystems;
+      formatterSystems = nixpkgs.lib.filter (
+        system: !(builtins.elem system noGhcSystems)
+      ) nixpkgs.lib.systems.flakeExposed;
     in
     {
       nixosModules.age = ./modules/age.nix;
@@ -45,10 +49,14 @@
 
       overlays.default = import ./overlay.nix;
 
-      formatter = eachSystem (system: nixpkgs.legacyPackages.${system}.nixfmt-tree);
+      formatter = nixpkgs.lib.genAttrs formatterSystems (
+        system: nixpkgs.legacyPackages.${system}.nixfmt-tree
+      );
 
       packages = eachSystem (system: {
-        agenix = nixpkgs.legacyPackages.${system}.callPackage ./pkgs/agenix.nix { };
+        agenix = nixpkgs.legacyPackages.${system}.callPackage ./pkgs/agenix.nix {
+          runShellcheck = !(builtins.elem system noGhcSystems);
+        };
         doc = nixpkgs.legacyPackages.${system}.callPackage ./pkgs/doc.nix { inherit self; };
         default = self.packages.${system}.agenix;
       });
