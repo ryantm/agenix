@@ -27,7 +27,10 @@ let
     if isDarwin then
       false
     else
-      options.systemd ? sysusers && (config.systemd.sysusers.enable || config.services.userborn.enable);
+      options.systemd ? sysusers
+      && (
+        config.systemd.sysusers.enable || (options.services ? userborn && config.services.userborn.enable)
+      );
 
   mountCommand =
     if isDarwin then
