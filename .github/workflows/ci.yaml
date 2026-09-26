@@ -46,7 +46,7 @@ jobs:
         ./result/activate-user
         # The GitHub runner has shell profiles that nix-darwin refuses to overwrite.
         for file in /etc/zshrc /etc/zprofile; do
-          if [ -e "$file" ]; then
+          if [ -e "$file" ] || [ -L "$file" ]; then
             sudo mv "$file" "$file.before-nix-darwin"
           fi
         done
