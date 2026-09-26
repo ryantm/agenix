@@ -122,7 +122,7 @@ pkgs.testers.nixosTest {
 
       assert "${hyphen-secret}" in system1.succeed("cat /run/agenix/leading-hyphen")
 
-      userDo = lambda input : f"sudo -u user1 -- bash -c 'set -eou pipefail; cd /tmp/secrets; {input}'"
+      userDo = lambda input, directory="/tmp/secrets": f"sudo -u user1 -- bash -c 'set -eou pipefail; cd {directory}; {input}'"
 
       # A leading ./ in a CLI path should match the same rules entry.
       assert "hello" in system1.succeed(userDo("agenix -d ./secret1.age"))
@@ -213,5 +213,27 @@ pkgs.testers.nixosTest {
 
       # finally, the plain text should not linger around anywhere in the filesystem.
       system1.fail("grep -r secret1234 /tmp")
+
+      # A user without a recipient identity can create and replace a secret via stdin.
+      one_way_dir = "/tmp/secrets-one-way"
+      system1.succeed(userDo("echo eye1234 | agenix -e one-way.age", one_way_dir))
+      system1.fail(userDo("agenix -d one-way.age </dev/null", one_way_dir))
+      assert system1.succeed(f"cd {one_way_dir}; agenix -d one-way.age -i /etc/ssh/ssh_host_ed25519_key </dev/null").strip() == "eye1234"
+
+      # An attempted interactive edit without an identity must leave the file intact.
+      original_hash = system1.succeed(f"sha256sum {one_way_dir}/one-way.age").split()[0]
+      system1.fail(userDo('script -q -e -c "EDITOR=cat agenix -e one-way.age" /dev/null', one_way_dir))
+      assert system1.succeed(f"sha256sum {one_way_dir}/one-way.age").split()[0] == original_hash
+
+      system1.succeed(userDo("echo nose1234 | agenix -e one-way.age", one_way_dir))
+      assert system1.succeed(f"cd {one_way_dir}; agenix -d one-way.age -i /etc/ssh/ssh_host_ed25519_key </dev/null").strip() == "nose1234"
+
+      # Direct decryption and rekeying still work when stdin is not a terminal.
+      before_rekey = system1.succeed(f"sha256sum {one_way_dir}/one-way.age").split()[0]
+      system1.fail(userDo("agenix -r </dev/null", one_way_dir))
+      assert system1.succeed(f"sha256sum {one_way_dir}/one-way.age").split()[0] == before_rekey
+      system1.succeed(f"cd {one_way_dir}; agenix -r -i /etc/ssh/ssh_host_ed25519_key </dev/null")
+      assert system1.succeed(f"sha256sum {one_way_dir}/one-way.age").split()[0] != before_rekey
+      assert system1.succeed(f"cd {one_way_dir}; agenix -d one-way.age -i /etc/ssh/ssh_host_ed25519_key </dev/null").strip() == "nose1234"
     '';
 }

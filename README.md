@@ -389,6 +389,12 @@ e.g. inside your `flake.nix` file:
    ```ShellSession
    $ agenix -e secret1.age -i ~/.ssh/id_ed25519
    ```
+   To create or replace a secret without access to a decryption key, pipe its
+   complete new contents to `agenix -e secret1.age`. This overwrites the old
+   secret; it cannot preserve or edit any of its previous contents.
+   ```ShellSession
+   $ printf '%s\n' 'new secret' | agenix -e secret1.age
+   ```
 
 ### Using agenix with home-manager
 
@@ -718,6 +724,7 @@ PRIVATE_KEY a path to a private SSH key used to decrypt file
 EDITOR environment variable of editor to use when editing FILE
 
 If STDIN is not interactive, EDITOR will be set to "cp /dev/stdin"
+Piped input replaces a secret without decrypting it first.
 
 AGENIX_RULES environment variable with path to Nix file specifying recipient public keys. 
 Searches the current directory for agenix-rules.nix, then secrets.nix.
