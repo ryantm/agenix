@@ -69,7 +69,7 @@ pkgs.testers.nixosTest {
           home.stateVersion = pkgs.lib.trivial.release;
 
           age = {
-            verbosity = 0;
+            verbosity = "quiet";
             secrets.disabled.enable = false;
             identityPaths = options.age.identityPaths.default ++ [ "/home/user1/.ssh/this_key_wont_exist" ];
             secrets.secret2 = {

@@ -13,14 +13,15 @@ decrypted in `/run`; reboot to clear them.
 ### `age.verbosity`
 
 `age.verbosity` controls agenix's routine activation messages. It accepts
-an integer from 0 to 3 and defaults to 3, preserving the current output.
+`"quiet"`, `"summary"`, `"progress"`, or `"detailed"` and defaults to
+`"detailed"`, preserving the current output.
 
 | Value | Messages |
 | --- | --- |
-| 0 | No routine agenix messages |
-| 1 | One decryption summary |
-| 2 | Summary and generation, linking, cleanup, and ownership steps |
-| 3 | All of the above, plus one line per secret |
+| `"quiet"` | No routine agenix messages |
+| `"summary"` | One decryption summary |
+| `"progress"` | Summary and generation, linking, cleanup, and ownership steps |
+| `"detailed"` | All of the above, plus one line per secret |
 
 Warnings and errors remain visible at every level. The Home Manager module
 uses the same levels, without an ownership step. This option does not control
