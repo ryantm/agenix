@@ -153,7 +153,7 @@ pkgs.testers.nixosTest {
       # An explicitly selected missing file must not silently fall back.
       system1.fail(userDo("env AGENIX_RULES=missing.nix agenix -d secret1.age"))
 
-      system1.succeed(userDo("mkdir nested && cp secret1.age nested/secret1.age"))
+      system1.succeed(userDo("mkdir nested"))
       parent_rules = system1.succeed(userDo("cd nested && env -u AGENIX_RULES -u RULES agenix -d secret1.age 2>&1"))
       assert "hello" in parent_rules
       assert "deprecated" not in parent_rules
@@ -163,10 +163,22 @@ pkgs.testers.nixosTest {
       missing_status, missing_output = system1.execute(userDo("cd nested && env -u AGENIX_RULES -u RULES agenix -d secret1.age 2>&1"))
       assert missing_status != 0
       assert "needs a rules file" in missing_output
-      system1.succeed(userDo("mv agenix-rules.nix.hidden agenix-rules.nix && cp secrets.nix nested/secrets.nix"))
+      system1.succeed(userDo("mv agenix-rules.nix.hidden agenix-rules.nix && cp secrets.nix secret1.age nested/"))
       local_legacy = system1.succeed(userDo("cd nested && env -u AGENIX_RULES -u RULES agenix -d secret1.age 2>&1"))
       assert "hello" in local_legacy
       assert "automatic discovery of secrets.nix are deprecated" in local_legacy
+
+      # Rekey from a child directory must update files beside the discovered rules.
+      nested_before = system1.succeed(userDo("sha256sum passwordfile-user1.age")).split()[0]
+      system1.succeed(userDo("mkdir nested-rekey && ln -s /home/user1/.ssh/id_ed25519 nested-rekey/identity"))
+      nested_rekey = system1.succeed(userDo("cd nested-rekey && agenix -r -i identity 2>&1"))
+      assert "wasn't created" not in nested_rekey
+      nested_after = system1.succeed(userDo("sha256sum passwordfile-user1.age")).split()[0]
+      assert nested_before != nested_after
+      system1.succeed(userDo("test ! -e nested-rekey/passwordfile-user1.age"))
+      explicit_parent = system1.succeed(userDo("cd nested-rekey && AGENIX_RULES=../agenix-rules.nix agenix -d secret1.age 2>&1"))
+      assert "hello" in explicit_parent
+      assert "deprecated" not in explicit_parent
 
       before_hash = system1.succeed(userDo('sha256sum passwordfile-user1.age')).split()
       print(system1.succeed(userDo('agenix -r -i /home/user1/.ssh/id_ed25519')))

@@ -249,6 +249,7 @@ If STDIN is not interactive, EDITOR will be set to "cp /dev/stdin"
 AGENIX_RULES environment variable with path to Nix file specifying recipient public keys. 
 Searches the current directory for agenix-rules.nix, then secrets.nix.
 Searches parent directories for agenix-rules.nix only.
+Resolves relative secret paths from the selected rules file's directory.
 ```
 
 > [!WARNING]

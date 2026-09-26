@@ -31,6 +31,7 @@ function show_help () {
   echo 'AGENIX_RULES environment variable with path to Nix file specifying recipient public keys.'
   echo 'Searches the current directory for agenix-rules.nix, then secrets.nix.'
   echo 'Searches parent directories for agenix-rules.nix only.'
+  echo "Resolves relative secret paths from the selected rules file's directory."
   echo ' '
   echo "agenix version: @version@"
   echo "age binary path: @ageBin@"
@@ -71,7 +72,11 @@ while test $# -gt 0; do
     -i|--identity)
       shift
       if test $# -gt 0; then
-        DEFAULT_DECRYPT+=(--identity "$1")
+        identity_path=$1
+        if [[ ${identity_path} != /* ]]; then
+          identity_path="${PWD}/${identity_path}"
+        fi
+        DEFAULT_DECRYPT+=(--identity "${identity_path}")
       else
         echo "no PRIVATE_KEY specified"
         exit 1
@@ -147,9 +152,12 @@ case ${RULES} in
     /*|./*|../*) ;;
     *) RULES="./${RULES}" ;;
 esac
+RULES_DIR=$(cd "$(dirname "${RULES}")" && pwd -P) || err "Cannot access rules directory for '${RULES}'."
+RULES="${RULES_DIR}/$(basename "${RULES}")"
 if (( legacy_rules_variable )) || [[ -z "${rules_variable}" && ${RULES##*/} == secrets.nix ]]; then
     warn 'warning: RULES and automatic discovery of secrets.nix are deprecated and will be removed in a future version of agenix; use AGENIX_RULES and agenix-rules.nix instead.'
 fi
+cd "${RULES_DIR}" || err "Cannot access rules directory '${RULES_DIR}'."
 
 function cleanup {
     if [[ -n "${CLEARTEXT_DIR+x}" ]]
