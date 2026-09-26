@@ -29,7 +29,8 @@ function show_help () {
   echo 'If STDIN is not interactive, EDITOR will be set to "cp /dev/stdin"'
   echo ' '
   echo 'AGENIX_RULES environment variable with path to Nix file specifying recipient public keys.'
-  echo "Defaults to './agenix-rules.nix'"
+  echo 'Searches the current directory for agenix-rules.nix, then secrets.nix.'
+  echo 'Searches parent directories for agenix-rules.nix only.'
   echo ' '
   echo "agenix version: @version@"
   echo "age binary path: @ageBin@"
@@ -104,22 +105,25 @@ while test $# -gt 0; do
 done
 
 function find_rules {
-    # Walk up the directory tree, preferring agenix-rules.nix in each directory.
+    # Keep secrets.nix discovery limited to the current directory.
     local cwd="${PWD}"
-    local f
-    while true
+    if [[ -f "${cwd}/agenix-rules.nix" ]]; then
+        printf '%s\n' "${cwd}/agenix-rules.nix"
+        return 0
+    fi
+    if [[ -f "${cwd}/secrets.nix" ]]; then
+        printf '%s\n' "${cwd}/secrets.nix"
+        return 0
+    fi
+    while [[ "${cwd}" != '/' ]]
     do
-        for f in "${cwd}/agenix-rules.nix" "${cwd}/secrets.nix"
-        do
-            if [[ -f "${f}" ]]; then
-                printf '%s\n' "${f}"
-                return 0
-            fi
-        done
-        [[ "${cwd}" != '/' ]] || break
         cwd=$(dirname "${cwd}")
+        if [[ -f "${cwd}/agenix-rules.nix" ]]; then
+            printf '%s\n' "${cwd}/agenix-rules.nix"
+            return 0
+        fi
     done
-    err "${PACKAGE} needs a rules file. Set AGENIX_RULES or create agenix-rules.nix in the current directory or a parent directory."
+    err "${PACKAGE} needs a rules file. Set AGENIX_RULES, create agenix-rules.nix in the current directory or a parent, or create secrets.nix in the current directory."
 }
 
 legacy_rules_variable=0

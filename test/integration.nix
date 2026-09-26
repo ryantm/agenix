@@ -158,6 +158,16 @@ pkgs.testers.nixosTest {
       assert "hello" in parent_rules
       assert "deprecated" not in parent_rules
 
+      # A parent secrets.nix is not discovered; the current directory still is.
+      system1.succeed(userDo("mv agenix-rules.nix agenix-rules.nix.hidden"))
+      missing_status, missing_output = system1.execute(userDo("cd nested && env -u AGENIX_RULES -u RULES agenix -d secret1.age 2>&1"))
+      assert missing_status != 0
+      assert "needs a rules file" in missing_output
+      system1.succeed(userDo("mv agenix-rules.nix.hidden agenix-rules.nix && cp secrets.nix nested/secrets.nix"))
+      local_legacy = system1.succeed(userDo("cd nested && env -u AGENIX_RULES -u RULES agenix -d secret1.age 2>&1"))
+      assert "hello" in local_legacy
+      assert "automatic discovery of secrets.nix are deprecated" in local_legacy
+
       before_hash = system1.succeed(userDo('sha256sum passwordfile-user1.age')).split()
       print(system1.succeed(userDo('agenix -r -i /home/user1/.ssh/id_ed25519')))
       after_hash = system1.succeed(userDo('sha256sum passwordfile-user1.age')).split()

@@ -247,7 +247,8 @@ EDITOR environment variable of editor to use when editing FILE
 If STDIN is not interactive, EDITOR will be set to "cp /dev/stdin"
 
 AGENIX_RULES environment variable with path to Nix file specifying recipient public keys. 
-Defaults to './agenix-rules.nix'
+Searches the current directory for agenix-rules.nix, then secrets.nix.
+Searches parent directories for agenix-rules.nix only.
 ```
 
 The legacy `RULES` environment variable and automatic discovery of
