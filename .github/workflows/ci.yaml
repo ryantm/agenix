@@ -49,7 +49,6 @@ jobs:
             sudo mv "$file" "$file.before-nix-darwin"
           fi
         done
-        ./result/activate-user
         sudo ./result/activate
     - name: "Test nix-darwin module"
       run: |

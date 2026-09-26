@@ -7,7 +7,7 @@
   system ? builtins.currentSystem,
   home-manager ? <home-manager>,
 }:
-pkgs.nixosTest {
+pkgs.testers.nixosTest {
   name = "agenix-integration";
   nodes.system1 =
     {
