@@ -43,6 +43,12 @@ jobs:
           --extra-experimental-features 'nix-command flakes' \
           build .#checks."${ARCH}"-darwin.integration
 
+        # The GitHub runner has shell profiles that nix-darwin refuses to overwrite.
+        for file in /etc/zshrc /etc/zprofile; do
+          if [ -e "$file" ] || [ -L "$file" ]; then
+            sudo mv "$file" "$file.before-nix-darwin"
+          fi
+        done
         ./result/activate-user
         sudo ./result/activate
     - name: "Test nix-darwin module"
