@@ -257,15 +257,17 @@ Overriding `age.secretsMountPoint` example:
 ## agenix CLI reference {#agenix-cli-reference}
 
 ```
-agenix - edit and rekey age secret files
+agenix - edit, rekey, and check age secret files
 
 agenix -e FILE [-i PRIVATE_KEY]
 agenix -r [-i PRIVATE_KEY]
+agenix -c
 
 options:
 -h, --help                show help
 -e, --edit FILE           edits FILE using $EDITOR
 -r, --rekey               re-encrypts all secrets with specified recipients
+-c, --check               checks encrypted SSH recipients against the rules
 -d, --decrypt FILE        decrypts FILE to STDOUT
 -i, --identity            identity to use when decrypting
 -v, --verbose             verbose output
@@ -284,6 +286,15 @@ Searches the current directory for agenix-rules.nix, then secrets.nix.
 Searches parent directories for agenix-rules.nix only.
 Resolves relative secret paths from the selected rules file's directory.
 ```
+
+`agenix --check` compares the SSH recipient tags in each age file header with
+the public keys in the rules file. It prints `✓` for matching files and `✗`
+with missing or extra recipients for mismatches, and exits with a nonzero status
+if any file differs or cannot be checked. It does not decrypt or change files,
+so no private key is needed. Age's SSH tags are 32-bit identifiers; this check
+shows a full extra key when it can find a matching key literal in the rules
+file, and otherwise shows the tag. It cannot verify native age recipients or
+authenticate the encrypted contents.
 
 > [!WARNING]
 > The legacy `RULES` environment variable and automatic discovery of
