@@ -7,15 +7,17 @@ set -Eeuo pipefail
 PACKAGE="agenix"
 
 function show_help () {
-  echo "${PACKAGE} - edit and rekey age secret files"
+  echo "${PACKAGE} - edit, rekey, and check age secret files"
   echo " "
   echo "${PACKAGE} -e FILE [-i PRIVATE_KEY]"
   echo "${PACKAGE} -r [-i PRIVATE_KEY]"
+  echo "${PACKAGE} -c"
   echo ' '
   echo 'options:'
   echo '-h, --help                show help'
   echo "-e, --edit FILE           edits FILE using \$EDITOR"
   echo '-r, --rekey               re-encrypts all secrets with specified recipients'
+  echo '-c, --check               checks encrypted SSH recipients against the rules'
   echo '-d, --decrypt FILE        decrypts FILE to STDOUT'
   echo '-i, --identity            identity to use when decrypting'
   echo '-v, --verbose             verbose output'
@@ -59,6 +61,7 @@ function set_file() {
 test $# -eq 0 && (show_help && exit 1)
 
 REKEY=0
+CHECK=0
 DECRYPT_ONLY=0
 DEFAULT_DECRYPT=(--decrypt)
 
@@ -95,6 +98,10 @@ while test $# -gt 0; do
     -r|--rekey)
       shift
       REKEY=1
+      ;;
+    -c|--check)
+      shift
+      CHECK=1
       ;;
     -d|--decrypt)
       shift
@@ -280,6 +287,119 @@ function rekey {
     done
 }
 
+# age stores the first four bytes of the SSH public key's SHA-256 hash as a
+# six-character, unpadded base64 tag in each SSH recipient stanza.
+function ssh_tag {
+    local fingerprint
+    fingerprint=$(printf '%s\n' "$1" | @sshKeygenBin@ -lf -) || return 1
+    fingerprint=${fingerprint#*SHA256:}
+    fingerprint=${fingerprint%% *}
+    printf '%s=' "${fingerprint}" | @base64Bin@ --decode | @headBin@ -c 4 | @base64Bin@ | @trBin@ -d '=\n'
+}
+
+function check_file {
+    local file=$1 rule_keys=$2 input=$1 line key tag stanza found_header=0 mismatch=0
+    local -A expected=() actual=()
+    local -a expected_order=() actual_order=()
+
+    if [[ ! -f ${file} ]]; then
+        warn "✗ ${file}: file not found"
+        return 1
+    fi
+
+    IFS= read -r line < "${file}" || true
+    if [[ ${line} == '-----BEGIN AGE ENCRYPTED FILE-----' ]]; then
+        input=$(@mktempBin@) || return 1
+        if ! @sedBin@ '1d; /^-----END AGE ENCRYPTED FILE-----/,$d' -- "${file}" | @base64Bin@ --decode > "${input}"; then
+            warn "✗ ${file}: invalid age armor"
+            rm -f -- "${input}"
+            return 1
+        fi
+    fi
+
+    while IFS= read -r key; do
+        [[ -n ${key} ]] || continue
+        case ${key} in
+            ssh-ed25519\ *|ssh-rsa\ *) ;;
+            *) warn "✗ ${file}: cannot check non-SSH recipient ${key}"; [[ ${input} == "${file}" ]] || rm -f -- "${input}"; return 1 ;;
+        esac
+        tag=$(ssh_tag "${key}") || { warn "✗ ${file}: invalid SSH recipient ${key}"; [[ ${input} == "${file}" ]] || rm -f -- "${input}"; return 1; }
+        stanza="${key%% *} ${tag}"
+        if [[ ! -v expected[${stanza}] ]]; then
+            expected[${stanza}]=${key}
+            expected_order+=("${stanza}")
+        fi
+    done <<< "${rule_keys}"
+
+    if IFS= read -r line < "${input}" && [[ ${line} == 'age-encryption.org/v1' ]]; then
+        found_header=1
+    fi
+    if (( found_header )); then
+        while IFS= read -r line; do
+            if [[ ${line} == '--- '* ]]; then
+                found_header=2
+                break
+            fi
+            if [[ ${line} == '-> '* ]]; then
+                read -r _ key tag _ <<< "${line}"
+                # age can add random GREASE stanzas to exercise parsers.
+                [[ ${key} == *-grease ]] && continue
+                stanza="${key} ${tag}"
+                actual[${stanza}]=$(( ${actual[${stanza}]:-0} + 1 ))
+                actual_order+=("${stanza}")
+            fi
+        done < <(@sedBin@ '1d; /^--- /q' -- "${input}")
+    fi
+    [[ ${input} == "${file}" ]] || rm -f -- "${input}"
+    if (( found_header != 2 )); then
+        warn "✗ ${file}: invalid age header"
+        return 1
+    fi
+
+    for stanza in "${expected_order[@]}"; do
+        if [[ ! -v actual[${stanza}] ]]; then
+            mismatch=1
+        fi
+    done
+    for stanza in "${actual_order[@]}"; do
+        if [[ ! -v expected[${stanza}] || ${actual[${stanza}]} -gt 1 ]]; then
+            mismatch=1
+        fi
+    done
+
+    if (( mismatch )); then
+        printf '✗ %s\n' "${file}"
+        for stanza in "${expected_order[@]}"; do
+            [[ -v actual[${stanza}] ]] || printf '  missing: %s\n' "${expected[${stanza}]}"
+        done
+        for stanza in "${actual_order[@]}"; do
+            if [[ ! -v expected[${stanza}] ]]; then
+                printf '  extra: %s\n' "${stanza}"
+            elif (( actual[${stanza}] > 1 )); then
+                printf '  extra: %s (duplicate)\n' "${stanza}"
+                actual[${stanza}]=1
+            fi
+        done
+        return 1
+    fi
+    printf '✓ %s\n' "${file}"
+}
+
+function check {
+    local files file rule_keys status=0
+    files=$(@nixInstantiate@ --json --eval -E "(let rules = import ${RULES}; in builtins.attrNames rules)" | @jqBin@ -r .[]) || return 1
+    [[ -n ${files} ]] || return 0
+    while IFS= read -r file; do
+        rule_keys=$(keys "${file}") || return 1
+        check_file "${file}" "${rule_keys}" || status=1
+    done <<< "${files}"
+    return "${status}"
+}
+
+if [[ ${CHECK} -eq 1 ]]; then
+    check
+    exit $?
+fi
 [[ ${REKEY} -eq 1 ]] && rekey && exit 0
 [[ ${DECRYPT_ONLY} -eq 1 ]] && DEFAULT_DECRYPT+=("-o" "-") && decrypt "${FILE}" "$(keys "${FILE}")" && exit 0
 edit "${FILE}" && cleanup && exit 0

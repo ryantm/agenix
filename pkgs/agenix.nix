@@ -6,6 +6,9 @@
   nix,
   mktemp,
   diffutils,
+  coreutils,
+  openssh,
+  gnused,
   replaceVars,
   ageBin ? "${age}/bin/age",
   shellcheck,
@@ -23,6 +26,11 @@ stdenv.mkDerivation rec {
     nixInstantiate = "${nix}/bin/nix-instantiate";
     mktempBin = "${mktemp}/bin/mktemp";
     diffBin = "${diffutils}/bin/diff";
+    sshKeygenBin = "${openssh}/bin/ssh-keygen";
+    base64Bin = "${coreutils}/bin/base64";
+    headBin = "${coreutils}/bin/head";
+    trBin = "${coreutils}/bin/tr";
+    sedBin = "${gnused}/bin/sed";
   };
   dontUnpack = true;
   doInstallCheck = true;
@@ -57,6 +65,15 @@ stdenv.mkDerivation rec {
 
     cd $HOME/secrets
     test $(${bin} -d secret1.age) = "hello"
+    ${bin} --check
+    sed 's/"secret2.age".publicKeys = \[ user1 \];/"secret2.age".publicKeys = [ system1 ];/' secrets.nix > changed-rules.nix
+    if AGENIX_RULES=changed-rules.nix ${bin} --check > check-report; then
+      echo 'agenix --check should fail when recipients differ' >&2
+      exit 1
+    fi
+    grep -q '^✗ secret2.age$' check-report
+    grep -q '^  missing: ssh-ed25519 ' check-report
+    grep -q '^  extra: ssh-ed25519 V3XmEA$' check-report
   '';
 
   installPhase = ''
