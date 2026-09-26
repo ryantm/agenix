@@ -28,6 +28,10 @@ pkgs.nixosTest {
       age.secrets = {
         passwordfile-user1.file = ../example/passwordfile-user1.age;
         leading-hyphen.file = ../example/-leading-hyphen-filename.age;
+        named-owner = {
+          file = ../example/secret1.age;
+          owner = "getpsyched";
+        };
       };
 
       age.identityPaths = options.age.identityPaths.default ++ [ "/etc/ssh/this_key_wont_exist" ];
@@ -44,6 +48,12 @@ pkgs.nixosTest {
             isNormalUser = true;
             hashedPasswordFile = config.age.secrets.passwordfile-user1.path;
             uid = 1000;
+          };
+          primary = {
+            name = "getpsyched";
+            isNormalUser = true;
+            group = "users";
+            uid = 1001;
           };
         };
       };
@@ -84,6 +94,10 @@ pkgs.nixosTest {
     in
     ''
       system1.wait_for_unit("multi-user.target")
+      # The owner is a Linux username, while its users.users attribute is "primary".
+      # The default secret group should come from that user's configuration.
+      owner_group = system1.succeed("stat -Lc '%U:%G' /run/agenix/named-owner").strip()
+      assert owner_group == "getpsyched:users", owner_group
       system1.wait_until_succeeds("pgrep -f 'agetty.*tty1'")
       system1.sleep(2)
       system1.send_key("alt-f2")
