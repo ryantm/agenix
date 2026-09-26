@@ -292,7 +292,9 @@ the public keys in the rules file. It prints `✓` for matching files and `✗`
 with missing or extra recipients for mismatches, and exits with a nonzero status
 if any file differs or cannot be checked. It does not decrypt or change files,
 so no private key is needed. Age's SSH tags are 32-bit identifiers; this check
-cannot verify native age recipients or authenticate the encrypted contents.
+shows a full extra key when it can find a matching key literal in the rules
+file, and otherwise shows the tag. It cannot verify native age recipients or
+authenticate the encrypted contents.
 
 > [!WARNING]
 > The legacy `RULES` environment variable and automatic discovery of

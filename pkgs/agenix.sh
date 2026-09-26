@@ -299,7 +299,7 @@ function ssh_tag {
 
 function check_file {
     local file=$1 rule_keys=$2 input=$1 line key tag stanza found_header=0 mismatch=0
-    local -A expected=() actual=()
+    local -A expected=() actual=() known=() ambiguous=()
     local -a expected_order=() actual_order=()
 
     if [[ ! -f ${file} ]]; then
@@ -330,6 +330,18 @@ function check_file {
             expected_order+=("${stanza}")
         fi
     done <<< "${rule_keys}"
+
+    # A stanza only contains a short tag, so recover a full key when it is
+    # still present as a literal elsewhere in the rules file.
+    while IFS= read -r key; do
+        tag=$(ssh_tag "${key}" 2>/dev/null) || continue
+        stanza="${key%% *} ${tag}"
+        if [[ -v known[${stanza}] && ${known[${stanza}]} != "${key}" ]]; then
+            ambiguous[${stanza}]=1
+        else
+            known[${stanza}]=${key}
+        fi
+    done < <(@jqBin@ -Rr 'scan("ssh-(?:ed25519|rsa) [A-Za-z0-9+/=]+")' -- "${RULES}")
 
     if IFS= read -r line < "${input}" && [[ ${line} == 'age-encryption.org/v1' ]]; then
         found_header=1
@@ -374,7 +386,11 @@ function check_file {
         done
         for stanza in "${actual_order[@]}"; do
             if [[ ! -v expected[${stanza}] ]]; then
-                printf '  extra: %s\n' "${stanza}"
+                if [[ -v known[${stanza}] && ! -v ambiguous[${stanza}] ]]; then
+                    printf '  extra: %s\n' "${known[${stanza}]}"
+                else
+                    printf '  extra: %s\n' "${stanza}"
+                fi
             elif (( actual[${stanza}] > 1 )); then
                 printf '  extra: %s (duplicate)\n' "${stanza}"
                 actual[${stanza}]=1
