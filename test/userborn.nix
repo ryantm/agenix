@@ -1,7 +1,7 @@
 {
   pkgs,
 }:
-pkgs.nixosTest {
+pkgs.testers.nixosTest {
   name = "agenix-userborn";
 
   nodes.machine =

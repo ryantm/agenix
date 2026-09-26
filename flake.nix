@@ -2,13 +2,13 @@
   description = "Secret management with age";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
     darwin = {
-      url = "github:lnl7/nix-darwin/master";
+      url = "github:nix-darwin/nix-darwin/nix-darwin-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     home-manager = {
-      url = "github:nix-community/home-manager";
+      url = "github:nix-community/home-manager/release-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
@@ -25,6 +25,8 @@
       # agenix's shellcheck install check there.
       noGhcSystems = [
         "armv6l-linux"
+        "armv7l-linux"
+        "powerpc64le-linux"
         "riscv64-linux"
         "x86_64-freebsd"
       ];
