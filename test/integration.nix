@@ -69,6 +69,7 @@ pkgs.testers.nixosTest {
           home.stateVersion = pkgs.lib.trivial.release;
 
           age = {
+            verbosity = 0;
             secrets.disabled.enable = false;
             identityPaths = options.age.identityPaths.default ++ [ "/home/user1/.ssh/this_key_wont_exist" ];
             secrets.secret2 = {
@@ -171,6 +172,12 @@ pkgs.testers.nixosTest {
       system1.send_chars("cat /run/user/$(id -u)/agenix/armored-secret > /tmp/3\n")
       system1.wait_for_file("/tmp/3")
       assert "${armored-secret}" in system1.succeed("cat /tmp/3")
+
+      # Home Manager's quiet mode still reports a missing identity on stderr.
+      home_log = system1.succeed("journalctl -b _SYSTEMD_USER_UNIT=agenix.service --no-pager -o cat")
+      assert "[agenix] WARNING: config.age.identityPaths entry /home/user1/.ssh/this_key_wont_exist not present!" in home_log
+      assert "[agenix] decrypting secrets..." not in home_log
+      assert "decrypting '" not in home_log
 
       assert "${hyphen-secret}" in system1.succeed("cat /run/agenix/leading-hyphen")
       system1.fail("test -e /run/agenix/disabled")

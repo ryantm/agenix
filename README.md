@@ -441,6 +441,23 @@ Set it to false to disable the module even when secrets are configured.
 Switching an existing system to `false` does not remove secrets already
 decrypted in `/run`; reboot to clear them.
 
+#### `age.verbosity`
+
+`age.verbosity` controls agenix's routine activation messages. It accepts
+an integer from 0 to 3 and defaults to 3, preserving the current output.
+
+| Value | Messages |
+| --- | --- |
+| 0 | No routine agenix messages |
+| 1 | One decryption summary |
+| 2 | Summary and generation, linking, cleanup, and ownership steps |
+| 3 | All of the above, plus one line per secret |
+
+Warnings and errors remain visible at every level. This option does not
+control output from Nix, systemd, other activation scripts, or the `agenix`
+command-line tool. The command-line `-v` option enables shell tracing
+independently of this setting.
+
 #### `age.secrets`
 
 `age.secrets` attrset of secrets. You always need to use this
@@ -670,6 +687,11 @@ Overriding `age.secretsMountPoint` example:
 ### `age-home` module reference
 
 The home-manager module provides options similar to the NixOS module but scoped to a single user.
+
+#### `age.verbosity`
+
+The Home Manager module uses the same `age.verbosity` levels as the NixOS
+module. It has no ownership step. The default is 3.
 
 #### `age.enable`
 
