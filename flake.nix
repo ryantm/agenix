@@ -21,7 +21,17 @@
       home-manager,
     }:
     let
-      eachSystem = nixpkgs.lib.genAttrs nixpkgs.lib.systems.flakeExposed;
+      # nixfmt-tree and agenix's shellcheck install check need GHC, which
+      # nixpkgs cannot bootstrap on these systems.
+      supportedSystems = nixpkgs.lib.filter (
+        system:
+        !(builtins.elem system [
+          "armv6l-linux"
+          "riscv64-linux"
+          "x86_64-freebsd"
+        ])
+      ) nixpkgs.lib.systems.flakeExposed;
+      eachSystem = nixpkgs.lib.genAttrs supportedSystems;
     in
     {
       nixosModules.age = ./modules/age.nix;
