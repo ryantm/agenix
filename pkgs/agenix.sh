@@ -143,8 +143,8 @@ case ${RULES} in
     /*|./*|../*) ;;
     *) RULES="./${RULES}" ;;
 esac
-if (( legacy_rules_variable )) || [[ ${RULES##*/} == secrets.nix ]]; then
-    warn 'warning: RULES and secrets.nix are deprecated and will be removed in a future version of agenix; use AGENIX_RULES and agenix-rules.nix instead.'
+if (( legacy_rules_variable )) || [[ -z "${rules_variable}" && ${RULES##*/} == secrets.nix ]]; then
+    warn 'warning: RULES and automatic discovery of secrets.nix are deprecated and will be removed in a future version of agenix; use AGENIX_RULES and agenix-rules.nix instead.'
 fi
 
 function cleanup {

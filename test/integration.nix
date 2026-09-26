@@ -124,18 +124,18 @@ pkgs.testers.nixosTest {
 
       userDo = lambda input : f"sudo -u user1 -- bash -c 'set -eou pipefail; cd /tmp/secrets; {input}'"
 
-      # Both legacy inputs continue to work and announce their removal.
+      # Legacy lookup and RULES warn, while an explicitly selected filename does not.
       legacy_default = system1.succeed(userDo("env -u AGENIX_RULES -u RULES agenix -d secret1.age 2>&1"))
       assert "hello" in legacy_default
-      assert "RULES and secrets.nix are deprecated and will be removed in a future version of agenix" in legacy_default
+      assert "RULES and automatic discovery of secrets.nix are deprecated and will be removed in a future version of agenix" in legacy_default
 
       legacy_variable = system1.succeed(userDo("env RULES=secrets.nix agenix -d secret1.age 2>&1"))
       assert "hello" in legacy_variable
-      assert "RULES and secrets.nix are deprecated and will be removed in a future version of agenix" in legacy_variable
+      assert "RULES and automatic discovery of secrets.nix are deprecated and will be removed in a future version of agenix" in legacy_variable
 
-      legacy_filename = system1.succeed(userDo("env AGENIX_RULES=secrets.nix agenix -d secret1.age 2>&1"))
-      assert "hello" in legacy_filename
-      assert "RULES and secrets.nix are deprecated and will be removed in a future version of agenix" in legacy_filename
+      explicit_filename = system1.succeed(userDo("env AGENIX_RULES=secrets.nix agenix -d secret1.age 2>&1"))
+      assert "hello" in explicit_filename
+      assert "deprecated" not in explicit_filename
 
       system1.succeed(userDo("cp secrets.nix agenix-rules.nix"))
       new_default = system1.succeed(userDo("env -u AGENIX_RULES -u RULES agenix -d secret1.age 2>&1"))
@@ -144,7 +144,7 @@ pkgs.testers.nixosTest {
 
       legacy_variable_new_file = system1.succeed(userDo("env RULES=agenix-rules.nix agenix -d secret1.age 2>&1"))
       assert "hello" in legacy_variable_new_file
-      assert "RULES and secrets.nix are deprecated and will be removed in a future version of agenix" in legacy_variable_new_file
+      assert "RULES and automatic discovery of secrets.nix are deprecated and will be removed in a future version of agenix" in legacy_variable_new_file
 
       new_variable = system1.succeed(userDo("env RULES=secrets.nix AGENIX_RULES=agenix-rules.nix agenix -d secret1.age 2>&1"))
       assert "hello" in new_variable

@@ -250,6 +250,7 @@ AGENIX_RULES environment variable with path to Nix file specifying recipient pub
 Defaults to './agenix-rules.nix'
 ```
 
-The legacy `RULES` environment variable and `secrets.nix` filename still
-work, but agenix warns when either is used. Both will be removed in a future
-version.
+The legacy `RULES` environment variable and automatic discovery of
+`secrets.nix` still work, but agenix warns when either is used. Both will be
+removed in a future version. Explicitly selecting `secrets.nix` with
+`AGENIX_RULES` does not warn.

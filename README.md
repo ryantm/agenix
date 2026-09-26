@@ -725,8 +725,10 @@ Defaults to './agenix-rules.nix'
 
 Up to version 0.14.0, agenix used the variable `RULES` (instead of
 `AGENIX_RULES`) and the default rules file `secrets.nix` (instead of
-`agenix-rules.nix`). Both still work, but agenix warns when either is used;
-they will be removed in a future version.
+`agenix-rules.nix`). The `RULES` variable and automatic discovery of
+`secrets.nix` still work, but agenix warns when either is used; both will be
+removed in a future version. You can explicitly select a file named
+`secrets.nix` with `AGENIX_RULES` without a warning.
 
 #### Rekeying
 
