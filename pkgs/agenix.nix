@@ -28,7 +28,7 @@ stdenv.mkDerivation rec {
   doInstallCheck = true;
   installCheckInputs = lib.optional runShellcheck shellcheck;
   postInstallCheck = ''
-    ${lib.optionalString runShellcheck "shellcheck ${bin}"}
+    ${lib.optionalString runShellcheck "shellcheck --norc --enable=all ${bin}"}
     ${bin} -h | grep ${version}
 
     test_tmp=$(mktemp -d 2>/dev/null || mktemp -d -t 'mytmpdir')
