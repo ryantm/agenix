@@ -124,6 +124,40 @@ pkgs.testers.nixosTest {
 
       userDo = lambda input : f"sudo -u user1 -- bash -c 'set -eou pipefail; cd /tmp/secrets; {input}'"
 
+      # Both legacy inputs continue to work and announce their removal.
+      legacy_default = system1.succeed(userDo("env -u AGENIX_RULES -u RULES agenix -d secret1.age 2>&1"))
+      assert "hello" in legacy_default
+      assert "RULES and secrets.nix are deprecated and will be removed in a future version of agenix" in legacy_default
+
+      legacy_variable = system1.succeed(userDo("env RULES=secrets.nix agenix -d secret1.age 2>&1"))
+      assert "hello" in legacy_variable
+      assert "RULES and secrets.nix are deprecated and will be removed in a future version of agenix" in legacy_variable
+
+      legacy_filename = system1.succeed(userDo("env AGENIX_RULES=secrets.nix agenix -d secret1.age 2>&1"))
+      assert "hello" in legacy_filename
+      assert "RULES and secrets.nix are deprecated and will be removed in a future version of agenix" in legacy_filename
+
+      system1.succeed(userDo("cp secrets.nix agenix-rules.nix"))
+      new_default = system1.succeed(userDo("env -u AGENIX_RULES -u RULES agenix -d secret1.age 2>&1"))
+      assert "hello" in new_default
+      assert "deprecated" not in new_default
+
+      legacy_variable_new_file = system1.succeed(userDo("env RULES=agenix-rules.nix agenix -d secret1.age 2>&1"))
+      assert "hello" in legacy_variable_new_file
+      assert "RULES and secrets.nix are deprecated and will be removed in a future version of agenix" in legacy_variable_new_file
+
+      new_variable = system1.succeed(userDo("env RULES=secrets.nix AGENIX_RULES=agenix-rules.nix agenix -d secret1.age 2>&1"))
+      assert "hello" in new_variable
+      assert "deprecated" not in new_variable
+
+      # An explicitly selected missing file must not silently fall back.
+      system1.fail(userDo("env AGENIX_RULES=missing.nix agenix -d secret1.age"))
+
+      system1.succeed(userDo("mkdir nested && cp secret1.age nested/secret1.age"))
+      parent_rules = system1.succeed(userDo("cd nested && env -u AGENIX_RULES -u RULES agenix -d secret1.age 2>&1"))
+      assert "hello" in parent_rules
+      assert "deprecated" not in parent_rules
+
       before_hash = system1.succeed(userDo('sha256sum passwordfile-user1.age')).split()
       print(system1.succeed(userDo('agenix -r -i /home/user1/.ssh/id_ed25519')))
       after_hash = system1.succeed(userDo('sha256sum passwordfile-user1.age')).split()

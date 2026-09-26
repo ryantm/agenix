@@ -248,3 +248,8 @@ If STDIN is not interactive, EDITOR will be set to "cp /dev/stdin"
 
 AGENIX_RULES environment variable with path to Nix file specifying recipient public keys. 
 Defaults to './agenix-rules.nix'
+```
+
+The legacy `RULES` environment variable and `secrets.nix` filename still
+work, but agenix warns when either is used. Both will be removed in a future
+version.

@@ -103,39 +103,49 @@ while test $# -gt 0; do
   esac
 done
 
-function get_configured_rules {
-    # prints the first among $AGENIX_RULES, $RULES, erroring out if it points to a
-    # non-existing file
-    ! [ -v AGENIX_RULES ] && ! [ -v RULES ] && return 1
-    local rulesfile="${AGENIX_RULES:-$RULES}"
-    [ -f "$rulesfile" ] || {
-        [ -v AGENIX_RULES ] && variable='AGENIX_RULES' || variable='RULES'
-        err "Rules file '$rulesfile' specified via the variable $variable not found."
-    }
-    echo "$rulesfile"
-}
-
 function find_rules {
-    # walks up the directory tree, printing the first file named agenix-rules.nix
-    # or ./secrets.nix it finds and erroring out otherwise
-    local cwd="$PWD"
-    local rulesfile=''
-    while [ -z "$rulesfile" ]
+    # Walk up the directory tree, preferring agenix-rules.nix in each directory.
+    local cwd="${PWD}"
+    local f
+    while true
     do
-        for f in "$cwd/agenix-rules.nix" "$cwd/secrets.nix"
+        for f in "${cwd}/agenix-rules.nix" "${cwd}/secrets.nix"
         do
-            [ -f "$f" ] && rulesfile="$f"
+            if [[ -f "${f}" ]]; then
+                printf '%s\n' "${f}"
+                return 0
+            fi
         done
-        [ "$cwd" != '/' ] || break
-        cwd=$(dirname "$cwd")
+        [[ "${cwd}" != '/' ]] || break
+        cwd=$(dirname "${cwd}")
     done
-    [ -n "$rulesfile" ] || err "$PACKAGE needs a rules file. You can specify one by setting the AGENIX_RULES variable or you can create a file named 'agenix-rules.nix' in the current directory or one of its parents."
-    echo "$rulesfile"
-    unset cwd rulesfile
+    err "${PACKAGE} needs a rules file. Set AGENIX_RULES or create agenix-rules.nix in the current directory or a parent directory."
 }
 
-RULES=$(get_configured_rules || find_rules)
-[ -r "$RULES" ] || err "Cannot read rules file '$RULES'."
+legacy_rules_variable=0
+if [[ -v AGENIX_RULES ]]; then
+    RULES=${AGENIX_RULES}
+    rules_variable=AGENIX_RULES
+elif [[ -v RULES ]]; then
+    legacy_rules_variable=1
+    rules_variable=RULES
+else
+    RULES=$(find_rules) || exit 1
+    rules_variable=''
+fi
+
+if [[ -n "${rules_variable}" && ! -f "${RULES}" ]]; then
+    err "Rules file '${RULES}' specified via the variable ${rules_variable} not found."
+fi
+[[ -r "${RULES}" ]] || err "Cannot read rules file '${RULES}'."
+# Nix path literals need an explicit ./ prefix for relative bare filenames.
+case ${RULES} in
+    /*|./*|../*) ;;
+    *) RULES="./${RULES}" ;;
+esac
+if (( legacy_rules_variable )) || [[ ${RULES##*/} == secrets.nix ]]; then
+    warn 'warning: RULES and secrets.nix are deprecated and will be removed in a future version of agenix; use AGENIX_RULES and agenix-rules.nix instead.'
+fi
 
 function cleanup {
     if [[ -n "${CLEARTEXT_DIR+x}" ]]
