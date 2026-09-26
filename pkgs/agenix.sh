@@ -28,8 +28,10 @@ function show_help () {
   echo ' '
   echo 'If STDIN is not interactive, EDITOR will be set to "cp /dev/stdin"'
   echo ' '
-  echo 'RULES environment variable with path to Nix file specifying recipient public keys.'
-  echo "Defaults to './secrets.nix'"
+  echo 'AGENIX_RULES environment variable with path to Nix file specifying recipient public keys.'
+  echo 'Searches the current directory for agenix-rules.nix, then secrets.nix.'
+  echo 'Searches parent directories for agenix-rules.nix only.'
+  echo "Resolves relative secret paths from the selected rules file's directory."
   echo ' '
   echo "agenix version: @version@"
   echo "age binary path: @ageBin@"
@@ -70,7 +72,11 @@ while test $# -gt 0; do
     -i|--identity)
       shift
       if test $# -gt 0; then
-        DEFAULT_DECRYPT+=(--identity "$1")
+        identity_path=$1
+        if [[ ${identity_path} != /* ]]; then
+          identity_path="${PWD}/${identity_path}"
+        fi
+        DEFAULT_DECRYPT+=(--identity "${identity_path}")
       else
         echo "no PRIVATE_KEY specified"
         exit 1
@@ -103,7 +109,56 @@ while test $# -gt 0; do
   esac
 done
 
-RULES=${RULES:-./secrets.nix}
+function find_rules {
+    # Keep secrets.nix discovery limited to the current directory.
+    local cwd="${PWD}"
+    if [[ -f "${cwd}/agenix-rules.nix" ]]; then
+        printf '%s\n' "${cwd}/agenix-rules.nix"
+        return 0
+    fi
+    if [[ -f "${cwd}/secrets.nix" ]]; then
+        printf '%s\n' "${cwd}/secrets.nix"
+        return 0
+    fi
+    while [[ "${cwd}" != '/' ]]
+    do
+        cwd=$(dirname "${cwd}")
+        if [[ -f "${cwd}/agenix-rules.nix" ]]; then
+            printf '%s\n' "${cwd}/agenix-rules.nix"
+            return 0
+        fi
+    done
+    err "${PACKAGE} needs a rules file. Set AGENIX_RULES, create agenix-rules.nix in the current directory or a parent, or create secrets.nix in the current directory."
+}
+
+legacy_rules_variable=0
+if [[ -v AGENIX_RULES ]]; then
+    RULES=${AGENIX_RULES}
+    rules_variable=AGENIX_RULES
+elif [[ -v RULES ]]; then
+    legacy_rules_variable=1
+    rules_variable=RULES
+else
+    RULES=$(find_rules) || exit 1
+    rules_variable=''
+fi
+
+if [[ -n "${rules_variable}" && ! -f "${RULES}" ]]; then
+    err "Rules file '${RULES}' specified via the variable ${rules_variable} not found."
+fi
+[[ -r "${RULES}" ]] || err "Cannot read rules file '${RULES}'."
+# Nix path literals need an explicit ./ prefix for relative bare filenames.
+case ${RULES} in
+    /*|./*|../*) ;;
+    *) RULES="./${RULES}" ;;
+esac
+RULES_DIR=$(cd "$(dirname "${RULES}")" && pwd -P) || err "Cannot access rules directory for '${RULES}'."
+RULES="${RULES_DIR}/$(basename "${RULES}")"
+if (( legacy_rules_variable )) || [[ -z "${rules_variable}" && ${RULES##*/} == secrets.nix ]]; then
+    warn 'warning: RULES and automatic discovery of secrets.nix are deprecated and will be removed in a future version of agenix; use AGENIX_RULES and agenix-rules.nix instead.'
+fi
+cd "${RULES_DIR}" || err "Cannot access rules directory '${RULES_DIR}'."
+
 function cleanup {
     if [[ -n "${CLEARTEXT_DIR+x}" ]]
     then
