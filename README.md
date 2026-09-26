@@ -433,15 +433,29 @@ When you run `home-manager switch`, your secrets will be decrypted to a user-spe
 
 ### `age` module reference
 
+#### `age.enable`
+
+`age.enable` controls whether agenix installs secrets and runs activation.
+It defaults to true when at least one secret is enabled, and false otherwise.
+Set it to false to disable the module even when secrets are configured.
+Switching an existing system to `false` does not remove secrets already
+decrypted in `/run`; reboot to clear them.
+
 #### `age.secrets`
 
 `age.secrets` attrset of secrets. You always need to use this
 configuration option. Defaults to `{}`.
 
+#### `age.secrets.<name>.enable`
+
+`age.secrets.<name>.enable` defaults to true. Set it to false to omit that
+secret from the installed generation. A disabled secret does not need a
+`file` value.
+
 #### `age.secrets.<name>.file`
 
 `age.secrets.<name>.file` is the path to the encrypted `.age` for this
-secret. This is the only required secret option.
+secret. This is required for enabled secrets.
 
 Example:
 
@@ -657,15 +671,26 @@ Overriding `age.secretsMountPoint` example:
 
 The home-manager module provides options similar to the NixOS module but scoped to a single user.
 
+#### `age.enable`
+
+`age.enable` defaults to true when at least one secret is enabled. Set it to
+false to disable the Home Manager agenix service.
+Disabling the service does not remove secrets decrypted by earlier activations.
+
 #### `age.secrets`
 
 `age.secrets` attrset of secrets. You always need to use this
 configuration option. Defaults to `{}`.
 
+#### `age.secrets.<name>.enable`
+
+`age.secrets.<name>.enable` defaults to true. Set it to false to omit that
+secret. A disabled secret does not need a `file` value.
+
 #### `age.secrets.<name>.file`
 
 `age.secrets.<name>.file` is the path to the encrypted `.age` for this
-secret. This is the only required secret option.
+secret. This is required for enabled secrets.
 
 #### `age.secrets.<name>.path`
 

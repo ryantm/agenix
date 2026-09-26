@@ -26,6 +26,7 @@ pkgs.testers.nixosTest {
       services.openssh.enable = true;
 
       age.secrets = {
+        disabled.enable = false;
         passwordfile-user1.file = ../example/passwordfile-user1.age;
         leading-hyphen.file = ../example/-leading-hyphen-filename.age;
         named-owner = {
@@ -68,6 +69,7 @@ pkgs.testers.nixosTest {
           home.stateVersion = pkgs.lib.trivial.release;
 
           age = {
+            secrets.disabled.enable = false;
             identityPaths = options.age.identityPaths.default ++ [ "/home/user1/.ssh/this_key_wont_exist" ];
             secrets.secret2 = {
               # Only decryptable by user1's key
@@ -84,6 +86,46 @@ pkgs.testers.nixosTest {
         };
     };
 
+  nodes.disabled = { pkgs, ... }: {
+    imports = [
+      ../modules/age.nix
+      "${home-manager}/nixos"
+    ];
+    age.secrets.only-disabled.enable = false;
+    home-manager.users.user1 = { ... }: {
+      imports = [ ../modules/age-home.nix ];
+      home.username = "user1";
+      home.homeDirectory = "/home/user1";
+      home.stateVersion = pkgs.lib.trivial.release;
+      age.secrets.only-disabled.enable = false;
+    };
+    users.users.user1 = {
+      isNormalUser = true;
+      uid = 1000;
+    };
+  };
+
+  nodes.forcedDisabled = { pkgs, ... }: {
+    imports = [
+      ../modules/age.nix
+      "${home-manager}/nixos"
+    ];
+    age.enable = false;
+    age.secrets.configured.file = ../example/secret1.age;
+    users.users.user1 = {
+      isNormalUser = true;
+      uid = 1000;
+    };
+    home-manager.users.user1 = { ... }: {
+      imports = [ ../modules/age-home.nix ];
+      home.username = "user1";
+      home.homeDirectory = "/home/user1";
+      home.stateVersion = pkgs.lib.trivial.release;
+      age.enable = false;
+      age.secrets.configured.file = ../example/secret2.age;
+    };
+  };
+
   testScript =
     let
       user = "user1";
@@ -94,6 +136,15 @@ pkgs.testers.nixosTest {
     in
     ''
       system1.wait_for_unit("multi-user.target")
+      system1.succeed("test -e /home/user1/.config/systemd/user/agenix.service")
+      disabled.wait_for_unit("multi-user.target")
+      disabled.fail("test -e /run/agenix")
+      disabled.fail("systemctl cat agenix-install-secrets.service")
+      disabled.fail("systemctl cat agenix-chown.service")
+      disabled.fail("test -e /home/user1/.config/systemd/user/agenix.service")
+      forcedDisabled.wait_for_unit("multi-user.target")
+      forcedDisabled.fail("test -e /run/agenix")
+      forcedDisabled.fail("test -e /home/user1/.config/systemd/user/agenix.service")
       # The owner is a Linux username, while its users.users attribute is "primary".
       # The default secret group should come from that user's configuration.
       owner_group = system1.succeed("stat -Lc '%U:%G' /run/agenix/named-owner").strip()
@@ -116,11 +167,13 @@ pkgs.testers.nixosTest {
       system1.send_chars("cat /run/user/$(id -u)/agenix/secret2 > /tmp/2\n")
       system1.wait_for_file("/tmp/2")
       assert "${secret2}" in system1.succeed("cat /tmp/2")
+      system1.fail("test -e /run/user/1000/agenix/disabled")
       system1.send_chars("cat /run/user/$(id -u)/agenix/armored-secret > /tmp/3\n")
       system1.wait_for_file("/tmp/3")
       assert "${armored-secret}" in system1.succeed("cat /tmp/3")
 
       assert "${hyphen-secret}" in system1.succeed("cat /run/agenix/leading-hyphen")
+      system1.fail("test -e /run/agenix/disabled")
 
       userDo = lambda input, directory="/tmp/secrets": f"sudo -u user1 -- bash -c 'set -eou pipefail; cd {directory}; {input}'"
 

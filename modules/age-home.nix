@@ -173,7 +173,7 @@ in
 {
   options.age = {
     enable = mkEnableOption "agenix" // {
-      default = cfg.secrets != { };
+      default = enabledSecrets != [ ];
     };
 
     package = mkPackageOption pkgs "age" { };

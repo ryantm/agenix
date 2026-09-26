@@ -134,9 +134,7 @@ let
   '';
 
   chownSecrets = builtins.concatStringsSep "\n" (
-    [ "echo '[agenix] chowning...'" ]
-    ++ [ chownMountPoint ]
-    ++ (map chownSecret enabledSecrets)
+    [ "echo '[agenix] chowning...'" ] ++ [ chownMountPoint ] ++ (map chownSecret enabledSecrets)
   );
 
   secretType = types.submodule (
@@ -210,7 +208,7 @@ in
 
   options.age = {
     enable = mkEnableOption "agenix" // {
-      default = cfg.secrets != { };
+      default = enabledSecrets != [ ];
     };
 
     ageBin = mkOption {
