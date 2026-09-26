@@ -36,8 +36,11 @@ let
         grep -q "${cfg.secretsMountPoint} ramfs" /proc/mounts ||
           mount -t ramfs none "${cfg.secretsMountPoint}" -o nodev,nosuid,mode=0751
       '';
-  newGeneration = ''
+  currentGeneration = ''
     _agenix_generation="$(basename "$(readlink ${cfg.secretsDir})" || echo 0)"
+  '';
+  newGeneration = ''
+    ${currentGeneration}
     (( ++_agenix_generation ))
     echo "[agenix] creating new generation in ${cfg.secretsMountPoint}/$_agenix_generation"
     mkdir -p "${cfg.secretsMountPoint}"
@@ -105,7 +108,7 @@ let
   '') cfg.identityPaths;
 
   cleanupAndLink = ''
-    _agenix_generation="$(basename "$(readlink ${cfg.secretsDir})" || echo 0)"
+    ${currentGeneration}
     (( ++_agenix_generation ))
     echo "[agenix] symlinking new secrets to ${cfg.secretsDir} (generation $_agenix_generation)..."
     ln -sfT "${cfg.secretsMountPoint}/$_agenix_generation" ${cfg.secretsDir}
@@ -282,7 +285,8 @@ in
       # because those are started in initrd while sysusers is started later.
       systemd.services.agenix-install-secrets = mkIf sysusersEnabled {
         wantedBy = [ "sysinit.target" ];
-        after = [ "systemd-sysusers.service" ];
+        # So user passwords can be encrypted.
+        before = [ "systemd-sysusers.service" ];
         unitConfig.DefaultDependencies = "no";
 
         path = [ pkgs.mount ];
@@ -291,7 +295,32 @@ in
           ExecStart = pkgs.writeShellScript "agenix-install" (concatLines [
             newGeneration
             installSecrets
+            # Don't fail the systemd unit if our script ended with a failing test.
+            "true"
+          ]);
+          RemainAfterExit = true;
+        };
+      };
+
+      systemd.services.agenix-chown = mkIf sysusersEnabled {
+        wantedBy = [ "sysinit.target" ];
+        # Change ownership and group after users and groups are made.
+        # (And after secrets are created, just in case systemd-sysusers.service is disabled.)
+        after = [
+          "systemd-sysusers.service"
+          "agenix-install-secrets.service"
+        ];
+        # We should get restarted when agenix-install-secrets is (to chown the new secrets).
+        requires = [ "agenix-install-secrets.service" ];
+        unitConfig.DefaultDependencies = "no";
+
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStart = pkgs.writeShellScript "agenix-chown" (concatLines [
+            currentGeneration
             chownSecrets
+            # Don't fail the systemd unit if our script ended with a failing test.
+            "true"
           ]);
           RemainAfterExit = true;
         };
