@@ -725,7 +725,7 @@ Searches parent directories for agenix-rules.nix only.
 ```
 
 > [!WARNING]
-> Up to version 0.14.0, agenix used the variable `RULES` (instead of
+> Through version 0.15.0, agenix used the variable `RULES` (instead of
 > `AGENIX_RULES`) and the default rules file `secrets.nix` (instead of
 > `agenix-rules.nix`). The `RULES` variable and automatic discovery of
 > `secrets.nix` still work, but agenix warns when either is used; both will be
