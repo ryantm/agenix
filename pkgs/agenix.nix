@@ -9,6 +9,7 @@
   replaceVars,
   ageBin ? "${age}/bin/age",
   shellcheck,
+  runShellcheck ? true,
 }:
 let
   bin = "${placeholder "out"}/bin/agenix";
@@ -25,9 +26,9 @@ stdenv.mkDerivation rec {
   };
   dontUnpack = true;
   doInstallCheck = true;
-  installCheckInputs = [ shellcheck ];
+  installCheckInputs = lib.optional runShellcheck shellcheck;
   postInstallCheck = ''
-    shellcheck ${bin}
+    ${lib.optionalString runShellcheck "shellcheck ${bin}"}
     ${bin} -h | grep ${version}
 
     test_tmp=$(mktemp -d 2>/dev/null || mktemp -d -t 'mytmpdir')
