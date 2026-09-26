@@ -124,6 +124,11 @@ pkgs.testers.nixosTest {
 
       userDo = lambda input : f"sudo -u user1 -- bash -c 'set -eou pipefail; cd /tmp/secrets; {input}'"
 
+      # A leading ./ in a CLI path should match the same rules entry.
+      assert "hello" in system1.succeed(userDo("agenix -d ./secret1.age"))
+      system1.succeed(userDo("EDITOR=: agenix -e ./secret1.age -i /home/user1/.ssh/id_ed25519"))
+      assert "hello" in system1.succeed(userDo("agenix -d secret1.age"))
+
       # Legacy lookup and RULES warn, while an explicitly selected filename does not.
       legacy_default = system1.succeed(userDo("env -u AGENIX_RULES -u RULES agenix -d secret1.age 2>&1"))
       assert "hello" in legacy_default
