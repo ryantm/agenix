@@ -8,13 +8,23 @@
 with lib;
 let
   cfg = config.age;
+  verbosityLevel =
+    {
+      quiet = 0;
+      summary = 1;
+      progress = 2;
+      detailed = 3;
+    }
+    .${cfg.verbosity};
 
   ageBin = lib.getExe config.age.package;
 
   newGeneration = ''
     _agenix_generation="$(basename "$(readlink "${cfg.secretsDir}")" || echo 0)"
     (( ++_agenix_generation ))
-    echo "[agenix] creating new generation in ${cfg.secretsMountPoint}/$_agenix_generation"
+    ${optionalString (
+      verbosityLevel >= 2
+    ) ''echo "[agenix] creating new generation in ${cfg.secretsMountPoint}/$_agenix_generation"''}
     mkdir -p "${cfg.secretsMountPoint}"
     chmod 0751 "${cfg.secretsMountPoint}"
     mkdir -p "${cfg.secretsMountPoint}/$_agenix_generation"
@@ -36,7 +46,9 @@ let
 
   installSecret = secretType: ''
     ${setTruePath secretType}
-    echo "decrypting '${secretType.file}' to '$_truePath'..."
+    ${optionalString (
+      verbosityLevel >= 3
+    ) ''echo "decrypting '${secretType.file}' to '$_truePath'..."''}
     TMP_FILE="$_truePath.tmp"
 
     IDENTITIES=()
@@ -47,15 +59,15 @@ let
       IDENTITIES+=("$identity")
     done
 
-    test "''${#IDENTITIES[@]}" -eq 0 && echo "[agenix] WARNING: no readable identities found!"
+    test "''${#IDENTITIES[@]}" -eq 0 && echo "[agenix] WARNING: no readable identities found!" >&2
 
     mkdir -p "$(dirname "$_truePath")"
     # shellcheck disable=SC2193,SC2050
     [ "${secretType.path}" != "${cfg.secretsDir}/${secretType.name}" ] && mkdir -p "$(dirname "${secretType.path}")"
     (
       umask u=r,g=,o=
-      test -f "${secretType.file}" || echo '[agenix] WARNING: encrypted file ${secretType.file} does not exist!'
-      test -d "$(dirname "$TMP_FILE")" || echo "[agenix] WARNING: $(dirname "$TMP_FILE") does not exist!"
+      test -f "${secretType.file}" || echo '[agenix] WARNING: encrypted file ${secretType.file} does not exist!' >&2
+      test -d "$(dirname "$TMP_FILE")" || echo "[agenix] WARNING: $(dirname "$TMP_FILE") does not exist!" >&2
       LANG=${
         config.i18n.defaultLocale or "C"
       } ${ageBin} --decrypt "''${IDENTITIES[@]}" -o "$TMP_FILE" "${secretType.file}"
@@ -70,17 +82,21 @@ let
   '';
 
   testIdentities = map (path: ''
-    test -f ${path} || echo '[agenix] WARNING: config.age.identityPaths entry ${path} not present!'
+    test -f ${path} || echo '[agenix] WARNING: config.age.identityPaths entry ${path} not present!' >&2
   '') cfg.identityPaths;
 
   cleanupAndLink = ''
     _agenix_generation="$(basename "$(readlink "${cfg.secretsDir}")" || echo 0)"
     (( ++_agenix_generation ))
-    echo "[agenix] symlinking new secrets to ${cfg.secretsDir} (generation $_agenix_generation)..."
+    ${optionalString (verbosityLevel >= 2)
+      ''echo "[agenix] symlinking new secrets to ${cfg.secretsDir} (generation $_agenix_generation)..."''
+    }
     ln -sfT "${cfg.secretsMountPoint}/$_agenix_generation" "${cfg.secretsDir}"
 
     (( _agenix_generation > 1 )) && {
-    echo "[agenix] removing old secrets (generation $(( _agenix_generation - 1 )))..."
+    ${optionalString (
+      verbosityLevel >= 2
+    ) ''echo "[agenix] removing old secrets (generation $(( _agenix_generation - 1 )))..."''}
     rm -rf "${cfg.secretsMountPoint}/$(( _agenix_generation - 1 ))"
     }
   '';
@@ -88,7 +104,7 @@ let
   enabledSecrets = lib.filter (secret: secret.enable) (builtins.attrValues cfg.secrets);
 
   installSecrets = builtins.concatStringsSep "\n" (
-    [ "echo '[agenix] decrypting secrets...'" ]
+    (optional (verbosityLevel >= 1) "echo '[agenix] decrypting secrets...'")
     ++ testIdentities
     ++ (map installSecret enabledSecrets)
     ++ [ cleanupAndLink ]
@@ -177,6 +193,22 @@ in
     };
 
     package = mkPackageOption pkgs "age" { };
+
+    verbosity = mkOption {
+      type = types.enum [
+        "quiet"
+        "summary"
+        "progress"
+        "detailed"
+      ];
+      default = "detailed";
+      description = ''
+        Verbosity of agenix activation messages. "quiet" hides routine messages,
+        "summary" prints a summary, "progress" also prints installation steps,
+        and "detailed" also prints one line per secret. Warnings and errors are always shown.
+        This does not affect the agenix command-line tool or other activation output.
+      '';
+    };
 
     secrets = mkOption {
       type = types.attrsOf secretType;
