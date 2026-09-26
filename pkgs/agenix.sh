@@ -14,8 +14,7 @@ function show_help () {
   echo ' '
   echo 'options:'
   echo '-h, --help                show help'
-  # shellcheck disable=SC2016
-  echo '-e, --edit FILE           edits FILE using $EDITOR'
+  echo "-e, --edit FILE           edits FILE using \$EDITOR"
   echo '-r, --rekey               re-encrypts all secrets with specified recipients'
   echo '-d, --decrypt FILE        decrypts FILE to STDOUT'
   echo '-i, --identity            identity to use when decrypting'
