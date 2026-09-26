@@ -724,12 +724,13 @@ Searches the current directory for agenix-rules.nix, then secrets.nix.
 Searches parent directories for agenix-rules.nix only.
 ```
 
-Up to version 0.14.0, agenix used the variable `RULES` (instead of
-`AGENIX_RULES`) and the default rules file `secrets.nix` (instead of
-`agenix-rules.nix`). The `RULES` variable and automatic discovery of
-`secrets.nix` still work, but agenix warns when either is used; both will be
-removed in a future version. You can explicitly select a file named
-`secrets.nix` with `AGENIX_RULES` without a warning.
+> [!WARNING]
+> Up to version 0.14.0, agenix used the variable `RULES` (instead of
+> `AGENIX_RULES`) and the default rules file `secrets.nix` (instead of
+> `agenix-rules.nix`). The `RULES` variable and automatic discovery of
+> `secrets.nix` still work, but agenix warns when either is used; both will be
+> removed in a future version. You can explicitly select a file named
+> `secrets.nix` with `AGENIX_RULES` without a warning.
 
 #### Rekeying
 

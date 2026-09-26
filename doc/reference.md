@@ -251,7 +251,8 @@ Searches the current directory for agenix-rules.nix, then secrets.nix.
 Searches parent directories for agenix-rules.nix only.
 ```
 
-The legacy `RULES` environment variable and automatic discovery of
-`secrets.nix` still work, but agenix warns when either is used. Both will be
-removed in a future version. Explicitly selecting `secrets.nix` with
-`AGENIX_RULES` does not warn.
+> [!WARNING]
+> The legacy `RULES` environment variable and automatic discovery of
+> `secrets.nix` still work, but agenix warns when either is used. Both will be
+> removed in a future version. Explicitly selecting `secrets.nix` with
+> `AGENIX_RULES` does not warn.
