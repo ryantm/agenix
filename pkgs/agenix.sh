@@ -47,6 +47,14 @@ function err() {
   exit 1
 }
 
+function set_file() {
+  FILE=$1
+  while [[ ${FILE} == ./* ]]; do
+    FILE=${FILE#./}
+  done
+  export FILE
+}
+
 test $# -eq 0 && (show_help && exit 1)
 
 REKEY=0
@@ -62,7 +70,7 @@ while test $# -gt 0; do
     -e|--edit)
       shift
       if test $# -gt 0; then
-        export FILE=$1
+        set_file "$1"
       else
         echo "no FILE specified"
         exit 1
@@ -91,7 +99,7 @@ while test $# -gt 0; do
       shift
       DECRYPT_ONLY=1
       if test $# -gt 0; then
-        export FILE=$1
+        set_file "$1"
       else
         echo "no FILE specified"
         exit 1
