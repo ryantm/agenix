@@ -27,6 +27,7 @@ function show_help () {
   echo 'EDITOR environment variable of editor to use when editing FILE'
   echo ' '
   echo 'If STDIN is not interactive, EDITOR will be set to "cp /dev/stdin"'
+  echo 'Piped input replaces a secret without decrypting it first.'
   echo ' '
   echo 'AGENIX_RULES environment variable with path to Nix file specifying recipient public keys.'
   echo 'Searches the current directory for agenix-rules.nix, then secrets.nix.'

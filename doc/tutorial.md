@@ -35,6 +35,9 @@
    ```ShellSession
    $ agenix -e secret1.age
    ```
+   You can also pipe complete contents into `agenix -e secret1.age` to create
+   or replace a secret without a decryption key. This overwrites the previous
+   contents rather than editing them.
 5. Add secret to a NixOS module config:
    ```nix
    {

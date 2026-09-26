@@ -245,6 +245,7 @@ PRIVATE_KEY a path to a private SSH key used to decrypt file
 EDITOR environment variable of editor to use when editing FILE
 
 If STDIN is not interactive, EDITOR will be set to "cp /dev/stdin"
+Piped input replaces a secret without decrypting it first.
 
 AGENIX_RULES environment variable with path to Nix file specifying recipient public keys. 
 Searches the current directory for agenix-rules.nix, then secrets.nix.
