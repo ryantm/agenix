@@ -144,11 +144,52 @@ let
     fi
   '';
 
-  installSecrets = builtins.concatStringsSep "\n" (
-    [ "echo '[agenix] decrypting secrets...'" ]
-    ++ testIdentities
-    ++ (map installSecret (builtins.attrValues cfg.secrets))
-  );
+  installSecrets =
+    let
+      secrets = builtins.attrValues cfg.secrets;
+    in
+    builtins.concatStringsSep "\n" (
+      [ "echo '[agenix] decrypting secrets...'" ]
+      ++ testIdentities
+      ++ [
+        ''
+          # Background jobs cannot prompt for passphrases via the caller's terminal.
+          # Keep unencrypted SSH identities parallel even during an interactive switch.
+          _agenix_needs_terminal=0
+          if [ -t 0 ]; then
+            for _agenix_identity in ${toString cfg.identityPaths}; do
+              [ -r "$_agenix_identity" ] && [ -s "$_agenix_identity" ] || continue
+              if ! ${pkgs.openssh}/bin/ssh-keygen -y -P "" -f "$_agenix_identity" >/dev/null 2>&1; then
+                _agenix_needs_terminal=1
+                break
+              fi
+            done
+          fi
+          # NixOS creates this link after boot activation has finished.
+          # Keep the early activation path foreground to preserve boot behavior.
+          if ${optionalString (!isDarwin) "[ ! -e /run/booted-system ] || "}(( _agenix_needs_terminal )); then
+            ${builtins.concatStringsSep "\n" (map installSecret secrets)}
+          else
+            _agenix_decryption_pids=()
+            ${builtins.concatStringsSep "\n" (
+              map (secretType: ''
+                (
+                  ${installSecret secretType}
+                ) &
+                _agenix_decryption_pids+=("$!")
+              '') secrets
+            )}
+            _agenix_decryption_failed=0
+            for _agenix_decryption_pid in "''${_agenix_decryption_pids[@]}"; do
+              wait "$_agenix_decryption_pid" || _agenix_decryption_failed=1
+            done
+            if (( _agenix_decryption_failed )); then
+              exit 1
+            fi
+          fi
+        ''
+      ]
+    );
 
   chownSecret = secretType: ''
     ${setTruePath secretType}
