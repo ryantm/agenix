@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
+# Keep the existing conditional function calls and command substitutions: changing
+# their set -e behavior would alter how edit, rekey, and decrypt report failures.
+# shellcheck disable=SC2310,SC2312
 set -Eeuo pipefail
 
 PACKAGE="agenix"
 
 function show_help () {
-  echo "$PACKAGE - edit and rekey age secret files"
+  echo "${PACKAGE} - edit and rekey age secret files"
   echo " "
-  echo "$PACKAGE -e FILE [-i PRIVATE_KEY]"
-  echo "$PACKAGE -r [-i PRIVATE_KEY]"
+  echo "${PACKAGE} -e FILE [-i PRIVATE_KEY]"
+  echo "${PACKAGE} -r [-i PRIVATE_KEY]"
   echo ' '
   echo 'options:'
   echo '-h, --help                show help'
@@ -103,113 +106,113 @@ done
 
 RULES=${RULES:-./secrets.nix}
 function cleanup {
-    if [ -n "${CLEARTEXT_DIR+x}" ]
+    if [[ -n "${CLEARTEXT_DIR+x}" ]]
     then
-        rm -rf -- "$CLEARTEXT_DIR"
+        rm -rf -- "${CLEARTEXT_DIR}"
     fi
-    if [ -n "${REENCRYPTED_DIR+x}" ]
+    if [[ -n "${REENCRYPTED_DIR+x}" ]]
     then
-        rm -rf -- "$REENCRYPTED_DIR"
+        rm -rf -- "${REENCRYPTED_DIR}"
     fi
 }
 trap "cleanup" 0 2 3 15
 
 function keys {
-    (@nixInstantiate@ --json --eval --strict -E "(let rules = import $RULES; in rules.\"$1\".publicKeys)" | @jqBin@ -r .[]) || exit 1
+    (@nixInstantiate@ --json --eval --strict -E "(let rules = import ${RULES}; in rules.\"$1\".publicKeys)" | @jqBin@ -r .[]) || exit 1
 }
 
 function armor {
-    (@nixInstantiate@ --json --eval --strict -E "(let rules = import $RULES; in (builtins.hasAttr \"armor\" rules.\"$1\" && rules.\"$1\".armor))") || exit 1
+    (@nixInstantiate@ --json --eval --strict -E "(let rules = import ${RULES}; in (builtins.hasAttr \"armor\" rules.\"$1\" && rules.\"$1\".armor))") || exit 1
 }
 
 function decrypt {
     FILE=$1
     KEYS=$2
-    if [ -z "$KEYS" ]
+    if [[ -z "${KEYS}" ]]
     then
-        err "There is no rule for $FILE in $RULES."
+        err "There is no rule for ${FILE} in ${RULES}."
     fi
 
-    if [ -f "$FILE" ]
+    if [[ -f "${FILE}" ]]
     then
         DECRYPT=("${DEFAULT_DECRYPT[@]}")
         if [[ "${DECRYPT[*]}" != *"--identity"* ]]; then
-            if [ -f "$HOME/.ssh/id_rsa" ]; then
-                DECRYPT+=(--identity "$HOME/.ssh/id_rsa")
+            if [[ -f "${HOME}/.ssh/id_rsa" ]]; then
+                DECRYPT+=(--identity "${HOME}/.ssh/id_rsa")
             fi
-            if [ -f "$HOME/.ssh/id_ed25519" ]; then
-                DECRYPT+=(--identity "$HOME/.ssh/id_ed25519")
+            if [[ -f "${HOME}/.ssh/id_ed25519" ]]; then
+                DECRYPT+=(--identity "${HOME}/.ssh/id_ed25519")
             fi
         fi
         if [[ "${DECRYPT[*]}" != *"--identity"* ]]; then
-          err "No identity found to decrypt $FILE. Try adding an SSH key at $HOME/.ssh/id_rsa or $HOME/.ssh/id_ed25519 or using the --identity flag to specify a file."
+          err "No identity found to decrypt ${FILE}. Try adding an SSH key at ${HOME}/.ssh/id_rsa or ${HOME}/.ssh/id_ed25519 or using the --identity flag to specify a file."
         fi
 
-        @ageBin@ "${DECRYPT[@]}" -- "$FILE" || exit 1
+        @ageBin@ "${DECRYPT[@]}" -- "${FILE}" || exit 1
     fi
 }
 
 function edit {
     FILE=$1
-    KEYS=$(keys "$FILE") || exit 1
-    ARMOR=$(armor "$FILE") || exit 1
+    KEYS=$(keys "${FILE}") || exit 1
+    ARMOR=$(armor "${FILE}") || exit 1
 
     CLEARTEXT_DIR=$(@mktempBin@ -d)
-    CLEARTEXT_FILE="$CLEARTEXT_DIR/$(basename -- "$FILE")"
-    DEFAULT_DECRYPT+=(-o "$CLEARTEXT_FILE")
+    CLEARTEXT_FILE="${CLEARTEXT_DIR}/$(basename -- "${FILE}")"
+    DEFAULT_DECRYPT+=(-o "${CLEARTEXT_FILE}")
 
-    decrypt "$FILE" "$KEYS" || exit 1
+    decrypt "${FILE}" "${KEYS}" || exit 1
 
-    [ ! -f "$CLEARTEXT_FILE" ] || cp -- "$CLEARTEXT_FILE" "$CLEARTEXT_FILE.before"
+    [[ ! -f "${CLEARTEXT_FILE}" ]] || cp -- "${CLEARTEXT_FILE}" "${CLEARTEXT_FILE}.before"
 
     # only edit if we're not rekeying
-    if [ "${EDITOR:-}" != ":" ]; then
-      [ -t 0 ] || EDITOR='cp -- /dev/stdin'
+    if [[ "${EDITOR:-}" != ":" ]]; then
+      [[ -t 0 ]] || EDITOR='cp -- /dev/stdin'
 
-      $EDITOR "$CLEARTEXT_FILE"
+      ${EDITOR} "${CLEARTEXT_FILE}"
     fi
 
-    if [ ! -f "$CLEARTEXT_FILE" ]
+    if [[ ! -f "${CLEARTEXT_FILE}" ]]
     then
-      warn "$FILE wasn't created."
+      warn "${FILE} wasn't created."
       return
     fi
-    [ -f "$FILE" ] && [ "${EDITOR:-}" != ":" ] && @diffBin@ -q -- "$CLEARTEXT_FILE.before" "$CLEARTEXT_FILE" && warn "$FILE wasn't changed, skipping re-encryption." && return
+    [[ -f "${FILE}" ]] && [[ "${EDITOR:-}" != ":" ]] && @diffBin@ -q -- "${CLEARTEXT_FILE}.before" "${CLEARTEXT_FILE}" && warn "${FILE} wasn't changed, skipping re-encryption." && return
 
     ENCRYPT=()
-    if [[ "$ARMOR" == "true" ]]; then
+    if [[ "${ARMOR}" == "true" ]]; then
         ENCRYPT+=(--armor)
     fi
     while IFS= read -r key
     do
-        if [ -n "$key" ]; then
-            ENCRYPT+=(--recipient "$key")
+        if [[ -n "${key}" ]]; then
+            ENCRYPT+=(--recipient "${key}")
         fi
-    done <<< "$KEYS"
+    done <<< "${KEYS}"
 
     REENCRYPTED_DIR=$(@mktempBin@ -d)
-    REENCRYPTED_FILE="$REENCRYPTED_DIR/$(basename -- "$FILE")"
+    REENCRYPTED_FILE="${REENCRYPTED_DIR}/$(basename -- "${FILE}")"
 
-    ENCRYPT+=(-o "$REENCRYPTED_FILE")
+    ENCRYPT+=(-o "${REENCRYPTED_FILE}")
 
-    @ageBin@ "${ENCRYPT[@]}" <"$CLEARTEXT_FILE" || exit 1
+    @ageBin@ "${ENCRYPT[@]}" <"${CLEARTEXT_FILE}" || exit 1
 
-    mkdir -p -- "$(dirname -- "$FILE")"
+    mkdir -p -- "$(dirname -- "${FILE}")"
 
-    mv -f -- "$REENCRYPTED_FILE" "$FILE"
+    mv -f -- "${REENCRYPTED_FILE}" "${FILE}"
 }
 
 function rekey {
-    FILES=$( (@nixInstantiate@ --json --eval -E "(let rules = import $RULES; in builtins.attrNames rules)"  | @jqBin@ -r .[]) || exit 1)
+    FILES=$( (@nixInstantiate@ --json --eval -E "(let rules = import ${RULES}; in builtins.attrNames rules)"  | @jqBin@ -r .[]) || exit 1)
 
-    for FILE in $FILES
+    for FILE in ${FILES}
     do
-        warn "rekeying $FILE..."
-        EDITOR=: edit "$FILE"
+        warn "rekeying ${FILE}..."
+        EDITOR=: edit "${FILE}"
         cleanup
     done
 }
 
-[ $REKEY -eq 1 ] && rekey && exit 0
-[ $DECRYPT_ONLY -eq 1 ] && DEFAULT_DECRYPT+=("-o" "-") && decrypt "${FILE}" "$(keys "$FILE")" && exit 0
-edit "$FILE" && cleanup && exit 0
+[[ ${REKEY} -eq 1 ]] && rekey && exit 0
+[[ ${DECRYPT_ONLY} -eq 1 ]] && DEFAULT_DECRYPT+=("-o" "-") && decrypt "${FILE}" "$(keys "${FILE}")" && exit 0
+edit "${FILE}" && cleanup && exit 0
