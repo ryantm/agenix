@@ -856,12 +856,17 @@ You can run the tests with
 
 ```ShellSession
 nix flake check
+nix flake check ./test
 ```
+
+Integration checks and their Home Manager and nix-darwin inputs live in the
+test flake. After updating the root nixpkgs pin, run
+`nix flake update agenix/nixpkgs --flake ./test` and commit both lock files.
 
 You can run the integration tests in interactive mode like this:
 
 ```ShellSession
-nix run .#checks.x86_64-linux.integration.driverInteractive
+nix run ./test#checks.x86_64-linux.integration.driverInteractive
 ```
 
 After it starts, enter `run_tests()` to run the tests.
