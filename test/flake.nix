@@ -2,6 +2,7 @@
   description = "agenix integration tests";
 
   inputs = {
+    # Tests use the local root source, so run this flake with --impure.
     agenix.url = "path:..";
     nixpkgs.follows = "agenix/nixpkgs";
     darwin = {
