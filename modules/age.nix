@@ -207,9 +207,9 @@ let
         };
         group = mkOption {
           type = types.str;
-          default = (findFirst (u: u.name == config.owner) { group = "0"; } (attrValues users)).group;
+          default = (findFirst (u: u.name == config.owner) { } (attrValues users)).group or "0";
           defaultText = literalExpression ''
-            (findFirst (u: u.name == config.owner) { group = "0"; } (attrValues users)).group
+            (findFirst (u: u.name == config.owner) { } (attrValues users)).group or "0"
           '';
           description = ''
             Group of the decrypted secret.
