@@ -25,6 +25,8 @@ Home Manager and nix-darwin as inputs. Its nixpkgs input follows the root
 flake's nixpkgs input. After updating the root nixpkgs pin, run
 `nix flake update agenix/nixpkgs --flake ./test` and commit both lock files.
 CI checks that the two lock files resolve nixpkgs to the same revision.
+The integration `checks`, `darwinConfigurations`, and Home Manager test
+configuration previously exported by the root flake are now under `./test#`.
 
 You can run the integration tests in interactive mode like this:
 
