@@ -17,12 +17,21 @@ You can run the tests with
 
 ```ShellSession
 nix flake check
+nix flake check ./test
 ```
+
+The root flake contains the public packages and modules. The test flake has
+Home Manager and nix-darwin as inputs. Its nixpkgs input uses the same
+revision as the root flake. After updating the root nixpkgs pin, run
+`nix flake update nixpkgs --flake ./test` and commit both lock files. CI
+checks that the two lock files resolve nixpkgs to the same revision.
+The integration `checks`, `darwinConfigurations`, and Home Manager test
+configuration previously exported by the root flake are now under `./test#`.
 
 You can run the integration tests in interactive mode like this:
 
 ```ShellSession
-nix run .#checks.x86_64-linux.integration.driverInteractive
+nix run ./test#checks.x86_64-linux.integration.driverInteractive
 ```
 
 After it starts, enter `run_tests()` to run the tests.
