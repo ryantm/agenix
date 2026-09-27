@@ -856,19 +856,18 @@ You can run the tests with
 
 ```ShellSession
 nix flake check
-nix flake check ./test --impure
+nix flake check ./test
 ```
 
 Integration checks and their Home Manager and nix-darwin inputs live in the
 test flake. After updating the root nixpkgs pin, run
-`nix flake update agenix/nixpkgs --flake ./test` and commit both lock files.
-The test commands use `--impure` because the test flake reads the local root
-source through `path:..`.
+`nix flake update nixpkgs --flake ./test` and commit both lock files. CI
+checks that the two lock files resolve nixpkgs to the same revision.
 
 You can run the integration tests in interactive mode like this:
 
 ```ShellSession
-nix run --impure ./test#checks.x86_64-linux.integration.driverInteractive
+nix run ./test#checks.x86_64-linux.integration.driverInteractive
 ```
 
 After it starts, enter `run_tests()` to run the tests.

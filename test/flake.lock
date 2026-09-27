@@ -1,19 +1,5 @@
 {
   "nodes": {
-    "agenix": {
-      "inputs": {
-        "nixpkgs": "nixpkgs"
-      },
-      "locked": {
-        "path": "..",
-        "type": "path"
-      },
-      "original": {
-        "path": "..",
-        "type": "path"
-      },
-      "parent": []
-    },
     "darwin": {
       "inputs": {
         "nixpkgs": [
@@ -74,13 +60,9 @@
     },
     "root": {
       "inputs": {
-        "agenix": "agenix",
         "darwin": "darwin",
         "home-manager": "home-manager",
-        "nixpkgs": [
-          "agenix",
-          "nixpkgs"
-        ]
+        "nixpkgs": "nixpkgs"
       }
     }
   },

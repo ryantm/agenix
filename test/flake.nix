@@ -2,9 +2,7 @@
   description = "agenix integration tests";
 
   inputs = {
-    # Tests use the local root source, so run this flake with --impure.
-    agenix.url = "path:..";
-    nixpkgs.follows = "agenix/nixpkgs";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
     darwin = {
       url = "github:nix-darwin/nix-darwin/nix-darwin-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -18,13 +16,12 @@
   outputs =
     {
       self,
-      agenix,
       nixpkgs,
       darwin,
       home-manager,
     }:
     let
-      testDir = agenix.outPath + "/test";
+      testDir = self.outPath;
     in
     {
       checks =
