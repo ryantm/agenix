@@ -1,10 +1,9 @@
 {
   lib,
-  stdenv,
+  stdenvNoCC,
   age,
   jq,
   nix,
-  mktemp,
   diffutils,
   coreutils,
   openssh,
@@ -17,14 +16,14 @@
 let
   bin = "${placeholder "out"}/bin/agenix";
 in
-stdenv.mkDerivation rec {
+stdenvNoCC.mkDerivation rec {
   pname = "agenix";
   version = "0.15.0";
   src = replaceVars ./agenix.sh {
     inherit ageBin version;
     jqBin = "${jq}/bin/jq";
     nixInstantiate = "${nix}/bin/nix-instantiate";
-    mktempBin = "${mktemp}/bin/mktemp";
+    mktempBin = "${coreutils}/bin/mktemp";
     diffBin = "${diffutils}/bin/diff";
     sshKeygenBin = "${openssh}/bin/ssh-keygen";
     base64Bin = "${coreutils}/bin/base64";
