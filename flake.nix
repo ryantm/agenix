@@ -52,5 +52,7 @@
         doc = nixpkgs.legacyPackages.${system}.callPackage ./pkgs/doc.nix { inherit self; };
         default = self.packages.${system}.agenix;
       });
+
+      checks.x86_64-linux.cli = self.packages.x86_64-linux.agenix;
     };
 }

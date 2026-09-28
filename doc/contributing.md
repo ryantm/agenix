@@ -28,7 +28,13 @@ checks that the two lock files resolve nixpkgs to the same revision.
 The integration `checks`, `darwinConfigurations`, and Home Manager test
 configuration previously exported by the root flake are now under `./test#`.
 
-You can run the integration tests in interactive mode like this:
+Run the CLI tests without a VM (they also run during the package install check):
+
+```ShellSession
+nix build .#checks.x86_64-linux.cli
+```
+
+The NixOS integration check covers activation order, secret ownership, and user services. Run it in interactive mode with:
 
 ```ShellSession
 nix run ./test#checks.x86_64-linux.integration.driverInteractive
