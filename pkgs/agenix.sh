@@ -28,7 +28,7 @@ function show_help () {
   echo ' '
   echo 'EDITOR environment variable of editor to use when editing FILE'
   echo ' '
-  echo 'If STDIN is not interactive, EDITOR will be set to "cp /dev/stdin"'
+  echo 'If STDIN is not interactive, its contents replace the secret.'
   echo 'Piped input replaces a secret without decrypting it first.'
   echo ' '
   echo 'AGENIX_RULES environment variable with path to Nix file specifying recipient public keys.'
@@ -241,9 +241,11 @@ function edit {
 
     # only edit if we're not rekeying
     if [[ "${EDITOR:-}" != ":" ]]; then
-      [[ -t 0 ]] || EDITOR='cp -- /dev/stdin'
-
-      ${EDITOR} "${CLEARTEXT_FILE}"
+      if [[ -t 0 ]]; then
+        ${EDITOR} "${CLEARTEXT_FILE}"
+      else
+        cat > "${CLEARTEXT_FILE}"
+      fi
     fi
 
     if [[ ! -f "${CLEARTEXT_FILE}" ]]
