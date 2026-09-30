@@ -8,18 +8,16 @@
 with lib;
 let
   cfg = config.age;
-  verbosityLevel =
-    {
-      quiet = 0;
-      summary = 1;
-      progress = 2;
-      detailed = 3;
-    }
-    .${cfg.verbosity};
+  shared = import ./secret-install.nix { inherit lib; };
+  installer = shared.installer {
+    inherit cfg mountCommand;
+    ageBin = config.age.ageBin;
+    locale = config.i18n.defaultLocale or "C";
+  };
+  inherit (installer) currentGeneration enabledSecrets setTruePath;
+  verbosityLevel = shared.verbosityLevels.${cfg.verbosity};
 
   isDarwin = lib.attrsets.hasAttrByPath [ "environment" "darwinConfig" ] options;
-
-  ageBin = config.age.ageBin;
 
   users = config.users.users;
 
@@ -47,105 +45,12 @@ let
         grep -q "${cfg.secretsMountPoint} ramfs" /proc/mounts ||
           mount -t ramfs none "${cfg.secretsMountPoint}" -o nodev,nosuid,mode=0751
       '';
-  currentGeneration = ''
-    _agenix_generation="$(basename "$(readlink ${cfg.secretsDir})" || echo 0)"
-  '';
-  newGeneration = ''
-    ${currentGeneration}
-    (( ++_agenix_generation ))
-    ${optionalString (
-      verbosityLevel >= 2
-    ) ''echo "[agenix] creating new generation in ${cfg.secretsMountPoint}/$_agenix_generation"''}
-    mkdir -p "${cfg.secretsMountPoint}"
-    chmod 0751 "${cfg.secretsMountPoint}"
-    ${mountCommand}
-    mkdir -p "${cfg.secretsMountPoint}/$_agenix_generation"
-    chmod 0751 "${cfg.secretsMountPoint}/$_agenix_generation"
-  '';
-
   chownGroup = if isDarwin then "admin" else "keys";
   # chown the secrets mountpoint and the current generation to the keys group
   # instead of leaving it root:root.
   chownMountPoint = ''
     chown :${chownGroup} "${cfg.secretsMountPoint}" "${cfg.secretsMountPoint}/$_agenix_generation"
   '';
-
-  setTruePath = secretType: ''
-    ${
-      if secretType.symlink then
-        ''
-          _truePath="${cfg.secretsMountPoint}/$_agenix_generation/${secretType.name}"
-        ''
-      else
-        ''
-          _truePath="${secretType.path}"
-        ''
-    }
-  '';
-
-  installSecret = secretType: ''
-    ${setTruePath secretType}
-    ${optionalString (
-      verbosityLevel >= 3
-    ) ''echo "decrypting '${secretType.file}' to '$_truePath'..."''}
-    TMP_FILE="$_truePath.tmp"
-
-    IDENTITIES=()
-    for identity in ${toString cfg.identityPaths}; do
-      test -r "$identity" || continue
-      test -s "$identity" || continue
-      IDENTITIES+=(-i)
-      IDENTITIES+=("$identity")
-    done
-
-    test "''${#IDENTITIES[@]}" -eq 0 && echo "[agenix] WARNING: no readable identities found!" >&2
-
-    mkdir -p "$(dirname "$_truePath")"
-    [ "${secretType.path}" != "${cfg.secretsDir}/${secretType.name}" ] && mkdir -p "$(dirname "${secretType.path}")"
-    (
-      umask u=r,g=,o=
-      test -f "${secretType.file}" || echo '[agenix] WARNING: encrypted file ${secretType.file} does not exist!' >&2
-      test -d "$(dirname "$TMP_FILE")" || echo "[agenix] WARNING: $(dirname "$TMP_FILE") does not exist!" >&2
-      LANG=${
-        config.i18n.defaultLocale or "C"
-      } ${ageBin} --decrypt "''${IDENTITIES[@]}" -o "$TMP_FILE" "${secretType.file}"
-    )
-    chmod ${secretType.mode} "$TMP_FILE"
-    mv -f "$TMP_FILE" "$_truePath"
-
-    ${optionalString secretType.symlink ''
-      [ "${secretType.path}" != "${cfg.secretsDir}/${secretType.name}" ] && ln -sfT "${cfg.secretsDir}/${secretType.name}" "${secretType.path}"
-    ''}
-  '';
-
-  testIdentities = map (path: ''
-    test -f ${path} || echo '[agenix] WARNING: config.age.identityPaths entry ${path} not present!' >&2
-  '') cfg.identityPaths;
-
-  cleanupAndLink = ''
-    ${currentGeneration}
-    (( ++_agenix_generation ))
-    ${optionalString (verbosityLevel >= 2)
-      ''echo "[agenix] symlinking new secrets to ${cfg.secretsDir} (generation $_agenix_generation)..."''
-    }
-    ln -sfT "${cfg.secretsMountPoint}/$_agenix_generation" ${cfg.secretsDir}
-
-    (( _agenix_generation > 1 )) && {
-    ${optionalString (
-      verbosityLevel >= 2
-    ) ''echo "[agenix] removing old secrets (generation $(( _agenix_generation - 1 )))..."''}
-    rm -rf "${cfg.secretsMountPoint}/$(( _agenix_generation - 1 ))"
-    }
-  '';
-
-  enabledSecrets = lib.filter (secret: secret.enable) (builtins.attrValues cfg.secrets);
-
-  installSecrets = builtins.concatStringsSep "\n" (
-    (optional (verbosityLevel >= 1) "echo '[agenix] decrypting secrets...'")
-    ++ testIdentities
-    ++ (map installSecret enabledSecrets)
-    ++ [ cleanupAndLink ]
-  );
 
   chownSecret = secretType: ''
     ${setTruePath secretType}
@@ -159,66 +64,32 @@ let
   );
 
   secretType = types.submodule (
-    { config, ... }:
+    { config, name, ... }:
     {
-      options = {
-        enable = mkOption {
-          type = types.bool;
-          default = true;
-          description = "Whether to decrypt and install this secret.";
-        };
-        name = mkOption {
-          type = types.str;
-          default = config._module.args.name;
-          defaultText = literalExpression "config._module.args.name";
-          description = ''
-            Name of the file used in {option}`age.secretsDir`
-          '';
-        };
-        file = mkOption {
-          type = types.path;
-          description = ''
-            Age file the secret is loaded from.
-          '';
-        };
-        path = mkOption {
-          type = types.str;
-          default = "${cfg.secretsDir}/${config.name}";
-          defaultText = literalExpression ''
+      options =
+        shared.secretOptions {
+          inherit config name;
+          secretsDir = cfg.secretsDir;
+          nameDefaultText = literalExpression "config._module.args.name";
+          pathDefaultText = literalExpression ''
             "''${cfg.secretsDir}/''${config.name}"
           '';
-          description = ''
-            Path where the decrypted secret is installed.
-          '';
+        }
+        // {
+          owner = mkOption {
+            type = types.str;
+            default = "0";
+            description = "User of the decrypted secret.";
+          };
+          group = mkOption {
+            type = types.str;
+            default = (findFirst (u: u.name == config.owner) { } (attrValues users)).group or "0";
+            defaultText = literalExpression ''
+              (findFirst (u: u.name == config.owner) { } (attrValues users)).group or "0"
+            '';
+            description = "Group of the decrypted secret.";
+          };
         };
-        mode = mkOption {
-          type = types.str;
-          default = "0400";
-          description = ''
-            Permissions mode of the decrypted secret in a format understood by chmod.
-          '';
-        };
-        owner = mkOption {
-          type = types.str;
-          default = "0";
-          description = ''
-            User of the decrypted secret.
-          '';
-        };
-        group = mkOption {
-          type = types.str;
-          default = (findFirst (u: u.name == config.owner) { } (attrValues users)).group or "0";
-          defaultText = literalExpression ''
-            (findFirst (u: u.name == config.owner) { } (attrValues users)).group or "0"
-          '';
-          description = ''
-            Group of the decrypted secret.
-          '';
-        };
-        symlink = mkEnableOption "symlinking secrets to their destination" // {
-          default = true;
-        };
-      };
     }
   );
 in
@@ -242,21 +113,8 @@ in
         The age executable to use.
       '';
     };
-    verbosity = mkOption {
-      type = types.enum [
-        "quiet"
-        "summary"
-        "progress"
-        "detailed"
-      ];
-      default = "detailed";
-      description = ''
-        Verbosity of agenix activation messages. "quiet" hides routine messages,
-        "summary" prints a summary, "progress" also prints installation steps,
-        and "detailed" also prints one line per secret. Warnings and errors are always shown.
-        This does not affect the agenix command-line tool or other rebuild output.
-      '';
-    };
+    verbosity = shared.verbosityOption "other rebuild output";
+
     secrets = mkOption {
       type = types.attrsOf secretType;
       default = { };
@@ -338,8 +196,8 @@ in
         serviceConfig = {
           Type = "oneshot";
           ExecStart = pkgs.writeShellScript "agenix-install" (concatLines [
-            newGeneration
-            installSecrets
+            installer.newGeneration
+            installer.installSecrets
             # Don't fail the systemd unit if our script ended with a failing test.
             "true"
           ]);
@@ -376,14 +234,14 @@ in
       # invalid symlinks).
       system.activationScripts = mkIf (!sysusersEnabled) {
         agenixNewGeneration = {
-          text = newGeneration;
+          text = installer.newGeneration;
           deps = [
             "specialfs"
           ];
         };
 
         agenixInstall = {
-          text = installSecrets;
+          text = installer.installSecrets;
           deps = [
             "agenixNewGeneration"
             "specialfs"
@@ -416,8 +274,8 @@ in
           set -e
           set -o pipefail
           export PATH="${pkgs.gnugrep}/bin:${pkgs.coreutils}/bin:@out@/sw/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-          ${newGeneration}
-          ${installSecrets}
+          ${installer.newGeneration}
+          ${installer.installSecrets}
           ${chownSecrets}
           exit 0
         '';
