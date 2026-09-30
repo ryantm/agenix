@@ -254,6 +254,83 @@ Overriding `age.secretsMountPoint` example:
 }
 ```
 
+## Home Manager module reference {#home-manager-module-reference}
+
+The Home Manager module manages secrets for one user. Its options are separate
+from the NixOS module options above, even where they share a name.
+
+### `age.enable`
+
+Defaults to true when at least one secret is enabled. Set it to false to
+disable the Home Manager agenix service. Disabling the service does not remove
+secrets decrypted by earlier activations.
+
+### `age.verbosity`
+
+Accepts the same four levels described above and defaults to `"detailed"`.
+There is no ownership step in the Home Manager service. Warnings and errors
+remain visible at every level.
+
+### `age.package`
+
+The `age` package used to decrypt secrets. Defaults to `pkgs.age`.
+
+### `age.secrets`
+
+An attribute set of secrets. Defaults to `{}`.
+
+### `age.secrets.<name>.enable`
+
+Defaults to true. Set it to false to omit the secret; a disabled secret does
+not need a `file` value.
+
+### `age.secrets.<name>.file`
+
+The path to the encrypted `.age` file. Required for enabled secrets.
+
+### `age.secrets.<name>.name`
+
+The decrypted file's name under `age.secretsDir`. Defaults to `<name>` from
+the attribute path.
+
+### `age.secrets.<name>.path`
+
+The destination of the decrypted secret. Defaults to
+`config.age.secretsDir/<name>`, which is usually
+`$XDG_RUNTIME_DIR/agenix/<name>` on Linux or
+`$(getconf DARWIN_USER_TEMP_DIR)/agenix/<name>` on Darwin.
+
+### `age.secrets.<name>.mode`
+
+Permissions of the decrypted secret in a format understood by `chmod`.
+Defaults to `"0400"`.
+
+### `age.secrets.<name>.symlink`
+
+Defaults to true. If true, the destination is a symlink to the current secret
+generation. If false, the decrypted file is copied to its destination; you
+are then responsible for removing it when no longer needed.
+
+### `age.identityPaths`
+
+Paths to SSH private keys to try for decryption. By default, the module tries
+`<home>/.ssh/id_ed25519` and `<home>/.ssh/id_rsa`, using
+`config.home.homeDirectory` for `<home>`. At least one readable identity must
+be available when secrets are decrypted. Use strings containing absolute paths
+when overriding this option; a Nix path would copy the private key into the
+world-readable Nix store.
+
+### `age.secretsDir`
+
+Directory where secrets are exposed. Defaults to `$XDG_RUNTIME_DIR/agenix`
+on Linux and `$(getconf DARWIN_USER_TEMP_DIR)/agenix` on Darwin.
+
+### `age.secretsMountPoint`
+
+Directory where generations are created before they are linked. Defaults to
+`$XDG_RUNTIME_DIR/agenix.d` on Linux and
+`$(getconf DARWIN_USER_TEMP_DIR)/agenix.d` on Darwin.
+
 ## agenix CLI reference {#agenix-cli-reference}
 
 ```
@@ -278,7 +355,7 @@ PRIVATE_KEY a path to a private SSH key used to decrypt file
 
 EDITOR environment variable of editor to use when editing FILE
 
-If STDIN is not interactive, EDITOR will be set to "cp /dev/stdin"
+If STDIN is not interactive, its contents replace the secret.
 Piped input replaces a secret without decrypting it first.
 
 AGENIX_RULES environment variable with path to Nix file specifying recipient public keys. 

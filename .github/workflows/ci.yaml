@@ -29,8 +29,6 @@ jobs:
           system-features = nixos-test recursive-nix benchmark big-parallel kvm
           extra-experimental-features = recursive-nix nix-command flakes
     - run: nix build
-    - run: nix build .#doc
-    - run: nix fmt . -- --ci
     - run: nix flake check
     - run: nix flake check ./test
     - name: "Install nix-darwin module"

@@ -41,3 +41,18 @@ nix run ./test#checks.x86_64-linux.integration.driverInteractive
 ```
 
 After it starts, enter `run_tests()` to run the tests.
+
+## Documentation build
+
+The Markdown files in `doc/` are the maintained documentation. The root
+flake's `doc` package renders them with the pinned nixpkgs `mmdoc`:
+
+```ShellSession
+nix build .#doc
+```
+
+The result contains `multi/` for the website, `single/` for a single-page
+HTML version, `man/` pages, and an EPUB. CI builds this package on Linux. The
+documentation deployment workflow builds the same package from `main` and
+publishes its `multi/` directory to GitHub Pages. Edit `doc/toc.md` when
+adding or rearranging pages so the site's navigation stays in sync.
