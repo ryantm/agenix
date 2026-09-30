@@ -44,5 +44,4 @@ installation, and deployment.
 - [NixOS module reference](https://ryantm.github.io/agenix/reference/#age-module-reference), [Home Manager module reference](https://ryantm.github.io/agenix/reference/#home-manager-module-reference), and [CLI reference](https://ryantm.github.io/agenix/reference/#agenix-cli-reference) (all maintained in [doc/reference.md](doc/reference.md)).
 - [Threat model and warnings](doc/threat-model-warnings.md), [contributing and tests](doc/contributing.md), and the [published documentation](https://ryantm.github.io/agenix/).
 
-For help, use [GitHub issues](https://github.com/ryantm/agenix/issues) or
-[Matrix](https://matrix.to/#/#agenix:nixos.org).
+For help, use [GitHub issues](https://github.com/ryantm/agenix/issues).
