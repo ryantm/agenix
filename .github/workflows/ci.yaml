@@ -14,7 +14,9 @@ jobs:
           extra-experimental-features = recursive-nix nix-command flakes
     - run: nix build
     - run: nix build .#checks.x86_64-linux.cli
-    - run: nix build .#doc
+    - uses: ryantm/mmdoc-action@v1
+      with:
+        src: doc
     - run: nix fmt . -- --ci
     - run: jq -e --slurp '.[0].nodes.nixpkgs.locked == .[1].nodes.nixpkgs.locked' flake.lock test/flake.lock
     - run: nix flake check

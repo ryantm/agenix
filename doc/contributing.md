@@ -44,15 +44,18 @@ After it starts, enter `run_tests()` to run the tests.
 
 ## Documentation build
 
-The Markdown files in `doc/` are the maintained documentation. The root
-flake's `doc` package renders them with the pinned nixpkgs `mmdoc`:
+The Markdown files in `doc/` are the maintained documentation. Linux CI and
+the GitHub Pages deployment both render them with `ryantm/mmdoc-action@v1`,
+using `doc/` as the source. To render the site locally with the mmdoc version
+currently used by the action:
 
 ```ShellSession
-nix build .#doc
+nix run github:ryantm/mmdoc/0.27.0 -- agenix doc /tmp/agenix-doc
 ```
 
-The result contains `multi/` for the website, `single/` for a single-page
-HTML version, `man/` pages, and an EPUB. CI builds this package on Linux. The
-documentation deployment workflow builds the same package from `main` and
-publishes its `multi/` directory to GitHub Pages. Edit `doc/toc.md` when
-adding or rearranging pages so the site's navigation stays in sync.
+The output contains `multi/` for the website, `single/` for a single-page
+HTML version, `man/` pages, and an EPUB. The deployment workflow publishes
+`multi/` from `main`. The former `packages.<system>.doc` flake output is
+retired; use the action or the local command above to build documentation.
+Edit `doc/toc.md` when adding or rearranging pages so the site's navigation
+stays in sync.

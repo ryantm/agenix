@@ -19,12 +19,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: cachix/install-nix-action@v30
-      - run: nix build .#doc --out-link docs-result
+      - id: docs
+        uses: ryantm/mmdoc-action@v1
+        with:
+          src: doc
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:
-          path: docs-result/multi
+          path: ${{ steps.docs.outputs.path }}/multi
 
   deploy:
     needs: build

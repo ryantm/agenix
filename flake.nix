@@ -49,7 +49,6 @@
         agenix = nixpkgs.legacyPackages.${system}.callPackage ./pkgs/agenix.nix {
           runShellcheck = !(builtins.elem system noGhcSystems);
         };
-        doc = nixpkgs.legacyPackages.${system}.callPackage ./pkgs/doc.nix { inherit self; };
         default = self.packages.${system}.agenix;
       });
 
