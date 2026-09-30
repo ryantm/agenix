@@ -1,5 +1,7 @@
 # agenix: age-encrypted secrets for NixOS and Home Manager
 
+[Read the documentation](https://ryantm.github.io/agenix/).
+
 `agenix` encrypts secrets with SSH public keys so the encrypted files can be
 stored and deployed with Nix. Its CLI creates and rekeys `.age` files; the
 NixOS and Home Manager modules decrypt them at activation time for the
@@ -35,13 +37,13 @@ secret. Declare it in a NixOS module:
 }
 ```
 
-The [tutorial](doc/tutorial.md) shows a complete rules file, key discovery,
+The [tutorial](https://ryantm.github.io/agenix/tutorial/) shows a complete rules file, key discovery,
 installation, and deployment.
 
 ## Documentation
 
-- [Installation](doc/install-via-flakes.md) by flakes, [niv](doc/install-via-niv.md), [nix-channel](doc/install-via-nix-channel.md), or [fetchTarball](doc/install-via-fetchtarball.md), including Home Manager installation.
-- [NixOS module reference](https://ryantm.github.io/agenix/reference/#age-module-reference), [Home Manager module reference](https://ryantm.github.io/agenix/reference/#home-manager-module-reference), and [CLI reference](https://ryantm.github.io/agenix/reference/#agenix-cli-reference) (all maintained in [doc/reference.md](doc/reference.md)).
-- [Threat model and warnings](doc/threat-model-warnings.md), [contributing and tests](doc/contributing.md), and the [published documentation](https://ryantm.github.io/agenix/).
+- [Installation](https://ryantm.github.io/agenix/install-via-flakes/) by flakes, [niv](https://ryantm.github.io/agenix/install-via-niv/), [nix-channel](https://ryantm.github.io/agenix/install-via-nix-channel/), or [fetchTarball](https://ryantm.github.io/agenix/install-via-fetchtarball/), including Home Manager installation.
+- [NixOS module reference](https://ryantm.github.io/agenix/reference/#age-module-reference), [Home Manager module reference](https://ryantm.github.io/agenix/reference/#home-manager-module-reference), and [CLI reference](https://ryantm.github.io/agenix/reference/#agenix-cli-reference).
+- [Threat model and warnings](https://ryantm.github.io/agenix/threat-model-warnings/) and [contributing and tests](https://ryantm.github.io/agenix/contributing/).
 
 For help, use [GitHub issues](https://github.com/ryantm/agenix/issues).
