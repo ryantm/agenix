@@ -41,3 +41,21 @@ nix run ./test#checks.x86_64-linux.integration.driverInteractive
 ```
 
 After it starts, enter `run_tests()` to run the tests.
+
+## Documentation build
+
+The Markdown files in `doc/` are the maintained documentation. Linux CI and
+the GitHub Pages deployment both render them with `ryantm/mmdoc-action@v1`,
+using `doc/` as the source. To render the site locally with the mmdoc version
+currently used by the action:
+
+```ShellSession
+nix run github:ryantm/mmdoc/0.27.0 -- agenix doc /tmp/agenix-doc
+```
+
+The output contains `multi/` for the website, `single/` for a single-page
+HTML version, `man/` pages, and an EPUB. The deployment workflow publishes
+`multi/` from `main`. The former `packages.<system>.doc` flake output is
+retired; use the action or the local command above to build documentation.
+Edit `doc/toc.md` when adding or rearranging pages so the site's navigation
+stays in sync.

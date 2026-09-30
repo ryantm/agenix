@@ -16,6 +16,16 @@ Then add the following to your `configuration.nix` in the `imports` list:
 }
 ```
 
+## Install Home Manager module via niv
+
+Add the following to your Home Manager configuration:
+
+```nix
+{
+  imports = [ "${(import ./nix/sources.nix).agenix}/modules/age-home.nix" ];
+}
+```
+
 ## Install CLI via niv
 
 To install the `agenix` binary:
