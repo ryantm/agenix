@@ -61,6 +61,10 @@
             }).system;
         })
         // {
+          x86_64-linux.home-service = import (testDir + "/home-service.nix") {
+            inherit home-manager;
+            pkgs = nixpkgs.legacyPackages.x86_64-linux;
+          };
           x86_64-linux.missing-identities = import (testDir + "/missing-identities.nix") {
             pkgs = nixpkgs.legacyPackages.x86_64-linux;
           };
