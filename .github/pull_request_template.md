@@ -13,3 +13,7 @@ Describe the problem and resulting behavior. Link related issues, and note any u
 ### Validation
 
 Describe the checks you ran and their results. For behavior changes, add or update the relevant tests and documentation.
+
+### AI assistance
+
+If AI tools materially assisted this change, name the tools and describe their role in implementation, tests, documentation, or review. State any validation limits. See the [contribution policy](https://ryantm.github.io/agenix/contributing/#ai-assistance).

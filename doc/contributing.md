@@ -10,6 +10,31 @@
 * Please update or make integration tests for new features
 * Use `nix fmt` to format nix code
 
+## AI assistance and review {#ai-assistance}
+
+Contributors may use AI tools, but remain responsible for understanding their
+changes and explaining how they were checked. Disclose material AI assistance
+in the PR description, including which parts of the implementation, tests,
+documentation, or review were assisted. Routine editor completion does not
+need a separate disclosure.
+
+Describe validation that actually ran, its results, and any remaining limits.
+Generated tests and an AI review do not establish correctness on their own.
+Never include private keys, decrypted secrets, or other confidential data in
+prompts, PR descriptions, logs, or test fixtures.
+
+Every PR needs approval from a human reviewer before merging. Automated
+checks and AI reviews can support that review; they do not count as the
+required approval. Maintainers decide whether a change is ready to merge or
+include in a release. Passing CI or opening a PR does not imply maintainer
+endorsement.
+
+Keep each PR focused on a change that a person can reasonably review. Explain
+dependencies between stacked PRs and avoid mixing unrelated fixes. If a
+reviewer cannot establish that a change is understood or adequately checked,
+the change needs more work before approval, regardless of which tools were
+used to produce it.
+
 
 ## Tests
 
