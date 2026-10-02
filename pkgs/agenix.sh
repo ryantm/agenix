@@ -268,14 +268,15 @@ function edit {
         fi
     done <<< "${KEYS}"
 
-    REENCRYPTED_DIR=$(@mktempBin@ -d)
+    # Publish with a same-filesystem rename even when TMPDIR is elsewhere.
+    # Keep plaintext in CLEARTEXT_DIR; only encrypted output goes here.
+    mkdir -p -- "$(dirname -- "${FILE}")"
+    REENCRYPTED_DIR=$(@mktempBin@ -d -- "$(dirname -- "${FILE}")/.agenix.XXXXXXXXXX")
     REENCRYPTED_FILE="${REENCRYPTED_DIR}/$(basename -- "${FILE}")"
 
     ENCRYPT+=(-o "${REENCRYPTED_FILE}")
 
     @ageBin@ "${ENCRYPT[@]}" <"${CLEARTEXT_FILE}" || exit 1
-
-    mkdir -p -- "$(dirname -- "${FILE}")"
 
     mv -f -- "${REENCRYPTED_FILE}" "${FILE}"
 }
