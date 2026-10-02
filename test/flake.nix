@@ -49,6 +49,9 @@
             }).system;
         })
         // {
+          x86_64-linux.decryption-cache = import (testDir + "/decryption-cache.nix") {
+            pkgs = nixpkgs.legacyPackages.x86_64-linux;
+          };
           x86_64-linux.templates = import (testDir + "/templates.nix") {
             pkgs = nixpkgs.legacyPackages.x86_64-linux;
           };

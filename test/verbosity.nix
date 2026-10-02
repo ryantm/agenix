@@ -44,6 +44,8 @@ pkgs.testers.nixosTest {
     ${level}.start()
     ${level}.wait_for_unit("multi-user.target")
     assert ${level}.succeed("cat /run/agenix/one").strip() == "hello"
+    # Force installation so this test covers all decryption messages.
+    ${level}.succeed("rm /run/agenix/one")
     ${level}.succeed("/run/current-system/activate > /tmp/agenix-stdout 2> /tmp/agenix-stderr")
     stdout = ${level}.succeed("cat /tmp/agenix-stdout")
     stderr = ${level}.succeed("cat /tmp/agenix-stderr")

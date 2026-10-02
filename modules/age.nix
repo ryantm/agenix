@@ -64,7 +64,7 @@ let
     mkdir -p "${cfg.secretsMountPoint}"
     chmod 0751 "${cfg.secretsMountPoint}"
     ${mountCommand}
-    rm -rf -- "${cfg.secretsMountPoint}/$_agenix_generation"
+    rm -rf -- "${cfg.secretsMountPoint}/$_agenix_generation" "${cfg.secretsMountPoint}/.cache-$_agenix_generation"
     mkdir -p "${cfg.secretsMountPoint}/$_agenix_generation"
     chmod 0751 "${cfg.secretsMountPoint}/$_agenix_generation"
   '';
@@ -184,7 +184,7 @@ let
       echo "[agenix] rollback failed; recovery copies remain in $_agenix_backup" >&2
       exit 1
     fi
-    rm -rf -- "$_agenix_backup" "${cfg.secretsMountPoint}/$_agenix_generation"
+    rm -rf -- "$_agenix_backup" "${cfg.secretsMountPoint}/$_agenix_generation" "${cfg.secretsMountPoint}/.cache-$_agenix_generation"
     exit "$_agenix_status"
   '';
   rollbackTrap = ''
@@ -228,13 +228,139 @@ let
     ${optionalString (
       verbosityLevel >= 2
     ) ''echo "[agenix] removing old secrets (generation $(( _agenix_generation - 1 )))..."''}
-    rm -rf "${cfg.secretsMountPoint}/$(( _agenix_generation - 1 ))"
+    rm -rf "${cfg.secretsMountPoint}/$(( _agenix_generation - 1 ))" "${cfg.secretsMountPoint}/.cache-$(( _agenix_generation - 1 ))"
     fi
   '';
 
   enabledAgeSecrets = filter (secret: secret.enable) (attrValues cfg.secrets);
   enabledDerivedSecrets = filter (secret: secret.enable) (attrValues cfg.derivedSecrets);
   enabledSecrets = enabledAgeSecrets ++ enabledDerivedSecrets;
+
+  # Include declarative account IDs: user creation runs between installation
+  # and chown, so the current account database alone cannot detect a new UID.
+  accountId =
+    account: field:
+    let
+      # nix-darwin permits references to existing accounts without defining IDs.
+      result = builtins.tryEval (account.${field} or null);
+    in
+    if result.success then result.value else null;
+  cacheSecret = s: s // { file = "${s.file}"; };
+  cacheConfiguration = builtins.hashString "sha256" (
+    builtins.toJSON {
+      inherit ageBin;
+      inherit (cfg) secretsDir secretsMountPoint;
+      # Identity paths refer to runtime files, even when written as Nix paths.
+      identityPaths = map toString cfg.identityPaths;
+      secrets = map cacheSecret enabledAgeSecrets;
+      templates = map (
+        s:
+        s
+        // {
+          template = "${s.template}";
+          secrets = map cacheSecret s.secrets;
+        }
+      ) enabledDerivedSecrets;
+      accounts = map (
+        s:
+        let
+          user = findFirst (u: u.name == s.owner) { } (attrValues users);
+          group = findFirst (g: g.name == s.group) { } (attrValues (config.users.groups or { }));
+        in
+        {
+          uid = accountId user "uid";
+          gid = accountId group "gid";
+          primaryGroup = user.group or null;
+        }
+      ) enabledSecrets;
+    }
+  );
+  fingerprint = pkgs.writeShellScript "agenix-fingerprint" ''
+    set -euo pipefail
+    export PATH=${pkgs.coreutils}/bin
+    {
+      case "$1" in
+        inputs)
+          printf '%s\n' ${escapeShellArg cacheConfiguration}
+          ${concatMapStringsSep "\n" (path: ''
+            test -f ${escapeShellArg "${path}"}
+            sha256sum -- ${escapeShellArg "${path}"}
+          '') (unique ((map (s: s.file) enabledAgeSecrets) ++ (map (s: s.template) enabledDerivedSecrets)))}
+          ${concatMapStringsSep "\n" (path: ''
+            if test -r ${escapeShellArg path} && test -s ${escapeShellArg path}; then
+              test -f ${escapeShellArg path}
+              sha256sum -- ${escapeShellArg path}
+            else
+              printf '%s\n' ${escapeShellArg "unavailable: ${path}"}
+            fi
+          '') cfg.identityPaths}
+          ;;
+        outputs)
+          test "$(readlink ${escapeShellArg cfg.secretsDir})" = "${cfg.secretsMountPoint}/$2"
+          stat -Lc '%a:%u:%g' -- ${escapeShellArg cfg.secretsMountPoint} "${cfg.secretsMountPoint}/$2"
+          ${concatMapStringsSep "\n" (s: ''
+            test -f ${escapeShellArg s.path}
+            ${
+              if s.symlink && s.path != "${cfg.secretsDir}/${s.name}" then
+                ''
+                  test "$(readlink ${escapeShellArg s.path})" = ${escapeShellArg "${cfg.secretsDir}/${s.name}"}
+                ''
+              else
+                ''
+                  test ! -L ${escapeShellArg s.path}
+                ''
+            }
+            sha256sum -- ${escapeShellArg s.path}
+            stat -Lc '%a:%u:%g' -- ${escapeShellArg s.path}
+            ${optionalString (builtins.match "[0-9]+" s.owner == null) ''
+              id -u ${escapeShellArg s.owner}
+            ''}
+            ${optionalString (builtins.match "[0-9]+" s.group == null) (
+              if isDarwin then
+                ''
+                  /usr/bin/dscl . -read ${escapeShellArg "/Groups/${s.group}"} PrimaryGroupID
+                ''
+              else
+                ''
+                  ${pkgs.getent}/bin/getent group ${escapeShellArg s.group}
+                ''
+            )}
+          '') enabledSecrets}
+          ;;
+        *) exit 1 ;;
+      esac
+    } | sha256sum
+  '';
+  reuseGeneration = optionalString cfg.cacheDecryption ''
+    ${currentGeneration}
+    _agenix_inputs="$(${fingerprint} inputs 2>/dev/null)" || _agenix_inputs=
+    _agenix_cache="${cfg.secretsMountPoint}/.cache-$_agenix_generation"
+    if test -n "$_agenix_inputs" &&
+       ! test -d "${cfg.secretsMountPoint}/.backup-$_agenix_generation" &&
+       test -f "$_agenix_cache/inputs" && test -f "$_agenix_cache/outputs" &&
+       test "$_agenix_inputs" = "$(cat "$_agenix_cache/inputs")" &&
+       _agenix_outputs="$(${fingerprint} outputs "$_agenix_generation" 2>/dev/null)" &&
+       test "$_agenix_outputs" = "$(cat "$_agenix_cache/outputs")"; then
+      ${optionalString (
+        verbosityLevel >= 1
+      ) "echo '[agenix] secrets unchanged; reusing installed generation'"}
+      exit 0
+    fi
+  '';
+  cacheGeneration = optionalString cfg.cacheDecryption ''
+    # Cache only after ownership succeeds, and only if inputs stayed stable
+    # across decryption. A cache miss must never hide an installation error.
+    if test -s "$_agenix_backup/inputs" &&
+       _agenix_inputs="$(${fingerprint} inputs 2>/dev/null)" &&
+       test "$_agenix_inputs" = "$(cat "$_agenix_backup/inputs")" &&
+       _agenix_outputs="$(${fingerprint} outputs "$_agenix_generation" 2>/dev/null)"; then
+      _agenix_cache="${cfg.secretsMountPoint}/.cache-$_agenix_generation"
+      mkdir -m 0700 "$_agenix_cache"
+      (umask 077
+       printf '%s\n' "$_agenix_inputs" > "$_agenix_cache/inputs"
+       printf '%s\n' "$_agenix_outputs" > "$_agenix_cache/outputs")
+    fi
+  '';
 
   installSecrets = builtins.concatStringsSep "\n" (
     (optional (verbosityLevel >= 1) "echo '[agenix] decrypting secrets...'")
@@ -353,10 +479,14 @@ let
   installGeneration = ''
     (
       set -e
+      ${reuseGeneration}
       ${newGeneration}
       ${rollbackTrap}
       ${installSecrets}
       mkdir -m 0700 "$_agenix_backup"
+      ${optionalString cfg.cacheDecryption ''
+        (umask 077; printf '%s\n' "$_agenix_inputs" > "$_agenix_backup/inputs")
+      ''}
       ${backupPaths}
       ${savePreviousSecrets}
       touch "$_agenix_backup/ready"
@@ -374,6 +504,7 @@ let
         ${rollbackTrap}
         ${chownSecrets}
         ${detectChanges}
+        ${cacheGeneration}
         trap - EXIT
         rm -rf -- "$_agenix_backup"
         ${cleanupOldGeneration}
@@ -501,6 +632,16 @@ in
       '';
       description = ''
         The age executable to use.
+      '';
+    };
+    cacheDecryption = mkOption {
+      type = types.bool;
+      default = true;
+      description = ''
+        Reuse the installed generation when configuration, encrypted inputs,
+        templates, local identity files, and installed files are unchanged.
+        Set false to decrypt on every activation, for example when an age
+        plugin depends on external state that agenix cannot fingerprint.
       '';
     };
     verbosity = mkOption {

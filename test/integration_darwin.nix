@@ -12,6 +12,13 @@ let
       grep "${secret}" "${config.age.secrets.system-secret.path}"
       test "$(cat "${config.age.derivedSecrets.rendered.path}")" = 'password=${secret}'
       test "$(/usr/bin/stat -L -f %Su:%Lp "${config.age.derivedSecrets.rendered.path}")" = runner:440
+      generation="$(readlink "${config.age.secretsDir}")"
+      ${config.launchd.daemons.activate-agenix.command}
+      test "$(readlink "${config.age.secretsDir}")" = "$generation"
+      rm "${config.age.secrets.system-secret.path}"
+      ${config.launchd.daemons.activate-agenix.command}
+      test "$(readlink "${config.age.secretsDir}")" != "$generation"
+      grep "${secret}" "${config.age.secrets.system-secret.path}"
     '';
   };
 in

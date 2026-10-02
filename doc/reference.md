@@ -28,6 +28,28 @@ uses the same levels, without an ownership step. This option does not control
 output from Nix, systemd, other activation scripts, or the `agenix` CLI.
 The CLI's `-v` option enables shell tracing independently of this setting.
 
+### `age.cacheDecryption`
+
+On NixOS and nix-darwin, `age.cacheDecryption` defaults to `true`. When the
+configuration, encrypted files, public templates, local identity files, and
+installed secrets are unchanged, activation reuses the current generation.
+It skips decryption, template rendering, publication, and change hooks, leaving
+file inodes and the generation link intact. Summary verbosity and higher print
+one reuse message; quiet mode prints none.
+
+Fingerprinting happens at runtime, so secret files specified with absolute
+string paths remain supported. Missing or modified plaintext, permissions,
+ownership, or custom symlinks trigger installation again. Ciphertext changes,
+including re-encryption of the same plaintext, also trigger decryption. Cache
+metadata is accessible only to root and is recorded after a successful
+installation. Generations retain their numbered names.
+
+The cache reuses the entire generation: a changed input causes all enabled
+secrets to be installed again. It cannot detect changes in an external key
+provider or a mutable custom age program. Set `age.cacheDecryption = false`
+when those dependencies must be checked on every activation, or to force
+decryption while debugging. Home Manager does not currently use this cache.
+
 ### `age.secrets`
 
 `age.secrets` is an attrset of encrypted secrets. Defaults to `{}`.
