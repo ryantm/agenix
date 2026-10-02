@@ -10,6 +10,8 @@ let
     name = "agenix-integration";
     text = ''
       grep "${secret}" "${config.age.secrets.system-secret.path}"
+      test "$(cat "${config.age.derivedSecrets.rendered.path}")" = 'password=${secret}'
+      test "$(/usr/bin/stat -L -f %Su:%Lp "${config.age.derivedSecrets.rendered.path}")" = runner:440
     '';
   };
 in
@@ -25,6 +27,12 @@ in
     secrets.owned-secret = {
       file = ../example/secret1.age;
       owner = "runner";
+    };
+    derivedSecrets.rendered = {
+      template = pkgs.writeText "darwin-template" "password=@system-secret@";
+      secrets = [ config.age.secrets.system-secret ];
+      owner = "runner";
+      mode = "0440";
     };
   };
 

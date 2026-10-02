@@ -49,6 +49,18 @@
             }).system;
         })
         // {
+          x86_64-linux.templates = import (testDir + "/templates.nix") {
+            pkgs = nixpkgs.legacyPackages.x86_64-linux;
+          };
+          x86_64-linux.template-options = import (testDir + "/template-options.nix") {
+            pkgs = nixpkgs.legacyPackages.x86_64-linux;
+          };
+          x86_64-linux.template-renderer =
+            nixpkgs.legacyPackages.x86_64-linux.runCommand "agenix-template-renderer" { }
+              ''
+                ${nixpkgs.legacyPackages.x86_64-linux.python3}/bin/python3 ${testDir}/render-template.py ${testDir}/../pkgs/render-template.py
+                touch "$out"
+              '';
           x86_64-linux.change-actions = import (testDir + "/change-actions.nix") {
             pkgs = nixpkgs.legacyPackages.x86_64-linux;
           };

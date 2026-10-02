@@ -120,6 +120,33 @@ let
     mv -f "$TMP_FILE" "$_truePath"
   '';
 
+  installTemplate = secret: ''
+    _truePath="${cfg.secretsMountPoint}/$_agenix_generation/${secret.name}"
+    ${optionalString (
+      verbosityLevel >= 3
+    ) "echo ${escapeShellArg "rendering template ${secret.name}..."}"}
+    mkdir -p "$(dirname "$_truePath")"
+    ${optionalString (secret.path != "${cfg.secretsDir}/${secret.name}") ''
+      mkdir -p ${escapeShellArg (builtins.dirOf secret.path)}
+    ''}
+    (
+      umask 077
+      ${pkgs.python3}/bin/python3 ${../pkgs/render-template.py} \
+        ${escapeShellArg "${secret.template}"} \
+        "${cfg.secretsMountPoint}/$_agenix_generation" \
+        ${
+          pkgs.writeText "agenix-template-inputs.json" (
+            builtins.toJSON {
+              secrets = unique (map (s: s.name) secret.secrets);
+              inherit (secret) trimFinalNewline;
+            }
+          )
+        } > "$_truePath.tmp"
+    )
+    chmod ${secret.mode} "$_truePath.tmp"
+    mv -f -- "$_truePath.tmp" "$_truePath"
+  '';
+
   # Keep copies of custom destinations until ownership has been assigned. User
   # creation needs the new password files before the ownership step can run.
   customSecrets = filter (s: s.path != "${cfg.secretsDir}/${s.name}") enabledSecrets;
@@ -205,12 +232,15 @@ let
     fi
   '';
 
-  enabledSecrets = lib.filter (secret: secret.enable) (builtins.attrValues cfg.secrets);
+  enabledAgeSecrets = filter (secret: secret.enable) (attrValues cfg.secrets);
+  enabledDerivedSecrets = filter (secret: secret.enable) (attrValues cfg.derivedSecrets);
+  enabledSecrets = enabledAgeSecrets ++ enabledDerivedSecrets;
 
   installSecrets = builtins.concatStringsSep "\n" (
     (optional (verbosityLevel >= 1) "echo '[agenix] decrypting secrets...'")
     ++ testIdentities
-    ++ (map installSecret enabledSecrets)
+    ++ (map installSecret enabledAgeSecrets)
+    ++ (map installTemplate enabledDerivedSecrets)
   );
 
   chownSecret = secretType: ''
@@ -352,84 +382,106 @@ let
     )
   '';
 
-  secretType = types.submodule (
-    { config, ... }:
-    {
-      options = {
-        enable = mkOption {
-          type = types.bool;
-          default = true;
-          description = "Whether to decrypt and install this secret.";
-        };
-        name = mkOption {
-          type = types.str;
-          default = config._module.args.name;
-          defaultText = literalExpression "config._module.args.name";
-          description = ''
-            Name of the file used in {option}`age.secretsDir`
-          '';
-        };
-        file = mkOption {
-          type = types.path;
-          description = ''
-            Age file the secret is loaded from.
-          '';
-        };
-        path = mkOption {
-          type = types.str;
-          default = "${cfg.secretsDir}/${config.name}";
-          defaultText = literalExpression ''
-            "''${cfg.secretsDir}/''${config.name}"
-          '';
-          description = ''
-            Path where the decrypted secret is installed.
-          '';
-        };
-        mode = mkOption {
-          type = types.str;
-          default = "0400";
-          description = ''
-            Permissions mode of the decrypted secret in a format understood by chmod.
-          '';
-        };
-        owner = mkOption {
-          type = types.str;
-          default = "0";
-          description = ''
-            User of the decrypted secret.
-          '';
-        };
-        group = mkOption {
-          type = types.str;
-          default = (findFirst (u: u.name == config.owner) { } (attrValues users)).group or "0";
-          defaultText = literalExpression ''
-            (findFirst (u: u.name == config.owner) { } (attrValues users)).group or "0"
-          '';
-          description = ''
-            Group of the decrypted secret.
-          '';
-        };
-        symlink = mkEnableOption "symlinking secrets to their destination" // {
-          default = true;
-        };
-        onChange = mkOption {
-          type = types.lines;
-          default = "";
-          description = "Shell script run as root after this secret's contents or permissions change. Not run at boot.";
-        };
-        reloadUnits = mkOption {
-          type = types.listOf (if isDarwin then types.str else utils.systemdUtils.lib.unitNameType);
-          default = [ ];
-          description = "Systemd units to reload after this secret changes. Linux only.";
-        };
-        restartUnits = mkOption {
-          type = types.listOf (if isDarwin then types.str else utils.systemdUtils.lib.unitNameType);
-          default = [ ];
-          description = "Systemd units to restart after this secret changes. Linux only.";
-        };
-      };
-    }
-  );
+  secretType =
+    derived:
+    types.submodule (
+      { config, ... }:
+      {
+        options = {
+          enable = mkOption {
+            type = types.bool;
+            default = true;
+            description = "Whether to decrypt and install this secret.";
+          };
+          name = mkOption {
+            type = types.str;
+            default = config._module.args.name;
+            defaultText = literalExpression "config._module.args.name";
+            description = ''
+              Name of the file used in {option}`age.secretsDir`
+            '';
+          };
+          path = mkOption {
+            type = types.str;
+            default = "${cfg.secretsDir}/${config.name}";
+            defaultText = literalExpression ''
+              "''${cfg.secretsDir}/''${config.name}"
+            '';
+            description = ''
+              Path where the decrypted secret is installed.
+            '';
+          };
+          mode = mkOption {
+            type = types.str;
+            default = "0400";
+            description = ''
+              Permissions mode of the decrypted secret in a format understood by chmod.
+            '';
+          };
+          owner = mkOption {
+            type = types.str;
+            default = "0";
+            description = ''
+              User of the decrypted secret.
+            '';
+          };
+          group = mkOption {
+            type = types.str;
+            default = (findFirst (u: u.name == config.owner) { } (attrValues users)).group or "0";
+            defaultText = literalExpression ''
+              (findFirst (u: u.name == config.owner) { } (attrValues users)).group or "0"
+            '';
+            description = ''
+              Group of the decrypted secret.
+            '';
+          };
+          symlink = mkEnableOption "symlinking secrets to their destination" // {
+            default = true;
+          };
+          onChange = mkOption {
+            type = types.lines;
+            default = "";
+            description = "Shell script run as root after this secret's contents or permissions change. Not run at boot.";
+          };
+          reloadUnits = mkOption {
+            type = types.listOf (if isDarwin then types.str else utils.systemdUtils.lib.unitNameType);
+            default = [ ];
+            description = "Systemd units to reload after this secret changes. Linux only.";
+          };
+          restartUnits = mkOption {
+            type = types.listOf (if isDarwin then types.str else utils.systemdUtils.lib.unitNameType);
+            default = [ ];
+            description = "Systemd units to restart after this secret changes. Linux only.";
+          };
+        }
+        // (
+          if derived then
+            {
+              template = mkOption {
+                type = types.path;
+                description = "Public template file with @secret-name@ placeholders, rendered at activation time.";
+              };
+              secrets = mkOption {
+                type = types.listOf (secretType false);
+                default = [ ];
+                description = "Enabled entries from config.age.secrets made available to this template.";
+              };
+              trimFinalNewline = mkOption {
+                type = types.bool;
+                default = true;
+                description = "Remove one terminal LF or CRLF from each inserted secret. Set false to preserve every byte.";
+              };
+            }
+          else
+            {
+              file = mkOption {
+                type = types.path;
+                description = "Age file the secret is loaded from.";
+              };
+            }
+        );
+      }
+    );
 in
 {
   imports = [
@@ -467,11 +519,16 @@ in
       '';
     };
     secrets = mkOption {
-      type = types.attrsOf secretType;
+      type = types.attrsOf (secretType false);
       default = { };
       description = ''
         Attrset of secrets.
       '';
+    };
+    derivedSecrets = mkOption {
+      type = types.attrsOf (secretType true);
+      default = { };
+      description = "Secrets rendered from public templates and decrypted inputs. Installed with the same permissions, paths, and change hooks as encrypted secrets.";
     };
     secretsDir = mkOption {
       type = types.path;
@@ -529,8 +586,24 @@ in
     {
       assertions = [
         {
-          assertion = cfg.identityPaths != [ ];
+          assertion = enabledAgeSecrets == [ ] || cfg.identityPaths != [ ];
           message = "age.identityPaths must be set, for example by enabling openssh.";
+        }
+        {
+          assertion = length (unique (map (s: s.name) enabledSecrets)) == length enabledSecrets;
+          message = "agenix: enabled secrets and derivedSecrets must have distinct names.";
+        }
+        {
+          assertion = all (
+            derived:
+            all (
+              source:
+              any (
+                secret: source.name == secret.name && toString source.file == toString secret.file
+              ) enabledAgeSecrets
+            ) derived.secrets
+          ) enabledDerivedSecrets;
+          message = "agenix: derivedSecrets may only reference enabled entries from age.secrets.";
         }
         {
           assertion = !isDarwin || all (s: s.restartUnits == [ ] && s.reloadUnits == [ ]) enabledSecrets;

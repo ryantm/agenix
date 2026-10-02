@@ -30,8 +30,55 @@ The CLI's `-v` option enables shell tracing independently of this setting.
 
 ### `age.secrets`
 
-`age.secrets` attrset of secrets. You always need to use this
-configuration option. Defaults to `{}`.
+`age.secrets` is an attrset of encrypted secrets. Defaults to `{}`.
+
+### `age.derivedSecrets`
+
+On NixOS and nix-darwin, `age.derivedSecrets` renders configuration files from
+public templates and decrypted secrets during activation. Defaults to `{}`.
+
+```nix
+{ config, pkgs, ... }: {
+  age.secrets.password.file = ./password.age;
+  age.derivedSecrets.service-config = {
+    template = pkgs.writeText "service-config.template" ''
+      password=@password@
+    '';
+    secrets = [ config.age.secrets.password ];
+    owner = "my-service";
+    restartUnits = [ "my-service.service" ]; # NixOS only
+  };
+  # Point the service at config.age.derivedSecrets.service-config.path.
+}
+```
+
+The `template` option is a required path to a public template. It can be a Nix
+store path or an absolute runtime path. Templates must not contain plaintext
+secrets: store paths and files created with `pkgs.writeText` are public.
+
+The `secrets` list defaults to `[]` and must reference enabled entries in
+`config.age.secrets`. Each input's `@name@` placeholder uses its `name` option,
+which defaults to its attribute name. Only listed inputs are replaced; other
+text remains unchanged. Substitution is literal and happens once, so quotes,
+backslashes, and placeholder text inside a secret are preserved. The renderer
+does not escape values for a particular configuration format.
+
+`trimFinalNewline` defaults to `true`, removing at most one final LF or CRLF
+from each input before substitution. Set it to `false` to preserve every byte.
+Inputs without a final newline are unchanged.
+
+Derived secrets support the same `enable`, `name`, `path`, `mode`, `owner`,
+`group`, `symlink`, `onChange`, `reloadUnits`, and `restartUnits` options as
+encrypted secrets below. They use `template` and `secrets` instead of `file`.
+Enabled encrypted and derived secrets must have distinct names. A disabled
+derived secret does not need a template.
+
+All encrypted inputs are decrypted before templates are rendered. Rendering
+uses the new generation's inputs, including inputs installed at custom paths.
+Plaintext output is created at activation time, outside the Nix store. A
+rendering failure preserves the previous generation and skips change hooks.
+Templates cannot depend on other derived secrets. Home Manager does not
+currently support this option.
 
 ### `age.secrets.<name>.enable`
 
@@ -387,7 +434,7 @@ EDITOR environment variable of editor to use when editing FILE
 If STDIN is not interactive, its contents replace the secret.
 Piped input replaces a secret without decrypting it first.
 
-AGENIX_RULES environment variable with path to Nix file specifying recipient public keys. 
+AGENIX_RULES environment variable with path to Nix file specifying recipient public keys.
 Searches the current directory for agenix-rules.nix, then secrets.nix.
 Searches parent directories for agenix-rules.nix only.
 Resolves relative secret paths from the selected rules file's directory.
