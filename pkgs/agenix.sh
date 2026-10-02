@@ -228,7 +228,37 @@ function cleanup {
         unset REENCRYPTED_DIR
     fi
 }
-trap cleanup EXIT
+# age and plugins can disable echo while prompting, then exit on a signal before
+# restoring it. Save the terminal settings before invoking either backend.
+TTY_SOURCE=none
+TTY_STATE=
+if TTY_STATE=$(@sttyBin@ -g 2>/dev/null </dev/tty); then
+    TTY_SOURCE=controlling
+elif [[ -t 0 ]] && TTY_STATE=$(@sttyBin@ -g 2>/dev/null); then
+    TTY_SOURCE=stdin
+fi
+
+# Called by the EXIT trap, including after interrupted decryption.
+# shellcheck disable=SC2329
+function finish {
+    case ${TTY_SOURCE} in
+        controlling)
+            # Avoid changing an untouched terminal, including in background jobs.
+            if [[ $(@sttyBin@ -g 2>/dev/null </dev/tty) != "${TTY_STATE}" ]]; then
+                @sttyBin@ "${TTY_STATE}" 2>/dev/null </dev/tty || true
+            fi
+            ;;
+        stdin)
+            if [[ $(@sttyBin@ -g 2>/dev/null) != "${TTY_STATE}" ]]; then
+                @sttyBin@ "${TTY_STATE}" 2>/dev/null || true
+            fi
+            ;;
+        *) ;;
+    esac
+    cleanup
+}
+
+trap finish EXIT
 trap 'exit 130' INT
 trap 'exit 131' QUIT
 trap 'exit 143' TERM
