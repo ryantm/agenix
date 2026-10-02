@@ -15,6 +15,7 @@
   * [Home Manager module reference](#home-manager-module-reference)
   * [agenix CLI reference](#agenix-cli-reference)
 * [Rekeying](#rekeying)
+* [Runtime configuration](#runtime-configuration)
 * [Overriding age binary](#overriding-age-binary)
 * [Community and Support](#community-and-support)
 * [Threat model/Warnings](#threat-model-warnings)
