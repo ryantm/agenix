@@ -1,0 +1,67 @@
+#!/usr/bin/env nix-shell
+#! nix-shell -p python3 -i python
+
+# based off of https://git.sr.ht/~sircmpwn/dotfiles/tree/master/item/bin/semver
+
+import os
+import subprocess
+import sys
+import tempfile
+
+if subprocess.run(["git", "branch", "--show-current"], stdout=subprocess.PIPE
+        ).stdout.decode().strip() != "main":
+    print("WARNING! Not on the main branch.")
+
+subprocess.run(["git", "pull", "--rebase"])
+p = subprocess.run(["git", "describe", "--abbrev=0"], stdout=subprocess.PIPE)
+describe = p.stdout.decode().strip()
+old_version = describe.split("-")[0].split(".")
+if len(old_version) == 2:
+    [major, minor] = old_version
+    [major, minor] = map(int, [major, minor])
+    patch = 0
+else:
+    [major, minor, patch] = old_version
+    [major, minor, patch] = map(int, [major, minor, patch])
+
+p = subprocess.run(["git", "shortlog", "--no-merges", f"{describe}..HEAD"],
+        stdout=subprocess.PIPE)
+shortlog = p.stdout.decode()
+
+new_version = None
+
+if sys.argv[1] == "patch":
+    patch += 1
+elif sys.argv[1] == "minor":
+    minor += 1
+    patch = 0
+elif sys.argv[1] == "major":
+    major += 1
+    minor = patch = 0
+else:
+    new_version = sys.argv[1]
+
+if new_version is None:
+    if len(old_version) == 2 and patch == 0:
+        new_version = f"{major}.{minor}"
+    else:
+        new_version = f"{major}.{minor}.{patch}"
+
+p = None
+if os.path.exists("contrib/_incr_version"):
+    p = subprocess.run(["contrib/_incr_version", describe, new_version])
+else:
+    print("Warning: no _incr_version script. " +
+        "Does this project have any specific release requirements?")
+
+if p and p.returncode != 0:
+    print("Error: _incr_version returned nonzero exit code")
+    sys.exit(1)
+
+with tempfile.NamedTemporaryFile() as f:
+    basename = os.path.basename(os.getcwd())
+    f.write(f"{basename} {new_version}\n\n".encode())
+    f.write(shortlog.encode())
+    f.flush()
+    subprocess.run(["git", "tag", "-e", "-F", f.name, "-a", new_version])
+    print(new_version)

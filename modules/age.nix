@@ -1,315 +1,708 @@
-{ config, options, lib, pkgs, ... }:
-
+{
+  config,
+  options,
+  lib,
+  pkgs,
+  utils ? { },
+  ...
+}:
 with lib;
-
 let
   cfg = config.age;
+  verbosityLevel =
+    {
+      quiet = 0;
+      summary = 1;
+      progress = 2;
+      detailed = 3;
+    }
+    .${cfg.verbosity};
 
-  # we need at least rage 0.5.0 to support ssh keys
-  rage =
-    if lib.versionOlder pkgs.rage.version "0.5.0"
-    then pkgs.callPackage ../pkgs/rage.nix { }
-    else pkgs.rage;
+  isDarwin = lib.attrsets.hasAttrByPath [ "environment" "darwinConfig" ] options;
+
   ageBin = config.age.ageBin;
 
   users = config.users.users;
 
-  identities = builtins.concatStringsSep " " (map (path: "-i ${path}") cfg.identityPaths);
-  installSecret = secret: ''
-    ${if secret.symlink then ''
-      _truePath="${cfg.secretsMountPoint}/$_agenix_generation/${secret.name}"
-    '' else ''
-      _truePath="${secret.path}"
-    ''}
+  sysusersEnabled =
+    if isDarwin then
+      false
+    else
+      options.systemd ? sysusers
+      && (
+        config.systemd.sysusers.enable || (options.services ? userborn && config.services.userborn.enable)
+      );
 
-    ${if secret ? file then ''
-       echo "decrypting '${secret.file}' to '$_truePath'..."
-    '' else ''
-       echo "constructing template ${secret.template} at '$_truePath'..."
-    ''}
-
-    TMP_FILE="$_truePath.tmp"
-    mkdir -p "$(dirname "$_truePath")"
-    [ "${secret.path}" != "/run/agenix/${secret.name}" ] && mkdir -p "$(dirname "${secret.path}")"
-    ${if secret ? file then ''
-       (
-         umask u=r,g=,o=
-         LANG=${config.i18n.defaultLocale} ${ageBin} --decrypt ${identities} -o "$TMP_FILE" "${secret.file}"
-       )
-    '' else ''
-       ${pkgs.perl}/bin/perl -pe '${
-         lib.concatStringsSep "; "
-           (map (s:
-             ''$match=q[@${s.name}@];'' +
-             ''$replace=substr(qx[cat ${s.path}], 0, -1);'' +
-             ''s/$match/$replace/ge'') secret.secrets)
-       }' ${secret.template} > "$TMP_FILE"
-    ''}
-    chmod ${secret.mode} "$TMP_FILE"
-    chown ${secret.owner}:${secret.group} "$TMP_FILE"
-    mv -f "$TMP_FILE" "$_truePath"
-
-    ${optionalString secret.symlink ''
-      [ "${secret.path}" != "/run/agenix/${secret.name}" ] && ln -sfn "/run/agenix/${secret.name}" "${secret.path}"
-    ''}
+  mountCommand =
+    if isDarwin then
+      ''
+        if ! diskutil info "${cfg.secretsMountPoint}" &> /dev/null; then
+            num_sectors=1048576
+            dev=$(hdiutil attach -nomount ram://"$num_sectors" | sed 's/[[:space:]]*$//')
+            newfs_hfs -v agenix "$dev"
+            mount -t hfs -o nobrowse,nodev,nosuid,-m=0751 "$dev" "${cfg.secretsMountPoint}"
+        fi
+      ''
+    else
+      ''
+        grep -q "${cfg.secretsMountPoint} ramfs" /proc/mounts ||
+          mount -t ramfs none "${cfg.secretsMountPoint}" -o nodev,nosuid,mode=0751
+      '';
+  currentGeneration = ''
+    _agenix_generation="$(basename "$(readlink ${cfg.secretsDir})" || echo 0)"
+  '';
+  newGeneration = ''
+    ${currentGeneration}
+    if test -d "${cfg.secretsMountPoint}/.backup-$_agenix_generation"; then
+      echo '[agenix] previous installation is awaiting its ownership step' >&2
+      exit 1
+    fi
+    (( ++_agenix_generation ))
+    ${optionalString (
+      verbosityLevel >= 2
+    ) ''echo "[agenix] creating new generation in ${cfg.secretsMountPoint}/$_agenix_generation"''}
+    mkdir -p "${cfg.secretsMountPoint}"
+    chmod 0751 "${cfg.secretsMountPoint}"
+    ${mountCommand}
+    rm -rf -- "${cfg.secretsMountPoint}/$_agenix_generation"
+    mkdir -p "${cfg.secretsMountPoint}/$_agenix_generation"
+    chmod 0751 "${cfg.secretsMountPoint}/$_agenix_generation"
   '';
 
-  isRootSecret = st: (st.owner == "root" || st.owner == "0") && (st.group == "root" || st.group == "0");
-  isNotRootSecret = st: !(isRootSecret st);
+  chownGroup = if isDarwin then "admin" else "keys";
+  # chown the secrets mountpoint and the current generation to the keys group
+  # instead of leaving it root:root.
+  chownMountPoint = ''
+    chown :${chownGroup} "${cfg.secretsMountPoint}" "${cfg.secretsMountPoint}/$_agenix_generation"
+  '';
 
-  rootOwnedSecrets = builtins.filter isRootSecret (builtins.attrValues cfg.secrets);
-  installRootOwnedSecrets = builtins.concatStringsSep "\n" ([ "echo '[agenix] decrypting root secrets...'" ] ++ (map installSecret rootOwnedSecrets));
+  setTruePath = secretType: ''
+    ${
+      if secretType.symlink then
+        ''
+          _truePath="${cfg.secretsMountPoint}/$_agenix_generation/${secretType.name}"
+        ''
+      else
+        ''
+          _truePath="${secretType.path}"
+        ''
+    }
+  '';
 
-  nonRootSecrets = builtins.filter isNotRootSecret (builtins.attrValues cfg.secrets);
-  installNonRootSecrets = builtins.concatStringsSep "\n" ([ "echo '[agenix] decrypting non-root secrets...'" ] ++ (map installSecret nonRootSecrets));
+  installSecret = secretType: ''
+    _truePath="${cfg.secretsMountPoint}/$_agenix_generation/${secretType.name}"
+    ${optionalString (
+      verbosityLevel >= 3
+    ) ''echo "decrypting '${secretType.file}' to '$_truePath'..."''}
+    TMP_FILE="$_truePath.tmp"
 
-  isRootDerivedSecret = st: isRootSecret st && builtins.all isRootSecret st.secrets;
-  isNotRootDerivedSecret = st: !(isRootDerivedSecret st);
+    IDENTITIES=()
+    for identity in ${toString cfg.identityPaths}; do
+      test -r "$identity" || continue
+      test -s "$identity" || continue
+      IDENTITIES+=(-i)
+      IDENTITIES+=("$identity")
+    done
 
-  rootDerivedSecrets = builtins.filter isRootDerivedSecret (builtins.attrValues cfg.derivedSecrets);
-  installRootDerivedSecrets = builtins.concatStringsSep "\n" ([ "echo '[agenix] constructing root derived secrets...'" ] ++ (map installSecret rootDerivedSecrets));
+    test "''${#IDENTITIES[@]}" -eq 0 && echo "[agenix] WARNING: no readable identities found!" >&2
 
-  nonRootDerivedSecrets = builtins.filter isNotRootDerivedSecret (builtins.attrValues cfg.derivedSecrets);
-  installNonRootDerivedSecrets = builtins.concatStringsSep "\n" ([ "echo '[agenix] constructing non-root derived secrets...'" ] ++ (map installSecret nonRootDerivedSecrets));
+    mkdir -p "$(dirname "$_truePath")"
+    [ "${secretType.path}" != "${cfg.secretsDir}/${secretType.name}" ] && mkdir -p "$(dirname "${secretType.path}")"
+    (
+      umask u=r,g=,o=
+      test -f "${secretType.file}" || echo '[agenix] WARNING: encrypted file ${secretType.file} does not exist!' >&2
+      test -d "$(dirname "$TMP_FILE")" || echo "[agenix] WARNING: $(dirname "$TMP_FILE") does not exist!" >&2
+      LANG=${
+        config.i18n.defaultLocale or "C"
+      } ${ageBin} --decrypt "''${IDENTITIES[@]}" -o "$TMP_FILE" "${secretType.file}"
+    )
+    chmod ${secretType.mode} "$TMP_FILE"
+    mv -f "$TMP_FILE" "$_truePath"
+  '';
 
-  baseSecretType = types.submodule ({ config, ... }: {
-    options = {
-      name = mkOption {
-        type = types.str;
-        default = config._module.args.name;
-        description = ''
-          Name of the file used in /run/agenix
-        '';
-      };
-      path = mkOption {
-        type = types.str;
-        default = "/run/agenix/${config.name}";
-        description = ''
-          Path where the decrypted secret is installed.
-        '';
-      };
-      mode = mkOption {
-        type = types.str;
-        default = "0400";
-        description = ''
-          Permissions mode of the decrypted secret in a format understood by chmod.
-        '';
-      };
-      owner = mkOption {
-        type = types.str;
-        default = "0";
-        description = ''
-          User of the decrypted secret.
-        '';
-      };
-      group = mkOption {
-        type = types.str;
-        default = users.${config.owner}.group or "0";
-        description = ''
-          Group of the decrypted secret.
-        '';
-      };
-      action = mkOption {
-        type = types.str;
-        default = "";
-        description = "A script to run when secret is updated.";
-      };
-      services = mkOption {
-        type = types.listOf types.str;
-        default = [];
-        description = "The systemd services that uses this secret. Will be restarted when the secret changes.";
-        example = "[ wireguard-wg0 ]";
-      };
-      symlink = mkEnableOption "symlinking secrets to their destination" // { default = true; };
-    };
-  });
+  installTemplate = secret: ''
+    _truePath="${cfg.secretsMountPoint}/$_agenix_generation/${secret.name}"
+    ${optionalString (
+      verbosityLevel >= 3
+    ) "echo ${escapeShellArg "rendering template ${secret.name}..."}"}
+    mkdir -p "$(dirname "$_truePath")"
+    ${optionalString (secret.path != "${cfg.secretsDir}/${secret.name}") ''
+      mkdir -p ${escapeShellArg (builtins.dirOf secret.path)}
+    ''}
+    (
+      umask 077
+      ${pkgs.python3}/bin/python3 ${../pkgs/render-template.py} \
+        ${escapeShellArg (toString secret.template)} \
+        "${cfg.secretsMountPoint}/$_agenix_generation" \
+        ${
+          pkgs.writeText "agenix-template-inputs.json" (
+            builtins.toJSON {
+              secrets = unique (map (s: s.name) secret.secrets);
+              inherit (secret) trimFinalNewline;
+            }
+          )
+        } > "$_truePath.tmp"
+    )
+    chmod ${secret.mode} "$_truePath.tmp"
+    mv -f -- "$_truePath.tmp" "$_truePath"
+  '';
 
-  secretType = types.submodule {
-    imports = baseSecretType.getSubModules;
-    options = {
-      file = mkOption {
-        type = types.path;
-        description = ''
-          Age file the secret is loaded from.
-        '';
-      };
-    };
-  };
+  # Keep copies of custom destinations until ownership has been assigned. User
+  # creation needs the new password files before the ownership step can run.
+  customSecrets = filter (s: s.path != "${cfg.secretsDir}/${s.name}") enabledSecrets;
+  backupName = s: builtins.hashString "sha256" s.path;
+  backupPaths = concatMapStringsSep "\n" (s: ''
+    if test -d ${escapeShellArg s.path} && ! test -L ${escapeShellArg s.path}; then
+      echo '[agenix] secret destination is a directory: ${s.path}' >&2
+      exit 1
+    fi
+    if test -e ${escapeShellArg s.path} || test -L ${escapeShellArg s.path}; then
+      cp -a -- ${escapeShellArg s.path} "$_agenix_backup/${backupName s}"
+    fi
+  '') customSecrets;
+  restorePaths = concatMapStringsSep "\n" (s: ''
+    rm -f -- ${escapeShellArg s.path} || _agenix_restore_failed=1
+    if test -e "$_agenix_backup/${backupName s}" || test -L "$_agenix_backup/${backupName s}"; then
+      cp -a -- "$_agenix_backup/${backupName s}" ${escapeShellArg s.path} || _agenix_restore_failed=1
+    fi
+  '') customSecrets;
 
-  derivedSecretType = types.submodule {
-    imports = baseSecretType.getSubModules;
-    options = {
-      template = mkOption {
-        type = types.path;
-        description = ''
-          A template to insert other secrets into.
-        '';
-        example = ''builtins.toFile "secret-template" "@secret1@ @secret2@"'';
-      };
-      secrets = mkOption {
-        type = types.listOf secretType;
-        default = [];
-        description = ''
-          A list of secrets available to the template.
-        '';
-        example = ''with config.age.secrets; [ secret1 secret2 ]'';
-      };
-    };
-  };
+  rollback = ''
+    _agenix_status=$?
+    trap - EXIT
+    set +e
+    _agenix_restore_failed=0
+    if test -f "$_agenix_backup/ready"; then
+      ${restorePaths}
+      if (( _agenix_generation > 1 )); then
+        ln -sfT "${cfg.secretsMountPoint}/$(( _agenix_generation - 1 ))" ${escapeShellArg cfg.secretsDir} || _agenix_restore_failed=1
+      else
+        rm -f -- ${escapeShellArg cfg.secretsDir} || _agenix_restore_failed=1
+      fi
+    fi
+    if (( _agenix_restore_failed )); then
+      echo "[agenix] rollback failed; recovery copies remain in $_agenix_backup" >&2
+      exit 1
+    fi
+    rm -rf -- "$_agenix_backup" "${cfg.secretsMountPoint}/$_agenix_generation"
+    exit "$_agenix_status"
+  '';
+  rollbackTrap = ''
+    _agenix_backup="${cfg.secretsMountPoint}/.backup-$_agenix_generation"
+    _agenix_rollback() {
+      ${rollback}
+    }
+    trap _agenix_rollback EXIT
+  '';
+
+  publishSecrets = concatMapStringsSep "\n" (
+    s:
+    if s.symlink then
+      ''
+        ln -sfT ${escapeShellArg "${cfg.secretsDir}/${s.name}"} ${escapeShellArg s.path}
+      ''
+    else
+      ''
+        _stagedPath="${cfg.secretsMountPoint}/$_agenix_generation/${s.name}"
+        _targetTemp="$(mktemp ${escapeShellArg "${s.path}.XXXXXX"})"
+        if ! cp -p -- "$_stagedPath" "$_targetTemp" || ! mv -f -- "$_targetTemp" ${escapeShellArg s.path}; then
+          rm -f -- "$_targetTemp"
+          exit 1
+        fi
+        rm -f -- "$_stagedPath"
+      ''
+  ) customSecrets;
+
+  testIdentities = map (path: ''
+    test -f ${path} || echo '[agenix] WARNING: config.age.identityPaths entry ${path} not present!' >&2
+  '') cfg.identityPaths;
+
+  linkNewGeneration = ''
+    ${optionalString (verbosityLevel >= 2)
+      ''echo "[agenix] symlinking new secrets to ${cfg.secretsDir} (generation $_agenix_generation)..."''
+    }
+    ln -sfT "${cfg.secretsMountPoint}/$_agenix_generation" ${cfg.secretsDir}
+  '';
+  cleanupOldGeneration = ''
+    if (( _agenix_generation > 1 )); then
+    ${optionalString (
+      verbosityLevel >= 2
+    ) ''echo "[agenix] removing old secrets (generation $(( _agenix_generation - 1 )))..."''}
+    rm -rf "${cfg.secretsMountPoint}/$(( _agenix_generation - 1 ))"
+    fi
+  '';
+
+  enabledAgeSecrets = filter (secret: secret.enable) (attrValues cfg.secrets);
+  enabledDerivedSecrets = filter (secret: secret.enable) (attrValues cfg.derivedSecrets);
+  enabledSecrets = enabledAgeSecrets ++ enabledDerivedSecrets;
+
+  installSecrets = builtins.concatStringsSep "\n" (
+    (optional (verbosityLevel >= 1) "echo '[agenix] decrypting secrets...'")
+    ++ testIdentities
+    ++ (map installSecret enabledAgeSecrets)
+    ++ (map installTemplate enabledDerivedSecrets)
+  );
+
+  chownSecret = secretType: ''
+    ${setTruePath secretType}
+    chown ${secretType.owner}:${secretType.group} "$_truePath"
+  '';
+
+  chownSecrets = builtins.concatStringsSep "\n" (
+    (optional (verbosityLevel >= 2) "echo '[agenix] chowning...'")
+    ++ [ chownMountPoint ]
+    ++ (map chownSecret enabledSecrets)
+  );
+
+  watchedSecrets = filter (
+    s: s.onChange != "" || s.reloadUnits != [ ] || s.restartUnits != [ ]
+  ) enabledSecrets;
+  changeBackup = s: "before-${builtins.hashString "sha256" s.name}";
+  savePreviousSecrets = concatMapStringsSep "\n" (s: ''
+    if test -f ${escapeShellArg s.path}; then
+      cp -pL -- ${escapeShellArg s.path} "$_agenix_backup/${changeBackup s}"
+    fi
+  '') watchedSecrets;
+  detectChanges = ''
+    _agenix_changed=()
+    ${concatMapStringsSep "\n" (s: ''
+      _before="$_agenix_backup/${changeBackup s}"
+      _after=${escapeShellArg s.path}
+      if ! test -f "$_before" ||
+         ! ${pkgs.diffutils}/bin/cmp -s -- "$_before" "$_after" ||
+         [ "$(stat -Lc '%a:%u:%g' -- "$_before")" != "$(stat -Lc '%a:%u:%g' -- "$_after")" ]; then
+        _agenix_changed+=(${escapeShellArg s.name})
+      fi
+    '') watchedSecrets}
+  '';
+  notifyChanges = mode: ''
+    _agenix_notify=0
+    ${
+      if mode == "activation" then
+        ''
+          if test -e /run/booted-system; then _agenix_notify=1; fi
+        ''
+      else if mode == "systemd" then
+        ''
+          case "$(${pkgs.systemd}/bin/systemctl is-system-running 2>/dev/null || true)" in
+            running|degraded) _agenix_notify=1 ;;
+          esac
+        ''
+      else
+        ''
+          if (( _agenix_generation > 1 )); then _agenix_notify=1; fi
+        ''
+    }
+    if (( _agenix_notify )); then
+      _agenix_hook_failed=0
+      declare -A _agenix_restart=() _agenix_reload=()
+      for _agenix_name in "''${_agenix_changed[@]}"; do
+        case "$_agenix_name" in
+          ${concatMapStringsSep "\n" (s: ''
+            ${escapeShellArg s.name})
+              ${optionalString (s.onChange != "") ''
+                ${pkgs.writeShellScript "agenix-on-change" ("set -e\n" + s.onChange)} || _agenix_hook_failed=1
+              ''}
+              ${concatMapStringsSep "\n" (u: "_agenix_restart[${escapeShellArg u}]=1") s.restartUnits}
+              ${concatMapStringsSep "\n" (u: "_agenix_reload[${escapeShellArg u}]=1") s.reloadUnits}
+              ;;
+          '') watchedSecrets}
+        esac
+      done
+      ${optionalString (!isDarwin) ''
+        for _agenix_unit in "''${!_agenix_restart[@]}"; do
+          ${
+            if mode == "activation" then
+              ''
+                if [[ ''${NIXOS_ACTION:-} == switch || ''${NIXOS_ACTION:-} == test ]]; then
+                  printf '%s\n' "$_agenix_unit" >> /run/nixos/activation-restart-list
+                else
+                  ${pkgs.systemd}/bin/systemctl --no-block try-restart "$_agenix_unit"
+                fi
+              ''
+            else
+              ''
+                ${pkgs.systemd}/bin/systemctl --no-block try-restart "$_agenix_unit"
+              ''
+          }
+        done
+        for _agenix_unit in "''${!_agenix_reload[@]}"; do
+          [[ -v _agenix_restart[$_agenix_unit] ]] && continue
+          ${
+            if mode == "activation" then
+              ''
+                if [[ ''${NIXOS_ACTION:-} == switch || ''${NIXOS_ACTION:-} == test ]]; then
+                  printf '%s\n' "$_agenix_unit" >> /run/nixos/activation-reload-list
+                elif ${pkgs.systemd}/bin/systemctl is-active --quiet "$_agenix_unit"; then
+                  ${pkgs.systemd}/bin/systemctl --no-block reload "$_agenix_unit"
+                fi
+              ''
+            else
+              ''
+                if ${pkgs.systemd}/bin/systemctl is-active --quiet "$_agenix_unit"; then
+                  ${pkgs.systemd}/bin/systemctl --no-block reload "$_agenix_unit"
+                fi
+              ''
+          }
+        done
+      ''}
+      exit "$_agenix_hook_failed"
+    fi
+  '';
+
+  installGeneration = ''
+    (
+      set -e
+      ${newGeneration}
+      ${rollbackTrap}
+      ${installSecrets}
+      mkdir -m 0700 "$_agenix_backup"
+      ${backupPaths}
+      ${savePreviousSecrets}
+      touch "$_agenix_backup/ready"
+      ${publishSecrets}
+      ${linkNewGeneration}
+      trap - EXIT
+    )
+  '';
+  finishGeneration = mode: ''
+    (
+      set -e
+      ${currentGeneration}
+      _agenix_backup="${cfg.secretsMountPoint}/.backup-$_agenix_generation"
+      if test -d "$_agenix_backup"; then
+        ${rollbackTrap}
+        ${chownSecrets}
+        ${detectChanges}
+        trap - EXIT
+        rm -rf -- "$_agenix_backup"
+        ${cleanupOldGeneration}
+        ${notifyChanges mode}
+      fi
+    )
+  '';
+
+  secretType =
+    derived:
+    types.submodule (
+      { config, ... }:
+      {
+        options = {
+          enable = mkOption {
+            type = types.bool;
+            default = true;
+            description = "Whether to decrypt and install this secret.";
+          };
+          name = mkOption {
+            type = types.str;
+            default = config._module.args.name;
+            defaultText = literalExpression "config._module.args.name";
+            description = ''
+              Name of the file used in {option}`age.secretsDir`
+            '';
+          };
+          path = mkOption {
+            type = types.str;
+            default = "${cfg.secretsDir}/${config.name}";
+            defaultText = literalExpression ''
+              "''${cfg.secretsDir}/''${config.name}"
+            '';
+            description = ''
+              Path where the decrypted secret is installed.
+            '';
+          };
+          mode = mkOption {
+            type = types.str;
+            default = "0400";
+            description = ''
+              Permissions mode of the decrypted secret in a format understood by chmod.
+            '';
+          };
+          owner = mkOption {
+            type = types.str;
+            default = "0";
+            description = ''
+              User of the decrypted secret.
+            '';
+          };
+          group = mkOption {
+            type = types.str;
+            default = (findFirst (u: u.name == config.owner) { } (attrValues users)).group or "0";
+            defaultText = literalExpression ''
+              (findFirst (u: u.name == config.owner) { } (attrValues users)).group or "0"
+            '';
+            description = ''
+              Group of the decrypted secret.
+            '';
+          };
+          symlink = mkEnableOption "symlinking secrets to their destination" // {
+            default = true;
+          };
+          onChange = mkOption {
+            type = types.lines;
+            default = "";
+            description = "Shell script run as root after this secret's contents or permissions change. Not run at boot.";
+          };
+          reloadUnits = mkOption {
+            type = types.listOf (if isDarwin then types.str else utils.systemdUtils.lib.unitNameType);
+            default = [ ];
+            description = "Systemd units to reload after this secret changes. Linux only.";
+          };
+          restartUnits = mkOption {
+            type = types.listOf (if isDarwin then types.str else utils.systemdUtils.lib.unitNameType);
+            default = [ ];
+            description = "Systemd units to restart after this secret changes. Linux only.";
+          };
+        }
+        // (
+          if derived then
+            {
+              template = mkOption {
+                type = types.path;
+                description = "Public template file with @secret-name@ placeholders, rendered at activation time.";
+              };
+              secrets = mkOption {
+                type = types.listOf (secretType false);
+                default = [ ];
+                description = "Enabled entries from config.age.secrets made available to this template.";
+              };
+              trimFinalNewline = mkOption {
+                type = types.bool;
+                default = true;
+                description = "Remove one terminal LF or CRLF from each inserted secret. Set false to preserve every byte.";
+              };
+            }
+          else
+            {
+              file = mkOption {
+                type = types.path;
+                description = "Age file the secret is loaded from.";
+              };
+            }
+        );
+      }
+    );
 in
 {
-
   imports = [
     (mkRenamedOptionModule [ "age" "sshKeyPaths" ] [ "age" "identityPaths" ])
   ];
 
   options.age = {
+    enable = mkEnableOption "agenix" // {
+      default = enabledSecrets != [ ];
+    };
+
     ageBin = mkOption {
       type = types.str;
-      default = "${rage}/bin/rage";
+      default = "${pkgs.age}/bin/age";
+      defaultText = literalExpression ''
+        "''${pkgs.age}/bin/age"
+      '';
       description = ''
         The age executable to use.
       '';
     };
+    verbosity = mkOption {
+      type = types.enum [
+        "quiet"
+        "summary"
+        "progress"
+        "detailed"
+      ];
+      default = "detailed";
+      description = ''
+        Verbosity of agenix activation messages. "quiet" hides routine messages,
+        "summary" prints a summary, "progress" also prints installation steps,
+        and "detailed" also prints one line per secret. Warnings and errors are always shown.
+        This does not affect the agenix command-line tool or other rebuild output.
+      '';
+    };
     secrets = mkOption {
-      type = types.attrsOf secretType;
+      type = types.attrsOf (secretType false);
       default = { };
       description = ''
         Attrset of secrets.
       '';
     };
     derivedSecrets = mkOption {
-      type = types.attrsOf derivedSecretType;
+      type = types.attrsOf (secretType true);
       default = { };
+      description = "Secrets rendered from public templates and decrypted inputs. Installed with the same permissions, paths, and change hooks as encrypted secrets.";
+    };
+    secretsDir = mkOption {
+      type = types.path;
+      default = "/run/agenix";
       description = ''
-        Attrset of secrets derived from a template applied to secrets from `age.secrets`.
+        Folder where secrets are symlinked to
       '';
     };
     secretsMountPoint = mkOption {
-      type = types.addCheck types.str
-        (s:
+      type =
+        types.addCheck types.str (
+          s:
           (builtins.match "[ \t\n]*" s) == null # non-empty
-            && (builtins.match ".+/" s) == null) # without trailing slash
-      // { description = "${types.str.description} (with check: non-empty without trailing slash)"; };
+          && (builtins.match ".+/" s) == null
+        ) # without trailing slash
+        // {
+          description = "${types.str.description} (with check: non-empty without trailing slash)";
+        };
       default = "/run/agenix.d";
       description = ''
-        Where secrets are created before they are symlinked to /run/agenix
+        Where secrets are created before they are symlinked to {option}`age.secretsDir`
       '';
     };
     identityPaths = mkOption {
       type = types.listOf types.path;
       default =
-        if config.services.openssh.enable then
-          map (e: e.path) (lib.filter (e: e.type == "rsa" || e.type == "ed25519") config.services.openssh.hostKeys)
-        else [ ];
+        if isDarwin then
+          [
+            "/etc/ssh/ssh_host_ed25519_key"
+            "/etc/ssh/ssh_host_rsa_key"
+          ]
+        else if (config.services.openssh.enable or false) then
+          map (e: e.path) (
+            lib.filter (e: e.type == "rsa" || e.type == "ed25519") config.services.openssh.hostKeys
+          )
+        else
+          [ ];
+      defaultText = literalExpression ''
+        if isDarwin
+        then [
+          "/etc/ssh/ssh_host_ed25519_key"
+          "/etc/ssh/ssh_host_rsa_key"
+        ]
+        else if (config.services.openssh.enable or false)
+        then map (e: e.path) (lib.filter (e: e.type == "rsa" || e.type == "ed25519") config.services.openssh.hostKeys)
+        else [];
+      '';
       description = ''
         Path to SSH keys to be used as identities in age decryption.
       '';
     };
   };
 
-  config = mkIf (cfg.secrets != { }) {
-    assertions = [{
-      assertion = cfg.identityPaths != [ ];
-      message = "age.identityPaths must be set.";
-    }];
-
-    # Create a new directory full of secrets for symlinking (this helps
-    # ensure removed secrets are actually removed, or at least become
-    # invalid symlinks).
-    system.activationScripts.agenixMountSecrets = {
-      text = ''
-        _agenix_generation="$(basename "$(readlink /run/agenix)" || echo 0)"
-        (( ++_agenix_generation ))
-        echo "[agenix] symlinking new secrets to /run/agenix (generation $_agenix_generation)..."
-        mkdir -p "${cfg.secretsMountPoint}"
-        chmod 0751 "${cfg.secretsMountPoint}"
-        grep -q "${cfg.secretsMountPoint} ramfs" /proc/mounts || mount -t ramfs none "${cfg.secretsMountPoint}" -o nodev,nosuid,mode=0751
-        mkdir -p "${cfg.secretsMountPoint}/$_agenix_generation"
-        chmod 0751 "${cfg.secretsMountPoint}/$_agenix_generation"
-        ln -sfn "${cfg.secretsMountPoint}/$_agenix_generation" /run/agenix
-
-        (( _agenix_generation > 1 )) && {
-          echo "[agenix] removing old secrets (generation $(( _agenix_generation - 1 )))..."
-          rm -rf "${cfg.secretsMountPoint}/$(( _agenix_generation - 1 ))"
+  config = mkIf cfg.enable (mkMerge [
+    {
+      assertions = [
+        {
+          assertion = enabledAgeSecrets == [ ] || cfg.identityPaths != [ ];
+          message = "age.identityPaths must be set, for example by enabling openssh.";
         }
-      '';
-      deps = [
-        "specialfs"
+        {
+          assertion = length (unique (map (s: s.name) enabledSecrets)) == length enabledSecrets;
+          message = "agenix: enabled secrets and derivedSecrets must have distinct names.";
+        }
+        {
+          assertion = all (
+            derived:
+            all (
+              source:
+              any (
+                secret: source.name == secret.name && toString source.file == toString secret.file
+              ) enabledAgeSecrets
+            ) derived.secrets
+          ) enabledDerivedSecrets;
+          message = "agenix: derivedSecrets may only reference enabled entries from age.secrets.";
+        }
+        {
+          assertion = !isDarwin || all (s: s.restartUnits == [ ] && s.reloadUnits == [ ]) enabledSecrets;
+          message = "agenix: restartUnits and reloadUnits are only supported on Linux.";
+        }
       ];
-    };
+    }
+    (optionalAttrs (!isDarwin) {
+      # When using sysusers we no longer be started as an activation script
+      # because those are started in initrd while sysusers is started later.
+      systemd.services.agenix-install-secrets = mkIf sysusersEnabled {
+        wantedBy = [ "sysinit.target" ];
+        # So user passwords can be encrypted.
+        before = [ "systemd-sysusers.service" ];
+        unitConfig.DefaultDependencies = "no";
 
-    # Secrets with root owner and group can be installed before users
-    # exist. This allows user password files to be encrypted.
-    system.activationScripts.agenixRoot = {
-      text = installRootOwnedSecrets + "\n" + installRootDerivedSecrets;
-      deps = [ "agenixMountSecrets" "specialfs" ];
-    };
-    system.activationScripts.users.deps = [ "agenixRoot" ];
+        path = [ pkgs.mount ];
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStart = pkgs.writeShellScript "agenix-install" installGeneration;
+          RemainAfterExit = true;
+        };
+      };
 
-    # chown the secrets mountpoint and the current generation to the keys group
-    # instead of leaving it root:root.
-    system.activationScripts.agenixChownKeys = {
-      text = ''
-        chown :keys "${cfg.secretsMountPoint}" "${cfg.secretsMountPoint}/$_agenix_generation"
-      '';
-      deps = [
-        "users"
-        "groups"
-        "agenixMountSecrets"
-      ];
-    };
+      systemd.services.agenix-chown = mkIf sysusersEnabled {
+        wantedBy = [ "sysinit.target" ];
+        # Change ownership and group after users and groups are made.
+        # (And after secrets are created, just in case systemd-sysusers.service is disabled.)
+        after = [
+          "systemd-sysusers.service"
+          "agenix-install-secrets.service"
+        ];
+        # We should get restarted when agenix-install-secrets is (to chown the new secrets).
+        requires = [ "agenix-install-secrets.service" ];
+        partOf = [ "agenix-install-secrets.service" ];
+        unitConfig.DefaultDependencies = "no";
 
-    # Other secrets need to wait for users and groups to exist.
-    system.activationScripts.agenix = {
-      text = installNonRootSecrets + "\n" + installNonRootDerivedSecrets;
-      deps = [
-        "users"
-        "groups"
-        "specialfs"
-        "agenixMountSecrets"
-        "agenixChownKeys"
-      ];
-    };
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStart = pkgs.writeShellScript "agenix-chown" (finishGeneration "systemd");
+          RemainAfterExit = true;
+        };
+      };
 
-    systemd.services =
-      let
-        hashFile = builtins.hashFile "sha256";
-        secretServices = { name, action, services, restartTriggers }:
-          lib.mkMerge [
-            (genAttrs services (_: { inherit restartTriggers; }))
-            (mkIf (action != "") {
-              "agenix-${name}-action" = {
-                inherit restartTriggers;
-
-                # We execute the action on reload so that it doesn't happen at
-                # startup. The only disadvantage is that it won't trigger the
-                # first time the service is created.
-                reload = action;
-                reloadIfChanged = true;
-
-                serviceConfig = {
-                  Type = "oneshot";
-                  RemainAfterExit = true;
-                };
-
-                script = " "; # systemd complains if we only set ExecReload
-
-                # Give it a reason for starting
-                wantedBy = [ "multi-user.target" ];
-              };
-            })
+      # Create a new directory full of secrets for symlinking (this helps
+      # ensure removed secrets are actually removed, or at least become
+      # invalid symlinks).
+      system.activationScripts = mkIf (!sysusersEnabled) {
+        agenixNewGeneration = {
+          # Preserve the dependency name; staging now runs inside agenixInstall.
+          text = "";
+          deps = [
+            "specialfs"
           ];
-      in
-        lib.mkMerge (map secretServices
-          ((mapAttrsToList (name: { file, action, services, path, mode, owner, group, ... }: {
-            inherit action services name;
-            restartTriggers = [ (hashFile file) path mode owner group ];
-          }) cfg.secrets)
-          ++
-          (mapAttrsToList (name: { secrets, template, action, services, path, mode, owner, group, ... }: {
-            inherit action services name;
-            restartTriggers = map ({ file, ... }: hashFile file) secrets ++ [ template path mode owner group ];
-          }) cfg.derivedSecrets)));
-  };
+        };
+
+        agenixInstall = {
+          text = installGeneration;
+          deps = [
+            "agenixNewGeneration"
+            "specialfs"
+          ];
+        };
+
+        # So user passwords can be encrypted.
+        users.deps = [ "agenixInstall" ];
+
+        # Change ownership and group after users and groups are made.
+        agenixChown = {
+          text = finishGeneration "activation";
+          deps = [
+            "users"
+            "groups"
+          ];
+        };
+
+        # So other activation scripts can depend on agenix being done.
+        agenix = {
+          text = "";
+          deps = [ "agenixChown" ];
+        };
+      };
+    })
+
+    (optionalAttrs isDarwin {
+      launchd.daemons.activate-agenix = {
+        script = ''
+          set -e
+          set -o pipefail
+          export PATH="${pkgs.gnugrep}/bin:${pkgs.coreutils}/bin:@out@/sw/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+          ${installGeneration}
+          ${finishGeneration "darwin"}
+          exit 0
+        '';
+        serviceConfig = {
+          RunAtLoad = true;
+          KeepAlive.SuccessfulExit = false;
+        };
+      };
+    })
+  ]);
 }
