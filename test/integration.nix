@@ -27,6 +27,10 @@ pkgs.testers.nixosTest {
 
       age.secrets = {
         disabled.enable = false;
+        trimmed = {
+          file = ../example/secret1.age;
+          trimFinalNewline = true;
+        };
         passwordfile-user1.file = ../example/passwordfile-user1.age;
         leading-hyphen.file = ../example/-leading-hyphen-filename.age;
         named-owner = {
@@ -67,6 +71,10 @@ pkgs.testers.nixosTest {
           age = {
             verbosity = "quiet";
             secrets.disabled.enable = false;
+            secrets.trimmed = {
+              file = ../example/secret2.age;
+              trimFinalNewline = true;
+            };
             identityPaths = options.age.identityPaths.default ++ [ "/home/user1/.ssh/this_key_wont_exist" ];
             secrets.secret2 = {
               # Only decryptable by user1's key
@@ -165,6 +173,8 @@ pkgs.testers.nixosTest {
       system1.wait_for_file("/tmp/2")
       assert "${secret2}" in system1.succeed("cat /tmp/2")
       system1.fail("test -e /run/user/1000/agenix/disabled")
+      assert system1.succeed("wc -c < /run/agenix/trimmed").strip() == "5"
+      assert system1.succeed("wc -c < /run/user/1000/agenix/trimmed").strip() == "6"
       system1.send_chars("cat /run/user/$(id -u)/agenix/armored-secret > /tmp/3\n")
       system1.wait_for_file("/tmp/3")
       assert "${armored-secret}" in system1.succeed("cat /tmp/3")

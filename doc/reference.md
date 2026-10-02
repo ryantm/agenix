@@ -115,6 +115,25 @@ Example:
 }
 ```
 
+### `age.secrets.<name>.trimFinalNewline`
+
+Set `trimFinalNewline = true` to remove one terminal LF or CRLF after
+decryption, for example when an editor adds a newline to an API token.
+The default is `false`, preserving all original bytes. Empty files, files
+without a final newline, and embedded newlines are unchanged. With multiple
+final newlines, only one is removed. The encrypted source is unchanged.
+
+```nix
+{
+  age.secrets.api-token = {
+    file = ./api-token.age;
+    trimFinalNewline = true;
+  };
+}
+```
+
+This option is available in the NixOS, nix-darwin, and Home Manager modules.
+
 ### `age.secrets.<name>.owner`
 
 `age.secrets.<name>.owner` is the username of the decrypted file's
@@ -308,6 +327,11 @@ The destination of the decrypted secret. Defaults to
 
 Permissions of the decrypted secret in a format understood by `chmod`.
 Defaults to `"0400"`.
+
+### `age.secrets.<name>.trimFinalNewline`
+
+Defaults to false. When true, removes one final LF or CRLF after decryption,
+with the same behavior as the system module option above.
 
 ### `age.secrets.<name>.symlink`
 

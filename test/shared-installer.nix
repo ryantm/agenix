@@ -23,6 +23,7 @@ let
         file = "$XDG_RUNTIME_DIR/encrypted";
         path = "$XDG_RUNTIME_DIR/custom/example";
         mode = "0400";
+        trimFinalNewline = false;
         symlink = true;
       };
     };

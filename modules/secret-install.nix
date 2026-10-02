@@ -56,6 +56,11 @@ in
         default = "0400";
         description = "Permissions mode of the decrypted secret in a format understood by chmod.";
       };
+      trimFinalNewline = mkOption {
+        type = types.bool;
+        default = false;
+        description = "Remove one terminal LF or CRLF after decryption. Other bytes, including embedded newlines, are preserved.";
+      };
       symlink = mkEnableOption "symlinking secrets to their destination" // {
         default = true;
       };
@@ -114,6 +119,17 @@ in
           test -d "$(dirname "$TMP_FILE")" || echo "[agenix] WARNING: $(dirname "$TMP_FILE") does not exist!" >&2
           LANG=${lib.escapeShellArg locale} ${ageBin} --decrypt "''${IDENTITIES[@]}" -o "$TMP_FILE" "${secret.file}"
         )
+        ${optionalString secret.trimFinalNewline ''
+          # Encode the last byte so empty and binary files remain unambiguous.
+          if [ "$(tail -c 1 -- "$TMP_FILE" | od -An -tu1 | tr -d '[:space:]')" = 10 ]; then
+            # age creates the file with the restrictive decryption umask.
+            chmod u+w "$TMP_FILE"
+            truncate --size=-1 -- "$TMP_FILE"
+            if [ "$(tail -c 1 -- "$TMP_FILE" | od -An -tu1 | tr -d '[:space:]')" = 13 ]; then
+              truncate --size=-1 -- "$TMP_FILE"
+            fi
+          fi
+        ''}
         chmod ${secret.mode} "$TMP_FILE"
         mv -f "$TMP_FILE" "$_truePath"
 
