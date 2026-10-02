@@ -64,13 +64,18 @@ pkgs.testers.nixosTest {
       };
 
       home-manager.users.user1 =
-        { options, ... }:
+        { config, options, ... }:
         {
           imports = [
             ../modules/age-home.nix
           ];
 
           home.stateVersion = pkgs.lib.trivial.release;
+          home.packages = [ pkgs.fish ];
+          home.file."agenix-path".text = config.age.secrets.secret2.path;
+          home.file."agenix-read.fish".text = ''
+            cat ${config.age.secrets.secret2.path}
+          '';
 
           age = {
             verbosity = "quiet";
@@ -177,19 +182,33 @@ pkgs.testers.nixosTest {
       system1.send_chars("whoami > /tmp/1\n")
       system1.wait_for_file("/tmp/1")
       assert "${user}" in system1.succeed("cat /tmp/1")
-      system1.send_chars("cat /run/user/$(id -u)/agenix/secret2 > /tmp/2\n")
+      system1.send_chars("cat /home/user1/.local/state/agenix/secret2 > /tmp/2\n")
       system1.wait_for_file("/tmp/2")
       assert "${secret2}" in system1.succeed("cat /tmp/2")
-      system1.fail("test -e /run/user/1000/agenix/disabled")
+      system1.fail("test -e /home/user1/.local/state/agenix/disabled")
       assert system1.succeed("cat /run/agenix/direct-default").strip() == "hello"
-      assert system1.succeed("cat /run/user/1000/agenix/direct-default").strip() == "${secret2}"
+      assert system1.succeed("cat /home/user1/.local/state/agenix/direct-default").strip() == "${secret2}"
       system1.fail("test -L /run/agenix/direct-default")
-      system1.fail("test -L /run/user/1000/agenix/direct-default")
+      system1.fail("test -L /home/user1/.local/state/agenix/direct-default")
       assert system1.succeed("wc -c < /run/agenix/trimmed").strip() == "5"
-      assert system1.succeed("wc -c < /run/user/1000/agenix/trimmed").strip() == "6"
-      system1.send_chars("cat /run/user/$(id -u)/agenix/armored-secret > /tmp/3\n")
+      assert system1.succeed("wc -c < /home/user1/.local/state/agenix/trimmed").strip() == "6"
+      system1.send_chars("cat /home/user1/.local/state/agenix/armored-secret > /tmp/3\n")
       system1.wait_for_file("/tmp/3")
       assert "${armored-secret}" in system1.succeed("cat /tmp/3")
+      assert system1.succeed("cat /home/user1/agenix-path") == "/home/user1/.local/state/agenix/secret2"
+      assert system1.succeed("su - user1 -c 'fish /home/user1/agenix-read.fish'").strip() == "${secret2}"
+      assert system1.succeed("readlink /home/user1/.local/state/agenix").strip().startswith("/run/user/1000/agenix.d/")
+
+      # Migrate an existing runtime-directory link without leaving its old
+      # generation (and any secrets removed from the configuration) behind.
+      old_generation = system1.succeed("readlink /home/user1/.local/state/agenix").strip()
+      system1.succeed("touch " + old_generation + "/removed-secret")
+      system1.succeed("mv /home/user1/.local/state/agenix /run/user/1000/agenix")
+      system1.succeed("su - user1 -c 'XDG_RUNTIME_DIR=/run/user/1000 systemctl --user restart agenix.service'")
+      assert system1.succeed("readlink /home/user1/.local/state/agenix").strip() != old_generation
+      system1.fail("test -e " + old_generation)
+      system1.fail("test -L /run/user/1000/agenix")
+      assert system1.succeed("su - user1 -c 'fish /home/user1/agenix-read.fish'").strip() == "${secret2}"
 
       # Home Manager's quiet mode still reports a missing identity on stderr.
       home_log = system1.succeed("journalctl -b _SYSTEMD_USER_UNIT=agenix.service --no-pager -o cat")

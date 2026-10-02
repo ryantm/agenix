@@ -88,7 +88,7 @@ Set `age.identityPaths` to absolute paths if your keys are elsewhere. Use
 `config.age.secrets.example-secret.path` for an application option that accepts
 a secret file path.
 
-After `home-manager switch`, secrets are available under
-`$XDG_RUNTIME_DIR/agenix` on Linux or the Darwin user temporary directory by
-default. See the [Home Manager module reference](#home-manager-module-reference)
-for its options.
+Once the user service has run, secrets are exposed under
+`${config.xdg.stateHome}/agenix` (usually `~/.local/state/agenix`). This stable
+path links to the current generation in the runtime directory. See the
+[Home Manager module reference](#home-manager-module-reference) for its options.

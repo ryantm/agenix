@@ -155,6 +155,7 @@ in
         ${optionalString (verbosityLevel >= 2)
           ''echo "[agenix] symlinking new secrets to ${cfg.secretsDir} (generation $_agenix_generation)..."''
         }
+        mkdir -p "$(dirname "${cfg.secretsDir}")"
         ln -sfT "${cfg.secretsMountPoint}/$_agenix_generation" "${cfg.secretsDir}"
 
         (( _agenix_generation > 1 )) && {
