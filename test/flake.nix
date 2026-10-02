@@ -26,6 +26,12 @@
     {
       checks =
         nixpkgs.lib.genAttrs [ "aarch64-darwin" "x86_64-darwin" ] (system: {
+          cli-rules = import (testDir + "/cli-rules.nix") {
+            pkgs = nixpkgs.legacyPackages.${system};
+          };
+          cli-plugin = import (testDir + "/cli-plugin.nix") {
+            pkgs = nixpkgs.legacyPackages.${system};
+          };
           cli-encryption = import (testDir + "/cli-encryption.nix") {
             pkgs = nixpkgs.legacyPackages.${system};
           };
@@ -52,6 +58,9 @@
             }).system;
         })
         // {
+          x86_64-linux.cli-rules = import (testDir + "/cli-rules.nix") {
+            pkgs = nixpkgs.legacyPackages.x86_64-linux;
+          };
           x86_64-linux.cli-encryption = import (testDir + "/cli-encryption.nix") {
             pkgs = nixpkgs.legacyPackages.x86_64-linux;
           };
