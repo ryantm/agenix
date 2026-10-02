@@ -32,6 +32,7 @@
     {
       nixosModules.age = ./modules/age.nix;
       nixosModules.default = self.nixosModules.age;
+      nixosModules.identityUnlock = ./modules/age-identity-unlock.nix;
 
       darwinModules.age = ./modules/age.nix;
       darwinModules.default = self.darwinModules.age;
