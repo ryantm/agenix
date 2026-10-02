@@ -1,5 +1,6 @@
 import errno
 import fcntl
+import json
 import os
 import pathlib
 import pty
@@ -17,6 +18,19 @@ ciphertext = pathlib.Path("secret.age").read_bytes()
 def run(cancel, controlling=True):
     master, slave = pty.openpty()
     initial = termios.tcgetattr(slave)
+    result_path = pathlib.Path("terminal-result.json").resolve()
+
+    # Keep the session leader alive while recording the child's final terminal
+    # state. Darwin revokes the slave device when the session leader exits.
+    helper = r'''
+import json, pathlib, signal, subprocess, sys, termios
+signal.signal(signal.SIGINT, signal.SIG_IGN)
+def reset_interrupt():
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
+proc = subprocess.Popen(sys.argv[2:], preexec_fn=reset_interrupt)
+status = proc.wait()
+pathlib.Path(sys.argv[1]).write_text(json.dumps({"status": status, "state": repr(termios.tcgetattr(0))}))
+'''
 
     def terminal_session():
         os.setsid()
@@ -24,7 +38,8 @@ def run(cancel, controlling=True):
             fcntl.ioctl(0, termios.TIOCSCTTY, 0)
 
     proc = subprocess.Popen(
-        [agenix, "-e" if cancel else "-d", "secret.age", "-i", identity],
+        [sys.executable, "-c", helper, str(result_path),
+         agenix, "-e" if cancel else "-d", "secret.age", "-i", identity],
         stdin=slave, stdout=slave, stderr=slave, preexec_fn=terminal_session,
     )
     output = b""
@@ -50,14 +65,15 @@ def run(cancel, controlling=True):
                 answered = True
         assert answered, output
         assert proc.poll() is not None, output
-        assert proc.returncode != 0 if cancel else proc.returncode == 0, output
-        assert termios.tcgetattr(slave) == initial, "terminal state was not restored"
+        assert proc.returncode == 0, output
+        result = json.loads(result_path.read_text())
+        assert result["status"] != 0 if cancel else result["status"] == 0, output
+        assert result["state"] == repr(initial), "terminal state was not restored"
         assert pathlib.Path("secret.age").read_bytes() == ciphertext
     finally:
         if proc.poll() is None:
             os.killpg(proc.pid, signal.SIGKILL)
             proc.wait()
-        termios.tcsetattr(slave, termios.TCSANOW, initial)
         os.close(master)
         os.close(slave)
 
