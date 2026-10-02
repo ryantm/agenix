@@ -8,6 +8,7 @@
 with lib;
 let
   cfg = config.age;
+  defaultSecretsDir = "${config.xdg.stateHome}/agenix";
   shared = import ./secret-install.nix { inherit lib; };
   installer = shared.installer {
     inherit cfg;
@@ -31,6 +32,15 @@ let
         name = "agenix-home-manager-mount-secrets";
         runtimeInputs = with pkgs; [ coreutils ];
         text = ''
+          ${optionalString (cfg.secretsDir == defaultSecretsDir) ''
+            # Preserve generation numbering when migrating the previous default.
+            # The next installation then removes that old generation normally.
+            if [ ! -e "${cfg.secretsDir}" ] && [ ! -L "${cfg.secretsDir}" ] &&
+               [ -L "${userDirectory "agenix"}" ]; then
+              mkdir -p "$(dirname "${cfg.secretsDir}")"
+              mv -T -- "${userDirectory "agenix"}" "${cfg.secretsDir}"
+            fi
+          ''}
           ${installer.newGeneration}
           ${installer.installSecrets}
           exit 0
@@ -91,10 +101,11 @@ in
 
     secretsDir = mkOption {
       type = types.str;
-      default = userDirectory "agenix";
-      defaultText = userDirectoryDescription "agenix";
+      default = defaultSecretsDir;
+      defaultText = literalExpression ''"''${config.xdg.stateHome}/agenix"'';
       description = ''
-        Folder where secrets are symlinked to
+        Stable path exposing the current generation. Secret generations remain
+        in age.secretsMountPoint; this path is a symlink to the current one.
       '';
     };
 

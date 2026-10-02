@@ -325,9 +325,10 @@ the attribute path.
 ### `age.secrets.<name>.path`
 
 The destination of the decrypted secret. Defaults to
-`config.age.secretsDir/<name>`, which is usually
-`$XDG_RUNTIME_DIR/agenix/<name>` on Linux or
-`$(getconf DARWIN_USER_TEMP_DIR)/agenix/<name>` on Darwin.
+`config.age.secretsDir/<name>`, usually
+`~/.local/state/agenix/<name>`. This is an absolute path resolved from the
+Home Manager configuration, so it can be used in application configuration
+files and fish scripts without shell expansion.
 
 ### `age.secrets.<name>.mode`
 
@@ -362,8 +363,26 @@ containing `$HOME`. Backslashes and quotes in the home directory are preserved.
 
 ### `age.secretsDir`
 
-Directory where secrets are exposed. Defaults to `$XDG_RUNTIME_DIR/agenix`
-on Linux and `$(getconf DARWIN_USER_TEMP_DIR)/agenix` on Darwin.
+Directory where secrets are exposed. Defaults to
+`${config.xdg.stateHome}/agenix`, usually `~/.local/state/agenix`, on both
+Linux and Darwin. It is a symlink to the current generation under
+`age.secretsMountPoint`; the default does not copy plaintext into the state
+directory.
+
+This replaces the former default under `$XDG_RUNTIME_DIR` on Linux or the
+Darwin user temporary directory. References to `config.age.secrets.<name>.path`
+update automatically. Update hard-coded application paths, or explicitly set
+`age.secretsDir` to retain your previous location. On Linux, for example:
+
+```nix
+{
+  age.secretsDir = "\${XDG_RUNTIME_DIR}/agenix";
+}
+```
+
+When using the new default, activation migrates an existing old default
+symlink if the new location is unused, then replaces and cleans up that
+generation as usual.
 
 ### `age.secretsMountPoint`
 
