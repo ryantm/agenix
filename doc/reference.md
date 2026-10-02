@@ -275,6 +275,16 @@ remain visible at every level.
 
 The `age` package used to decrypt secrets. Defaults to `pkgs.age`.
 
+### `age.ageBin`
+
+The command used to decrypt secrets. Defaults to `lib.getExe config.age.package`,
+so changing `age.package` also changes the default command. Override this to use
+a wrapper or provide an age plugin on `PATH`, for example:
+
+```nix
+age.ageBin = "PATH=${pkgs.age-plugin-yubikey}/bin:$PATH ${pkgs.age}/bin/age";
+```
+
 ### `age.secrets`
 
 An attribute set of secrets. Defaults to `{}`.

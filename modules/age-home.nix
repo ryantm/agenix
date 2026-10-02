@@ -17,7 +17,7 @@ let
     }
     .${cfg.verbosity};
 
-  ageBin = lib.getExe config.age.package;
+  ageBin = config.age.ageBin;
 
   newGeneration = ''
     _agenix_generation="$(basename "$(readlink "${cfg.secretsDir}")" || echo 0)"
@@ -193,6 +193,17 @@ in
     };
 
     package = mkPackageOption pkgs "age" { };
+
+    ageBin = mkOption {
+      type = types.str;
+      default = lib.getExe cfg.package;
+      defaultText = literalExpression ''
+        lib.getExe config.age.package
+      '';
+      description = ''
+        The age executable to use.
+      '';
+    };
 
     verbosity = mkOption {
       type = types.enum [
