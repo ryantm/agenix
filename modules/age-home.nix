@@ -264,6 +264,8 @@ in
     systemd.user.services.agenix = lib.mkIf pkgs.stdenv.hostPlatform.isLinux {
       Unit = {
         Description = "agenix activation";
+        # Wait for user services ordered before basic.target, such as bind mounts.
+        After = [ "basic.target" ];
       };
       Service = {
         Type = "oneshot";
