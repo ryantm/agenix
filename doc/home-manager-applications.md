@@ -71,3 +71,16 @@ in `age.identityPaths`; the default only includes the user's Ed25519 and RSA SSH
 key paths. Prepare replacement identities before switching to the configuration
 that needs them. A private key obtained from another secret cannot bootstrap its
 own decryption.
+
+The user service has no interactive terminal. A passphrase-protected SSH key
+that works in an interactive CLI session can therefore fail during service
+startup. Use an identity suitable for unattended decryption, or arrange for its
+protected key material to be available before the service starts.
+
+Importing the module alone does not create secret directories: at least one
+secret must be enabled. Use `config.age.secrets.<name>.path` to find its configured
+destination. The current default is under the user's state directory, with
+plaintext generations in `$XDG_RUNTIME_DIR/agenix.d`. On Linux, that runtime
+directory is normally `/run/user/<uid>` (singular `user`). A generation directory
+without a working public symlink can indicate that decryption failed; the service
+journal shows the underlying error.
