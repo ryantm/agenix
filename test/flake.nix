@@ -49,6 +49,9 @@
             }).system;
         })
         // {
+          x86_64-linux.identity-unlock = import (testDir + "/identity-unlock.nix") {
+            pkgs = nixpkgs.legacyPackages.x86_64-linux;
+          };
           x86_64-linux.native-init = import (testDir + "/native-init.nix") {
             pkgs = nixpkgs.legacyPackages.x86_64-linux;
           };

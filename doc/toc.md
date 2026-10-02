@@ -15,6 +15,7 @@
   * [Home Manager module reference](#home-manager-module-reference)
   * [agenix CLI reference](#agenix-cli-reference)
 * [Rekeying](#rekeying)
+* [Unlocking an identity at boot](#identity-unlock)
 * [NixOS without activation scripts](#native-init)
 * [Overriding age binary](#overriding-age-binary)
 * [Community and Support](#community-and-support)
