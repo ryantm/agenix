@@ -83,6 +83,46 @@ before=$(hash passwordfile-user1.age)
 "$agenix" -r -i "$HOME/.ssh/id_ed25519"
 [[ $(hash passwordfile-user1.age) != "$before" ]]
 
+# A recipient filter selects by the current rules and keeps other files intact.
+selected_before=$(hash secret1.age)
+unselected_before=$(hash secret2.age)
+armored_before=$(hash armored-secret.age)
+recipient=$(cut -d ' ' -f 1,2 "$keys/system1.pub")
+"$agenix" --rekey "$recipient" -i "$HOME/.ssh/id_ed25519"
+[[ $(hash secret1.age) != "$selected_before" ]]
+[[ $(hash secret2.age) == "$unselected_before" ]]
+[[ $(hash armored-secret.age) == "$armored_before" ]]
+[[ $(decrypt secret1.age 2>/dev/null) == hello ]]
+
+# Multiple recipients form a union. A flag following --rekey is not consumed
+# as a recipient, and repeated --rekey options accumulate recipients.
+selected_before=$(hash secret1.age)
+unselected_before=$(hash secret2.age)
+"$agenix" --rekey "$recipient" '"; builtins.abort "injected' -i "$HOME/.ssh/id_ed25519"
+[[ $(hash secret1.age) != "$selected_before" ]]
+[[ $(hash secret2.age) == "$unselected_before" ]]
+recipient2=$(cut -d ' ' -f 1,2 "$keys/user1.pub")
+unselected_before=$(hash secret2.age)
+"$agenix" --rekey "$recipient" "$recipient2" -i "$HOME/.ssh/id_ed25519"
+[[ $(hash secret2.age) != "$unselected_before" ]]
+before=$(hash secret2.age)
+"$agenix" --rekey "$recipient" --rekey "$recipient2" -i "$HOME/.ssh/id_ed25519"
+[[ $(hash secret2.age) != "$before" ]]
+before=$(hash secret2.age)
+"$agenix" --rekey -v -i "$HOME/.ssh/id_ed25519" > rekey-verbose-output 2>&1
+[[ $(hash secret2.age) != "$before" ]]
+
+# Missing filters must fail without changing files, including strings that
+# would become Nix code if interpolated into the expression.
+selected_before=$(hash secret1.age)
+for recipient in '' 'unknown-recipient' '"; builtins.abort "injected'; do
+  if "$agenix" -r "$recipient" > rekey-output 2>&1; then
+    fail 'invalid recipient filter succeeded'
+  fi
+  [[ $(hash secret1.age) == "$selected_before" ]]
+done
+grep -q 'No secrets in the rules match PUBLIC_KEY' rekey-output
+
 EDITOR=: "$agenix" -e passwordfile-user1.age </dev/null
 printf 'bogus\n' > "$HOME/.ssh/id_rsa"
 before=$(hash passwordfile-user1.age)
