@@ -83,6 +83,28 @@ before=$(hash passwordfile-user1.age)
 "$agenix" -r -i "$HOME/.ssh/id_ed25519"
 [[ $(hash passwordfile-user1.age) != "$before" ]]
 
+# A recipient filter selects by the current rules and keeps other files intact.
+selected_before=$(hash secret1.age)
+unselected_before=$(hash secret2.age)
+armored_before=$(hash armored-secret.age)
+recipient=$(cut -d ' ' -f 1,2 "$keys/system1.pub")
+"$agenix" --rekey "$recipient" -i "$HOME/.ssh/id_ed25519"
+[[ $(hash secret1.age) != "$selected_before" ]]
+[[ $(hash secret2.age) == "$unselected_before" ]]
+[[ $(hash armored-secret.age) == "$armored_before" ]]
+[[ $(decrypt secret1.age 2>/dev/null) == hello ]]
+
+# Missing filters must fail without changing files, including strings that
+# would become Nix code if interpolated into the expression.
+selected_before=$(hash secret1.age)
+for recipient in '' 'unknown-recipient' '"; builtins.abort "injected'; do
+  if "$agenix" -r "$recipient" > rekey-output 2>&1; then
+    fail 'invalid recipient filter succeeded'
+  fi
+  [[ $(hash secret1.age) == "$selected_before" ]]
+done
+grep -q 'No secrets in the rules match PUBLIC_KEY' rekey-output
+
 EDITOR=: "$agenix" -e passwordfile-user1.age </dev/null
 # Local rules are intentionally impure, even if nix.conf defaults to pure eval.
 NIX_CONFIG='pure-eval = true' "$agenix" --check

@@ -10,13 +10,13 @@ function show_help () {
   echo "${PACKAGE} - edit, rekey, and check age secret files"
   echo " "
   echo "${PACKAGE} -e FILE [-i PRIVATE_KEY]"
-  echo "${PACKAGE} -r [-i PRIVATE_KEY]"
+  echo "${PACKAGE} -r [PUBLIC_KEY] [-i PRIVATE_KEY]"
   echo "${PACKAGE} -c"
   echo ' '
   echo 'options:'
   echo '-h, --help                show help'
   echo "-e, --edit FILE           edits FILE using \$EDITOR"
-  echo '-r, --rekey               re-encrypts all secrets with specified recipients'
+  echo '-r, --rekey [PUBLIC_KEY]  re-encrypts secrets, optionally selecting a recipient'
   echo '-c, --check               checks encrypted SSH recipients against the rules'
   echo '-d, --decrypt FILE        decrypts FILE to STDOUT'
   echo '-i, --identity            identity to use when decrypting'
@@ -25,6 +25,8 @@ function show_help () {
   echo 'FILE an age-encrypted file'
   echo ' '
   echo 'PRIVATE_KEY a path to a private SSH key used to decrypt file'
+  echo ' '
+  echo 'PUBLIC_KEY an exact public key string from the rules; only matching secrets are rekeyed'
   echo ' '
   echo 'EDITOR environment variable of editor to use when editing FILE'
   echo ' '
@@ -61,6 +63,7 @@ function set_file() {
 test $# -eq 0 && (show_help && exit 1)
 
 REKEY=0
+REKEY_PUBLIC_KEY=
 CHECK=0
 DECRYPT_ONLY=0
 DEFAULT_DECRYPT=(--decrypt)
@@ -97,6 +100,11 @@ while test $# -gt 0; do
       ;;
     -r|--rekey)
       shift
+      if [[ $# -gt 0 && $1 != -* ]]; then
+        REKEY_PUBLIC_KEY="$1"
+        [[ -n ${REKEY_PUBLIC_KEY} ]] || err 'PUBLIC_KEY must not be empty'
+        shift
+      fi
       REKEY=1
       ;;
     -c|--check)
@@ -282,9 +290,19 @@ function edit {
 }
 
 function rekey {
-    FILES_JSON=$(@nixInstantiate@ --impure --json --eval -E "(let rules = import ${RULES}; in builtins.attrNames rules)") || exit 1
-    mapfile -d '' -t FILES < <(printf '%s' "${FILES_JSON}" | @jqBin@ -jr '.[] + "\u0000"')
-
+    local files
+    files=$(@nixInstantiate@ --impure --json --eval --strict \
+        --argstr rulesPath "${RULES}" --argstr recipient "${REKEY_PUBLIC_KEY}" \
+        -E '{ rulesPath, recipient }:
+            let rules = import (builtins.toPath rulesPath);
+            in builtins.filter
+              (file: recipient == "" || builtins.elem recipient (builtins.getAttr file rules).publicKeys)
+              (builtins.attrNames rules)') || return 1
+    mapfile -d '' -t FILES < <(printf '%s' "${files}" | @jqBin@ -jr '.[] + "\u0000"')
+    if (( ${#FILES[@]} == 0 )); then
+        [[ -z ${REKEY_PUBLIC_KEY} ]] || err 'No secrets in the rules match PUBLIC_KEY'
+        return 0
+    fi
     for FILE in "${FILES[@]}"
     do
         warn "rekeying ${FILE}..."
