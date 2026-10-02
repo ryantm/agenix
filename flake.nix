@@ -39,6 +39,8 @@
       homeManagerModules.age = ./modules/age-home.nix;
       homeManagerModules.default = self.homeManagerModules.age;
 
+      lib.hjemConfiguration = import ./lib/hjem-configuration.nix;
+
       overlays.default = import ./overlay.nix;
 
       formatter = nixpkgs.lib.genAttrs formatterSystems (
