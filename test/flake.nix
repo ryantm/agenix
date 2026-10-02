@@ -11,6 +11,10 @@
       url = "github:nix-community/home-manager/release-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    hjem = {
+      url = "github:feel-co/hjem";
+      flake = false;
+    };
   };
 
   outputs =
@@ -19,6 +23,7 @@
       nixpkgs,
       darwin,
       home-manager,
+      hjem,
     }:
     let
       testDir = self.outPath;
@@ -61,6 +66,10 @@
             }).system;
         })
         // {
+          x86_64-linux.hjem = import (testDir + "/hjem.nix") {
+            inherit hjem;
+            pkgs = nixpkgs.legacyPackages.x86_64-linux;
+          };
           x86_64-linux.missing-identities = import (testDir + "/missing-identities.nix") {
             pkgs = nixpkgs.legacyPackages.x86_64-linux;
           };
