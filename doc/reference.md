@@ -255,6 +255,11 @@ Overriding `age.ageBin` example:
 
 ### `age.identityPaths`
 
+Only readable, non-empty regular files are passed to age. If secrets are enabled
+and no configured identity is usable, activation fails before preparing a new
+generation or changing secret destinations. Missing files may be listed alongside
+available identities; those missing entries are skipped with a warning.
+
 `age.identityPaths` is a list of paths to recipient keys to try to use to
 decrypt the secrets. By default, it is the `rsa` and `ed25519` keys in
 `config.services.openssh.hostKeys`, and on NixOS you usually don't need to
@@ -382,6 +387,9 @@ Paths to SSH private keys to try for decryption. By default, the module tries
 be available when secrets are decrypted. Use strings containing absolute paths
 when overriding this option; a Nix path would copy the private key into the
 world-readable Nix store.
+
+The Home Manager service applies the same readable, non-empty regular-file check
+as the system module. It fails before changing secret paths if none are available.
 
 Paths are passed literally to age. For example, use
 `"${config.home.homeDirectory}/.ssh/id_ed25519"` rather than a shell expression
