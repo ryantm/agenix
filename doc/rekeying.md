@@ -7,6 +7,17 @@ secrets:
 $ agenix --rekey
 ```
 
+To rekey one file after changing its recipient list:
+
+```ShellSession
+$ agenix --rekey-file secrets/database.age -i ~/.ssh/id_ed25519
+```
+
+The filename is relative to the selected rules file's directory and must match
+a rule. Only that rule is evaluated and only that file is re-encrypted. The
+command requires an identity that can decrypt the existing file, does not open
+an editor, and ignores piped input. Quote filenames containing spaces.
+
 To rekey only secrets whose current rules include a particular public key,
 pass the key as a quoted argument:
 

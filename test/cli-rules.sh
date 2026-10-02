@@ -50,6 +50,16 @@ EOF
 once "$agenix" -d "$strange" -i "$identity" > decrypted
 printf replacement | once "$agenix" -e "$strange"
 test "$("$agenix" -d "$strange" -i "$identity")" = replacement
+cp -- "$strange" selected.age
+cp -- "$plain" unselected.age
+printf 'must not replace plaintext' | EDITOR=false once "$agenix" --rekey-file "$strange" -i "$identity"
+! cmp -- selected.age "$strange"
+cmp -- unselected.age "$plain"
+test "$("$agenix" -d "$strange" -i "$identity")" = replacement
+cp -- "$strange" selected.age
+if "$agenix" --rekey-file "$strange" > error 2>&1; then exit 1; fi
+cmp -- selected.age "$strange"
+test -z "$(ls -A "$TMPDIR")"
 cat > "$AGENIX_RULES" <<'EOF'
 builtins.mapAttrs (_: rule: rule // {
   armor = throw "unused armor forced";
@@ -80,6 +90,9 @@ for operation in -d -e -c -r; do
 done
 if "$agenix" > error 2>&1; then exit 1; fi
 if "$agenix" -e '' > error 2>&1; then exit 1; fi
+if "$agenix" --rekey-file > error 2>&1; then exit 1; fi
+grep -q 'no FILE specified' error
+if "$agenix" --rekey-file '' > error 2>&1; then exit 1; fi
 
 # A failing editor may modify plaintext, but must not replace the encrypted file.
 cat > "$TMPDIR/../failed-editor" <<'EOF'
@@ -127,6 +140,9 @@ if "$agenix" -r -i "$identity" > error 2>&1; then exit 1; fi
 grep -q 'does not exist' error
 test ! -e "$plain"
 test -z "$(ls -A "$TMPDIR")"
+if "$agenix" --rekey-file "$plain" -i "$identity" > error 2>&1; then exit 1; fi
+grep -q 'does not exist' error
+test ! -e "$plain"
 if "$agenix" -d "$plain" -i "$identity" > error 2>&1; then exit 1; fi
 grep -q 'does not exist' error
 

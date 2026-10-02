@@ -39,6 +39,7 @@ pkgs.runCommand "agenix-cli-plugin" { nativeBuildInputs = [ cli ]; } ''
   test "$(agenix -d secret1.age -j fixture)" = hello
   EDITOR=: agenix -e secret1.age -j fixture
   agenix -r -j fixture
+  agenix --rekey-file secret1.age -j fixture
   test "$(agenix -d secret1.age -j fixture)" = hello
   if agenix -d secret1.age -j unknown; then exit 1; fi
   for args in '-j' '-j -r'; do

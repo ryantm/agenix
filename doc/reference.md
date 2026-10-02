@@ -338,7 +338,7 @@ when `pure-eval = true` is set in `nix.conf`. This allows it to read the selecte
 file and any local files imported by those rules.
 
 Select one operation per invocation: edit, decrypt, rekey, or check. Each command
-evaluates the rules it needs once. Editing or decrypting a single file does not
+evaluates the rules it needs once. Editing, decrypting, or rekeying a single file does not
 evaluate unrelated secrets, and checking or decrypting does not evaluate armor
 settings. Secret filenames are literal rule names and may contain spaces or
 quotes. Relative filenames resolve from the selected rules file's directory.
@@ -348,12 +348,14 @@ agenix - edit, rekey, and check age secret files
 
 agenix -e FILE [-i PRIVATE_KEY] [-j PLUGIN]
 agenix -r [PUBLIC_KEY] [-i PRIVATE_KEY] [-j PLUGIN]
+agenix --rekey-file FILE [-i PRIVATE_KEY] [-j PLUGIN]
 agenix -c
 
 options:
 -h, --help                show help
 -e, --edit FILE           edits FILE using $EDITOR
 -r, --rekey [PUBLIC_KEY]  re-encrypts secrets, optionally selecting a recipient
+--rekey-file FILE        re-encrypts only FILE with its current recipients
 -c, --check               checks encrypted SSH recipients against the rules
 -d, --decrypt FILE        decrypts FILE to STDOUT
 -i, --identity            identity to use when decrypting
