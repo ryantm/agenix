@@ -8,16 +8,18 @@ $ agenix --rekey
 ```
 
 To rekey only secrets whose current rules include a particular public key,
-pass the key as a quoted argument:
+pass each key as a separate quoted argument:
 
 ```ShellSession
 $ agenix --rekey 'ssh-ed25519 AAAA... server-name' -i ~/.ssh/id_ed25519
+$ agenix --rekey 'ssh-ed25519 AAAA... first-server' 'ssh-ed25519 AAAA... second-server' -i ~/.ssh/id_ed25519
 ```
 
-The argument must exactly match a public key string in the rules, including
-any comment. Selection uses the current rules, so a newly added recipient
+Each argument matches an exact public key string in the rules, including
+any comment. A match for any selected recipient includes the secret once.
+Selection uses the current rules, so a newly added recipient
 selects the secrets that need to be encrypted for it. Other files are left
-unchanged. An empty argument or a key absent from all rules is an error.
+unchanged. An empty argument or no matches across all selected keys is an error.
 Omit the public key to rekey all secrets. `-i` still selects the private key
 used for decryption.
 

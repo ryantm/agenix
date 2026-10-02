@@ -10,13 +10,13 @@ function show_help () {
   echo "${PACKAGE} - edit, rekey, and check age secret files"
   echo " "
   echo "${PACKAGE} -e FILE [-i PRIVATE_KEY]"
-  echo "${PACKAGE} -r [PUBLIC_KEY] [-i PRIVATE_KEY]"
+  echo "${PACKAGE} -r [PUBLIC_KEY...] [-i PRIVATE_KEY]"
   echo "${PACKAGE} -c"
   echo ' '
   echo 'options:'
   echo '-h, --help                show help'
   echo "-e, --edit FILE           edits FILE using \$EDITOR"
-  echo '-r, --rekey [PUBLIC_KEY]  re-encrypts secrets, optionally selecting a recipient'
+  echo '-r, --rekey [PUBLIC_KEY...]  re-encrypts secrets matching any selected recipient'
   echo '-c, --check               checks encrypted SSH recipients against the rules'
   echo '-d, --decrypt FILE        decrypts FILE to STDOUT'
   echo '-i, --identity            identity to use when decrypting'
@@ -26,7 +26,7 @@ function show_help () {
   echo ' '
   echo 'PRIVATE_KEY a path to a private SSH key used to decrypt file'
   echo ' '
-  echo 'PUBLIC_KEY an exact public key string from the rules; only matching secrets are rekeyed'
+  echo 'PUBLIC_KEY exact public key strings from the rules; any match selects a secret'
   echo ' '
   echo 'EDITOR environment variable of editor to use when editing FILE'
   echo ' '
@@ -63,7 +63,7 @@ function set_file() {
 test $# -eq 0 && (show_help && exit 1)
 
 REKEY=0
-REKEY_PUBLIC_KEY=
+REKEY_PUBLIC_KEYS=()
 CHECK=0
 DECRYPT_ONLY=0
 DEFAULT_DECRYPT=(--decrypt)
@@ -100,11 +100,11 @@ while test $# -gt 0; do
       ;;
     -r|--rekey)
       shift
-      if [[ $# -gt 0 && $1 != -* ]]; then
-        REKEY_PUBLIC_KEY="$1"
-        [[ -n ${REKEY_PUBLIC_KEY} ]] || err 'PUBLIC_KEY must not be empty'
+      while [[ $# -gt 0 && $1 != -* ]]; do
+        [[ -n $1 ]] || err 'PUBLIC_KEY must not be empty'
+        REKEY_PUBLIC_KEYS+=("$1")
         shift
-      fi
+      done
       REKEY=1
       ;;
     -c|--check)
@@ -287,16 +287,21 @@ function edit {
 }
 
 function rekey {
-    local files
+    local files recipients
+    recipients=$(@jqBin@ -cn --args '$ARGS.positional' "${REKEY_PUBLIC_KEYS[@]}") || return 1
     files=$(@nixInstantiate@ --json --eval --strict \
-        --argstr rulesPath "${RULES}" --argstr recipient "${REKEY_PUBLIC_KEY}" \
-        -E '{ rulesPath, recipient }:
-            let rules = import (builtins.toPath rulesPath);
+        --argstr rulesPath "${RULES}" --argstr recipientsJson "${recipients}" \
+        -E '{ rulesPath, recipientsJson }:
+            let
+              rules = import (builtins.toPath rulesPath);
+              recipients = builtins.fromJSON recipientsJson;
             in builtins.filter
-              (file: recipient == "" || builtins.elem recipient (builtins.getAttr file rules).publicKeys)
+              (file: recipients == [] || builtins.any
+                (recipient: builtins.elem recipient (builtins.getAttr file rules).publicKeys)
+                recipients)
               (builtins.attrNames rules)' | @jqBin@ -r .[]) || return 1
     if [[ -z ${files} ]]; then
-        [[ -z ${REKEY_PUBLIC_KEY} ]] || err 'No secrets in the rules match PUBLIC_KEY'
+        [[ ${#REKEY_PUBLIC_KEYS[@]} -eq 0 ]] || err 'No secrets in the rules match PUBLIC_KEY'
         return 0
     fi
     while IFS= read -r FILE
