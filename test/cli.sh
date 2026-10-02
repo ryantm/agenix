@@ -84,6 +84,13 @@ before=$(hash passwordfile-user1.age)
 [[ $(hash passwordfile-user1.age) != "$before" ]]
 
 EDITOR=: "$agenix" -e passwordfile-user1.age </dev/null
+# Local rules are intentionally impure, even if nix.conf defaults to pure eval.
+NIX_CONFIG='pure-eval = true' "$agenix" --check
+[[ $(NIX_CONFIG='pure-eval = true' decrypt secret1.age) == hello ]]
+NIX_CONFIG='pure-eval = true' EDITOR=: "$agenix" -e secret1.age
+NIX_CONFIG='pure-eval = true' "$agenix" -r </dev/null
+[[ $(decrypt secret1.age) == hello ]]
+
 printf 'bogus\n' > "$HOME/.ssh/id_rsa"
 before=$(hash passwordfile-user1.age)
 if EDITOR=: "$agenix" -e passwordfile-user1.age </dev/null; then
