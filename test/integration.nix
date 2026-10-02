@@ -1,182 +1,182 @@
-args@{ nixpkgs ? <nixpkgs>, ... }:
+{
+  nixpkgs ? <nixpkgs>,
+  pkgs ? import <nixpkgs> {
+    inherit system;
+    config = { };
+  },
+  system ? builtins.currentSystem,
+  home-manager ? <home-manager>,
+}:
+pkgs.testers.nixosTest {
+  name = "agenix-integration";
+  nodes.system1 =
+    {
+      config,
+      pkgs,
+      options,
+      ...
+    }:
+    {
+      imports = [
+        ../modules/age.nix
+        ./install_ssh_host_keys.nix
+        "${home-manager}/nixos"
+      ];
 
-with (import "${nixpkgs}/lib");
+      services.openssh.enable = true;
 
-import "${nixpkgs}/nixos/tests/make-test-python.nix"
-  (
-    let
-      sshdConf = {
-        enable = true;
-        hostKeys = [{ type = "ed25519"; path = "/etc/ssh/ssh_host_ed25519_key"; }];
+      age.secrets = {
+        disabled.enable = false;
+        passwordfile-user1.file = ../example/passwordfile-user1.age;
+        leading-hyphen.file = ../example/-leading-hyphen-filename.age;
+        named-owner = {
+          file = ../example/secret1.age;
+          owner = "getpsyched";
+        };
       };
 
-      testService = name: {
-        systemd.services.${name} = {
-          wantedBy = [ "multi-user.target" ];
-          reload = "touch /tmp/${name}-reloaded";
-          # restarting a serivice stops it
-          preStop = "touch /tmp/${name}-stopped";
-          serviceConfig = {
-            Type = "oneshot";
-            RemainAfterExit = true;
+      age.identityPaths = options.age.identityPaths.default ++ [ "/etc/ssh/this_key_wont_exist" ];
+
+      users = {
+        mutableUsers = false;
+
+        users = {
+          user1 = {
+            isNormalUser = true;
+            hashedPasswordFile = config.age.secrets.passwordfile-user1.path;
+            uid = 1000;
+          };
+          primary = {
+            name = "getpsyched";
+            isNormalUser = true;
+            group = "users";
+            uid = 1001;
           };
         };
       };
 
-      testSecret = name: {
-        imports = map testService [ "${name}-reloadUnit" "${name}-restartUnit" ];
-        age.secrets.${name} = {
-          file = ../example/secret1.age;
-          onChange = "touch /tmp/${name}-onChange-executed";
-          reloadUnits = [ "${name}-reloadUnit.service" ];
-          restartUnits = [ "${name}-restartUnit.service" ];
-        };
-      };
-    in
-    rec {
-      name = "agenix-integration";
+      home-manager.users.user1 =
+        { options, ... }:
+        {
+          imports = [
+            ../modules/age-home.nix
+          ];
 
-      nodes.system1 = { config, ... }: {
-        imports = [
-          ../modules/age.nix
-          ./install_ssh_host_keys.nix
-        ];
+          home.stateVersion = pkgs.lib.trivial.release;
 
-        services.openssh = sshdConf;
-
-        age.secrets.passwordfile-user1.file = ../example/passwordfile-user1.age;
-
-        users = {
-          mutableUsers = false;
-
-          users = {
-            user1 = {
-              isNormalUser = true;
-              passwordFile = config.age.secrets.passwordfile-user1.path;
+          age = {
+            verbosity = "quiet";
+            secrets.disabled.enable = false;
+            identityPaths = options.age.identityPaths.default ++ [ "/home/user1/.ssh/this_key_wont_exist" ];
+            secrets.secret2 = {
+              # Only decryptable by user1's key
+              file = ../example/secret2.age;
+            };
+            secrets.secret2Path = {
+              file = ../example/secret2.age;
+              path = "/home/user1/secret2";
+            };
+            secrets.armored-secret = {
+              file = ../example/armored-secret.age;
             };
           };
         };
-      };
+    };
 
-      nodes.system2 = { pkgs, ... }: {
-        imports = [
-          ../modules/age.nix
-          ./install_ssh_host_keys.nix
-        ]
-        ++ map testSecret [
-          "noChange"
-          "fileChange"
-          "secretChange"
-          "secretChangeWeirdPath"
-          "pathChange"
-          "pathChangeNoSymlink"
-          "modeChange"
-          "symlinkOn"
-          "symlinkOff"
-        ]
-        # add these services so they get started before the secret is added
-        ++ (testSecret "secretAdded").imports;
+  nodes.disabled = { pkgs, ... }: {
+    imports = [
+      ../modules/age.nix
+      "${home-manager}/nixos"
+    ];
+    age.secrets.only-disabled.enable = false;
+    home-manager.users.user1 = { ... }: {
+      imports = [ ../modules/age-home.nix ];
+      home.username = "user1";
+      home.homeDirectory = "/home/user1";
+      home.stateVersion = pkgs.lib.trivial.release;
+      age.secrets.only-disabled.enable = false;
+    };
+    users.users.user1 = {
+      isNormalUser = true;
+      uid = 1000;
+    };
+  };
 
+  nodes.forcedDisabled = { pkgs, ... }: {
+    imports = [
+      ../modules/age.nix
+      "${home-manager}/nixos"
+    ];
+    age.enable = false;
+    age.secrets.configured.file = ../example/secret1.age;
+    users.users.user1 = {
+      isNormalUser = true;
+      uid = 1000;
+    };
+    home-manager.users.user1 = { ... }: {
+      imports = [ ../modules/age-home.nix ];
+      home.username = "user1";
+      home.homeDirectory = "/home/user1";
+      home.stateVersion = pkgs.lib.trivial.release;
+      age.enable = false;
+      age.secrets.configured.file = ../example/secret2.age;
+    };
+  };
 
-        age.secrets.secretChangeWeirdPath.path = "/tmp/secretChangeWeirdPath";
-        age.secrets.pathChangeNoSymlink.symlink = false;
-        age.secrets.symlinkOn.symlink = false;
+  testScript =
+    let
+      user = "user1";
+      password = "password1234";
+      secret2 = "world!";
+      hyphen-secret = "filename started with hyphen";
+      armored-secret = "Hello World!";
+    in
+    ''
+      system1.wait_for_unit("multi-user.target")
+      system1.succeed("test -e /home/user1/.config/systemd/user/agenix.service")
+      disabled.wait_for_unit("multi-user.target")
+      disabled.fail("test -e /run/agenix")
+      disabled.fail("systemctl cat agenix-install-secrets.service")
+      disabled.fail("systemctl cat agenix-chown.service")
+      disabled.fail("test -e /home/user1/.config/systemd/user/agenix.service")
+      forcedDisabled.wait_for_unit("multi-user.target")
+      forcedDisabled.fail("test -e /run/agenix")
+      forcedDisabled.fail("test -e /home/user1/.config/systemd/user/agenix.service")
+      # The owner is a Linux username, while its users.users attribute is "primary".
+      # The default secret group should come from that user's configuration.
+      owner_group = system1.succeed("stat -Lc '%U:%G' /run/agenix/named-owner").strip()
+      assert owner_group == "getpsyched:users", owner_group
+      system1.wait_until_succeeds("pgrep -f 'agetty.*tty1'")
+      system1.sleep(2)
+      system1.send_key("alt-f2")
+      system1.wait_until_succeeds("[ $(fgconsole) = 2 ]")
+      system1.wait_for_unit("getty@tty2.service")
+      system1.wait_until_succeeds("pgrep -f 'agetty.*tty2'")
+      system1.wait_until_tty_matches("2", "login: ")
+      system1.send_chars("${user}\n")
+      system1.wait_until_tty_matches("2", "login: ${user}")
+      system1.wait_until_succeeds("pgrep login")
+      system1.sleep(2)
+      system1.send_chars("${password}\n")
+      system1.send_chars("whoami > /tmp/1\n")
+      system1.wait_for_file("/tmp/1")
+      assert "${user}" in system1.succeed("cat /tmp/1")
+      system1.send_chars("cat /run/user/$(id -u)/agenix/secret2 > /tmp/2\n")
+      system1.wait_for_file("/tmp/2")
+      assert "${secret2}" in system1.succeed("cat /tmp/2")
+      system1.fail("test -e /run/user/1000/agenix/disabled")
+      system1.send_chars("cat /run/user/$(id -u)/agenix/armored-secret > /tmp/3\n")
+      system1.wait_for_file("/tmp/3")
+      assert "${armored-secret}" in system1.succeed("cat /tmp/3")
 
-        services.openssh = sshdConf;
-      };
+      # Home Manager's quiet mode still reports a missing identity on stderr.
+      home_log = system1.succeed("journalctl -b _SYSTEMD_USER_UNIT=agenix.service --no-pager -o cat")
+      assert "[agenix] WARNING: config.age.identityPaths entry /home/user1/.ssh/this_key_wont_exist not present!" in home_log
+      assert "[agenix] decrypting secrets..." not in home_log
+      assert "decrypting '" not in home_log
 
-      nodes.system2After = { lib, ... }: {
-        imports = [
-          nodes.system2
-          # services have already been added
-          (builtins.removeAttrs (testSecret "secretAdded") [ "imports" ])
-        ];
-        age.secrets.fileChange.file = lib.mkForce ../example/secret1-copy.age;
-        age.secrets.secretChange.file = lib.mkForce ../example/passwordfile-user1.age;
-        age.secrets.secretChangeWeirdPath.file = lib.mkForce ../example/passwordfile-user1.age;
-        age.secrets.pathChange.path = lib.mkForce "/tmp/pathChange";
-        age.secrets.pathChangeNoSymlink.path = lib.mkForce "/tmp/pathChangeNoSymlink";
-        age.secrets.modeChange.mode = lib.mkForce "0777";
-        age.secrets.symlinkOn.symlink = lib.mkForce true;
-        age.secrets.symlinkOff.symlink = lib.mkForce false;
-      };
+      assert "${hyphen-secret}" in system1.succeed("cat /run/agenix/leading-hyphen")
+      system1.fail("test -e /run/agenix/disabled")
 
-      testScript =
-        let
-          user = "user1";
-          password = "password1234";
-        in
-        { nodes, ... }:
-        ''
-          system1.start()
-          system2.start()
-
-          system1.wait_for_unit("multi-user.target")
-          system1.wait_until_succeeds("pgrep -f 'agetty.*tty1'")
-          system1.sleep(2)
-          system1.send_key("alt-f2")
-          system1.wait_until_succeeds("[ $(fgconsole) = 2 ]")
-          system1.wait_for_unit("getty@tty2.service")
-          system1.wait_until_succeeds("pgrep -f 'agetty.*tty2'")
-          system1.wait_until_tty_matches(2, "login: ")
-          system1.send_chars("${user}\n")
-          system1.wait_until_tty_matches(2, "login: ${user}")
-          system1.wait_until_succeeds("pgrep login")
-          system1.sleep(2)
-          system1.send_chars("${password}\n")
-          system1.send_chars("whoami > /tmp/1\n")
-          system1.wait_for_file("/tmp/1")
-          assert "${user}" in system1.succeed("cat /tmp/1")
-
-          # test changing secret
-          system2.wait_for_unit("multi-user.target")
-          # for these secrets the content doesn't change at all
-          system2_noChange_secrets = [
-            "noChange",
-            "fileChange",
-            "symlinkOn",
-            "symlinkOff",
-          ]
-          system2_change_secrets = [
-            "secretChange",
-            "secretChangeWeirdPath",
-            "pathChange",
-            "pathChangeNoSymlink",
-            "modeChange",
-            "secretAdded",
-          ]
-          system2_secrets = system2_noChange_secrets + system2_change_secrets
-          system2.wait_for_unit("multi-user.target")
-          for secret in system2_secrets:
-            system2.wait_for_unit(secret + "-reloadUnit")
-            system2.wait_for_unit(secret + "-restartUnit")
-
-          def test_not_changed(secret):
-            system2.fail("test -f /tmp/" + secret + "-reloadUnit-reloaded")
-            system2.fail("test -f /tmp/" + secret + "-reloadUnit-restarted")
-            system2.fail("test -f /tmp/" + secret + "-restartUnit-reloaded")
-            system2.fail("test -f /tmp/" + secret + "-restartUnit-restarted")
-            system2.fail("test -f /tmp/" + secret + "-onChange-executed")
-          def test_changed(secret):
-            system2.wait_for_file("/tmp/" + secret + "-onChange-executed")
-            system2.wait_for_file("/tmp/" + secret + "-reloadUnit-reloaded")
-            system2.wait_for_file("/tmp/" + secret + "-restartUnit-stopped")
-            system2.fail("test -f /tmp/" + secret + "-reloadUnit-restarted")
-            system2.fail("test -f /tmp/" + secret + "-restartUnit-reloaded")
-
-          # nothing should happen at startup
-          for secret in system2_secrets:
-            test_not_changed(secret)
-
-          # apply changes
-          system2.succeed(
-              "${nodes.system2After.config.system.build.toplevel}/bin/switch-to-configuration test"
-          )
-          for secret in system2_noChange_secrets:
-            test_not_changed(secret)
-          for secret in system2_change_secrets:
-            test_changed(secret)
-        '';
-    }
-  )
-  args
+    '';
+}
