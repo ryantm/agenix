@@ -138,7 +138,8 @@ let
           pkgs.writeText "agenix-template-inputs.json" (
             builtins.toJSON {
               secrets = unique (map (s: s.name) secret.secrets);
-              inherit (secret) trimFinalNewline;
+              environmentFiles = map (s: s.name) secret.environmentFiles;
+              inherit (secret) trimFinalNewline format;
             }
           )
         } > "$_truePath.tmp"
@@ -259,6 +260,7 @@ let
         // {
           template = "${s.template}";
           secrets = map cacheSecret s.secrets;
+          environmentFiles = map cacheSecret s.environmentFiles;
         }
       ) enabledDerivedSecrets;
       accounts = map (
@@ -597,6 +599,19 @@ let
                 default = [ ];
                 description = "Enabled entries from config.age.secrets made available to this template.";
               };
+              environmentFiles = mkOption {
+                type = types.listOf (secretType false);
+                default = [ ];
+                description = "Enabled age.secrets entries containing single-line KEY=value assignments for $KEY and \${KEY} placeholders. Later files override earlier values; no shell code or environment expansion is evaluated.";
+              };
+              format = mkOption {
+                type = types.enum [
+                  "text"
+                  "json"
+                ];
+                default = "text";
+                description = "With json, escape inserted values as JSON string contents and validate the result. Put placeholders inside JSON quotes. Text preserves the input bytes.";
+              };
               trimFinalNewline = mkOption {
                 type = types.bool;
                 default = true;
@@ -742,7 +757,7 @@ in
               any (
                 secret: source.name == secret.name && toString source.file == toString secret.file
               ) enabledAgeSecrets
-            ) derived.secrets
+            ) (derived.secrets ++ derived.environmentFiles)
           ) enabledDerivedSecrets;
           message = "agenix: derivedSecrets may only reference enabled entries from age.secrets.";
         }

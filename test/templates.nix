@@ -11,10 +11,28 @@ let
     plain=@plain@
     rich=@regex[.*]@
   '';
+  encryptEnvironment =
+    text:
+    pkgs.runCommand "template-environment.age" { } ''
+      ${pkgs.age}/bin/age -R ${../example_keys/system1.pub} -o "$out" < ${pkgs.writeText "public-test-environment" text}
+    '';
+  environmentCipher = encryptEnvironment ''
+    TOKEN='quote " slash \ $(touch /tmp/agenix-env-pwned) $NOT_EXPANDED'
+    COUNT=7
+  '';
+  invalidEnvironmentCipher = encryptEnvironment "TOKEN='unterminated-private-value";
+  changedEnvironmentCipher = encryptEnvironment ''
+    TOKEN='changed "value"'
+    COUNT=8
+  '';
   makeNode = sysusers: { config, lib, ... }: {
     imports = [ ../modules/age.nix ];
     systemd.sysusers.enable = sysusers;
     services.userborn.enable = false;
+    # This test deliberately retries multiple failed activations in quick succession.
+    systemd.services.agenix-install-secrets.unitConfig = lib.mkIf sysusers {
+      StartLimitIntervalSec = 0;
+    };
     users.users.template-owner = {
       isSystemUser = true;
       group = "users";
@@ -29,6 +47,11 @@ let
       rich = {
         file = richCipher;
         name = "regex[.*]";
+      };
+      environment = {
+        file = "/run/agenix-test/environment.age";
+        path = "/var/lib/agenix-environment";
+        symlink = false;
       };
     };
     age.derivedSecrets = {
@@ -58,9 +81,19 @@ let
         template = ./fixtures/template.txt;
         secrets = [ config.age.secrets.plain ];
       };
+      environment-json = {
+        template = pkgs.writeText "environment-json.template" ''
+          {"token":"$TOKEN","count":"''${COUNT}"}
+        '';
+        environmentFiles = [ config.age.secrets.environment ];
+        format = "json";
+      };
     };
     system.activationScripts.templateTestFixtures.text = ''
       mkdir -p /run/agenix-test
+      if ! test -e /run/agenix-test/environment.age; then
+        cp ${environmentCipher} /run/agenix-test/environment.age
+      fi
       for name in config failable; do
         if ! test -e "/run/agenix-test/$name.template"; then
           cp ${publicTemplate} "/run/agenix-test/$name.template"
@@ -77,6 +110,8 @@ pkgs.testers.nixosTest {
   nodes.activation = makeNode false;
   nodes.sysusers = makeNode true;
   testScript = ''
+    import json
+
     for machine in [activation, sysusers]:
         machine.start()
         machine.wait_for_unit("multi-user.target")
@@ -88,6 +123,9 @@ pkgs.testers.nixosTest {
         machine.fail("test -e /run/agenix/disabled")
         machine.fail("test -e /tmp/agenix-template-pwned")
         machine.fail("test -e /tmp/template-hook")
+        environment = json.loads(machine.succeed("cat /run/agenix/environment-json"))
+        assert environment == {"token": r'quote " slash \ $(touch /tmp/agenix-env-pwned) $NOT_EXPANDED', "count": "7"}
+        machine.fail("test -e /tmp/agenix-env-pwned")
         command = "systemctl restart agenix-install-secrets.service" if machine == sysusers else "/run/current-system/activate"
         machine.succeed(command)
         machine.fail("test -e /tmp/template-hook")
@@ -105,6 +143,22 @@ pkgs.testers.nixosTest {
             machine.succeed("systemctl start agenix-chown.service")
         machine.wait_for_file("/tmp/template-hook")
         assert machine.succeed("cat /run/agenix/a-config") == "updated:hello"
+
+        generation = machine.succeed("readlink /run/agenix").strip()
+        previous_environment_file = machine.succeed("cat /var/lib/agenix-environment")
+        machine.succeed("cp ${invalidEnvironmentCipher} /run/agenix-test/environment.age")
+        machine.fail(command)
+        assert machine.succeed("readlink /run/agenix").strip() == generation
+        assert json.loads(machine.succeed("cat /run/agenix/environment-json")) == environment
+        assert machine.succeed("cat /var/lib/agenix-environment") == previous_environment_file
+        machine.succeed("cp ${changedEnvironmentCipher} /run/agenix-test/environment.age")
+        machine.succeed(command)
+        if machine == sysusers:
+            machine.succeed("systemctl start agenix-chown.service")
+        assert json.loads(machine.succeed("cat /run/agenix/environment-json")) == {"token": 'changed "value"', "count": "8"}
+        generation = machine.succeed("readlink /run/agenix").strip()
+        machine.succeed(command)
+        assert machine.succeed("readlink /run/agenix").strip() == generation
         machine.shutdown()
   '';
 }

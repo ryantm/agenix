@@ -44,9 +44,19 @@ let
     age.secrets.duplicate.file = ../example/secret1.age;
     age.derivedSecrets.duplicate.template = ./template-options.nix;
   };
+  disabledEnvironment = evaluate (
+    { config, ... }: {
+      age.secrets.disabled.enable = false;
+      age.derivedSecrets.output = {
+        template = ./template-options.nix;
+        environmentFiles = [ config.age.secrets.disabled ];
+      };
+    }
+  );
 in
 assert literal.age.enable && valid literal;
 assert !valid disabledInput;
 assert !valid missingInput;
 assert !valid collision;
+assert !valid disabledEnvironment;
 pkgs.runCommand "agenix-template-options" { } ''touch "$out"''
