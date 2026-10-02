@@ -58,6 +58,9 @@
           x86_64-linux.failure-safety = import (testDir + "/failure-safety.nix") {
             pkgs = nixpkgs.legacyPackages.x86_64-linux;
           };
+          x86_64-linux.cli-plugin = import (testDir + "/cli-plugin.nix") {
+            pkgs = nixpkgs.legacyPackages.x86_64-linux;
+          };
           x86_64-linux.integration = import (testDir + "/integration.nix") {
             inherit nixpkgs home-manager;
             pkgs = nixpkgs.legacyPackages.x86_64-linux;

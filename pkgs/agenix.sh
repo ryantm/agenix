@@ -9,8 +9,8 @@ PACKAGE="agenix"
 function show_help () {
   echo "${PACKAGE} - edit, rekey, and check age secret files"
   echo " "
-  echo "${PACKAGE} -e FILE [-i PRIVATE_KEY]"
-  echo "${PACKAGE} -r [PUBLIC_KEY] [-i PRIVATE_KEY]"
+  echo "${PACKAGE} -e FILE [-i PRIVATE_KEY] [-j PLUGIN]"
+  echo "${PACKAGE} -r [PUBLIC_KEY] [-i PRIVATE_KEY] [-j PLUGIN]"
   echo "${PACKAGE} -c"
   echo ' '
   echo 'options:'
@@ -20,6 +20,7 @@ function show_help () {
   echo '-c, --check               checks encrypted SSH recipients against the rules'
   echo '-d, --decrypt FILE        decrypts FILE to STDOUT'
   echo '-i, --identity            identity to use when decrypting'
+  echo '-j PLUGIN                 decrypt using the data-less plugin PLUGIN'
   echo '-v, --verbose             verbose output'
   echo ' '
   echo 'FILE an age-encrypted file'
@@ -67,6 +68,7 @@ REKEY_PUBLIC_KEY=
 CHECK=0
 DECRYPT_ONLY=0
 DEFAULT_DECRYPT=(--decrypt)
+EXPLICIT_IDENTITY=0
 
 while test $# -gt 0; do
   case "$1" in
@@ -92,10 +94,20 @@ while test $# -gt 0; do
           identity_path="${PWD}/${identity_path}"
         fi
         DEFAULT_DECRYPT+=(--identity "${identity_path}")
+        EXPLICIT_IDENTITY=1
       else
         echo "no PRIVATE_KEY specified"
         exit 1
       fi
+      shift
+      ;;
+    -j)
+      shift
+      if [[ $# -eq 0 || -z $1 || $1 == -* ]]; then
+        err 'no PLUGIN specified'
+      fi
+      DEFAULT_DECRYPT+=(-j "$1")
+      EXPLICIT_IDENTITY=1
       shift
       ;;
     -r|--rekey)
@@ -214,16 +226,19 @@ function decrypt {
     if [[ -f "${FILE}" ]]
     then
         DECRYPT=("${DEFAULT_DECRYPT[@]}")
-        if [[ "${DECRYPT[*]}" != *"--identity"* ]]; then
+        local have_identity=${EXPLICIT_IDENTITY}
+        if (( ! have_identity )); then
             if [[ -f "${HOME}/.ssh/id_rsa" ]]; then
                 DECRYPT+=(--identity "${HOME}/.ssh/id_rsa")
+                have_identity=1
             fi
             if [[ -f "${HOME}/.ssh/id_ed25519" ]]; then
                 DECRYPT+=(--identity "${HOME}/.ssh/id_ed25519")
+                have_identity=1
             fi
         fi
-        if [[ "${DECRYPT[*]}" != *"--identity"* ]]; then
-          err "No identity found to decrypt ${FILE}. Try adding an SSH key at ${HOME}/.ssh/id_rsa or ${HOME}/.ssh/id_ed25519 or using the --identity flag to specify a file."
+        if (( ! have_identity )); then
+          err "No identity found to decrypt ${FILE}. Try adding an SSH key at ${HOME}/.ssh/id_rsa or ${HOME}/.ssh/id_ed25519, using --identity to specify a file, or using -j to specify a plugin."
         fi
 
         @ageBin@ "${DECRYPT[@]}" -- "${FILE}" || exit 1
