@@ -61,6 +61,9 @@
             }).system;
         })
         // {
+          x86_64-linux.systemd-credentials = import (testDir + "/systemd-credentials.nix") {
+            pkgs = nixpkgs.legacyPackages.x86_64-linux;
+          };
           x86_64-linux.missing-identities = import (testDir + "/missing-identities.nix") {
             pkgs = nixpkgs.legacyPackages.x86_64-linux;
           };
