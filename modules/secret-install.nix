@@ -124,9 +124,7 @@ in
       '';
       identitySetup = ''
         IDENTITIES=()
-        _agenix_identity_paths=( ${
-          lib.concatMapStringsSep " " (path: ''"${toString path}"'') cfg.identityPaths
-        } )
+        _agenix_identity_paths=( ${lib.escapeShellArgs (map toString cfg.identityPaths)} )
         for identity in "''${_agenix_identity_paths[@]}"; do
           test -f "$identity" || echo "[agenix] WARNING: config.age.identityPaths entry $identity not present!" >&2
           test -r "$identity" || continue

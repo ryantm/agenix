@@ -26,6 +26,9 @@
     {
       checks =
         nixpkgs.lib.genAttrs [ "aarch64-darwin" "x86_64-darwin" ] (system: {
+          shared-installer = import (testDir + "/shared-installer.nix") {
+            pkgs = nixpkgs.legacyPackages.${system};
+          };
           integration =
             (darwin.lib.darwinSystem {
               inherit system;
