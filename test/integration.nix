@@ -27,6 +27,10 @@ pkgs.testers.nixosTest {
 
       age.secrets = {
         disabled.enable = false;
+        direct-default = {
+          file = ../example/secret1.age;
+          symlink = false;
+        };
         trimmed = {
           file = ../example/secret1.age;
           trimFinalNewline = true;
@@ -71,6 +75,10 @@ pkgs.testers.nixosTest {
           age = {
             verbosity = "quiet";
             secrets.disabled.enable = false;
+            secrets.direct-default = {
+              file = ../example/secret2.age;
+              symlink = false;
+            };
             secrets.trimmed = {
               file = ../example/secret2.age;
               trimFinalNewline = true;
@@ -173,6 +181,10 @@ pkgs.testers.nixosTest {
       system1.wait_for_file("/tmp/2")
       assert "${secret2}" in system1.succeed("cat /tmp/2")
       system1.fail("test -e /run/user/1000/agenix/disabled")
+      assert system1.succeed("cat /run/agenix/direct-default").strip() == "hello"
+      assert system1.succeed("cat /run/user/1000/agenix/direct-default").strip() == "${secret2}"
+      system1.fail("test -L /run/agenix/direct-default")
+      system1.fail("test -L /run/user/1000/agenix/direct-default")
       assert system1.succeed("wc -c < /run/agenix/trimmed").strip() == "5"
       assert system1.succeed("wc -c < /run/user/1000/agenix/trimmed").strip() == "6"
       system1.send_chars("cat /run/user/$(id -u)/agenix/armored-secret > /tmp/3\n")

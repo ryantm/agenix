@@ -185,6 +185,12 @@ stop using them.
 Some programs do not like following symlinks (for example Java
 programs like Elasticsearch).
 
+At the default path, the secret itself is a regular file inside the current
+generation regardless of this option; `age.secretsDir` is the directory
+symlink selecting that generation. Setting `symlink = false` without a
+custom path keeps the file in the new generation. To place it outside that
+directory symlink, also choose a custom path such as `/var/lib/my-service/token`.
+
 Example:
 
 ```nix
@@ -335,9 +341,11 @@ with the same behavior as the system module option above.
 
 ### `age.secrets.<name>.symlink`
 
-Defaults to true. If true, the destination is a symlink to the current secret
-generation. If false, the decrypted file is copied to its destination; you
-are then responsible for removing it when no longer needed.
+Defaults to true. Custom destinations are symlinks to the current generation
+when true, or regular files when false. You are responsible for removing
+custom regular files when no longer needed. At the default path, the secret
+is always a regular file within the current generation, and `age.secretsDir`
+is the directory symlink selecting that generation.
 
 ### `age.identityPaths`
 
