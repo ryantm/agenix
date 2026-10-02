@@ -2,15 +2,47 @@
 
 ## `age` module reference {#age-module-reference}
 
+### `age.enable`
+
+`age.enable` controls whether agenix installs secrets and runs activation.
+It defaults to true when at least one secret is enabled, and false otherwise.
+Set it to false to disable the module even when secrets are configured.
+Switching an existing system to `false` does not remove secrets already
+decrypted in `/run`; reboot to clear them.
+
+### `age.verbosity`
+
+`age.verbosity` controls agenix's routine activation messages. It accepts
+`"quiet"`, `"summary"`, `"progress"`, or `"detailed"` and defaults to
+`"detailed"`, preserving the current output.
+
+| Value | Messages |
+| --- | --- |
+| `"quiet"` | No routine agenix messages |
+| `"summary"` | One decryption summary |
+| `"progress"` | Summary and generation, linking, cleanup, and ownership steps |
+| `"detailed"` | All of the above, plus one line per secret |
+
+Warnings and errors remain visible at every level. The Home Manager module
+uses the same levels, without an ownership step. This option does not control
+output from Nix, systemd, other activation scripts, or the `agenix` CLI.
+The CLI's `-v` option enables shell tracing independently of this setting.
+
 ### `age.secrets`
 
 `age.secrets` attrset of secrets. You always need to use this
 configuration option. Defaults to `{}`.
 
+### `age.secrets.<name>.enable`
+
+`age.secrets.<name>.enable` defaults to true. Set it to false to omit that
+secret from the installed generation. A disabled secret does not need a
+`file` value.
+
 ### `age.secrets.<name>.file`
 
 `age.secrets.<name>.file` is the path to the encrypted `.age` for this
-secret. This is the only required secret option.
+secret. This is required for enabled secrets.
 
 Example:
 
@@ -46,7 +78,7 @@ Example referring to path:
 {
   users.users.ryantm = {
     isNormalUser = true;
-    passwordFile = config.age.secrets.passwordfile-ryantm.path;
+    hashedPasswordFile = config.age.secrets.passwordfile-ryantm.path;
   };
 }
 ```
@@ -124,7 +156,7 @@ Example:
 ### `age.secrets.<name>.symlink`
 
 `age.secrets.<name>.symlink` is a boolean. If true (the default),
-secrets are symlinked to `age.secrets.<name>.path`. If false, secerts
+secrets are symlinked to `age.secrets.<name>.path`. If false, secrets
 are copied to `age.secrets.<name>.path`. Usually, you want to keep
 this as true, because it secure cleanup of secrets no longer
 used. (The symlink will still be there, but it will be broken.) If
@@ -166,7 +198,7 @@ Example of a secret with a name different from its attrpath:
 ### `age.ageBin`
 
 `age.ageBin` the string of the path to the `age` binary. Usually, you
-don't need to change this. Defaults to `rage/bin/rage`.
+don't need to change this. Defaults to `age/bin/age`.
 
 Overriding `age.ageBin` example:
 
@@ -222,18 +254,97 @@ Overriding `age.secretsMountPoint` example:
 }
 ```
 
+## Home Manager module reference {#home-manager-module-reference}
+
+The Home Manager module manages secrets for one user. Its options are separate
+from the NixOS module options above, even where they share a name.
+
+### `age.enable`
+
+Defaults to true when at least one secret is enabled. Set it to false to
+disable the Home Manager agenix service. Disabling the service does not remove
+secrets decrypted by earlier activations.
+
+### `age.verbosity`
+
+Accepts the same four levels described above and defaults to `"detailed"`.
+There is no ownership step in the Home Manager service. Warnings and errors
+remain visible at every level.
+
+### `age.package`
+
+The `age` package used to decrypt secrets. Defaults to `pkgs.age`.
+
+### `age.secrets`
+
+An attribute set of secrets. Defaults to `{}`.
+
+### `age.secrets.<name>.enable`
+
+Defaults to true. Set it to false to omit the secret; a disabled secret does
+not need a `file` value.
+
+### `age.secrets.<name>.file`
+
+The path to the encrypted `.age` file. Required for enabled secrets.
+
+### `age.secrets.<name>.name`
+
+The decrypted file's name under `age.secretsDir`. Defaults to `<name>` from
+the attribute path.
+
+### `age.secrets.<name>.path`
+
+The destination of the decrypted secret. Defaults to
+`config.age.secretsDir/<name>`, which is usually
+`$XDG_RUNTIME_DIR/agenix/<name>` on Linux or
+`$(getconf DARWIN_USER_TEMP_DIR)/agenix/<name>` on Darwin.
+
+### `age.secrets.<name>.mode`
+
+Permissions of the decrypted secret in a format understood by `chmod`.
+Defaults to `"0400"`.
+
+### `age.secrets.<name>.symlink`
+
+Defaults to true. If true, the destination is a symlink to the current secret
+generation. If false, the decrypted file is copied to its destination; you
+are then responsible for removing it when no longer needed.
+
+### `age.identityPaths`
+
+Paths to SSH private keys to try for decryption. By default, the module tries
+`<home>/.ssh/id_ed25519` and `<home>/.ssh/id_rsa`, using
+`config.home.homeDirectory` for `<home>`. At least one readable identity must
+be available when secrets are decrypted. Use strings containing absolute paths
+when overriding this option; a Nix path would copy the private key into the
+world-readable Nix store.
+
+### `age.secretsDir`
+
+Directory where secrets are exposed. Defaults to `$XDG_RUNTIME_DIR/agenix`
+on Linux and `$(getconf DARWIN_USER_TEMP_DIR)/agenix` on Darwin.
+
+### `age.secretsMountPoint`
+
+Directory where generations are created before they are linked. Defaults to
+`$XDG_RUNTIME_DIR/agenix.d` on Linux and
+`$(getconf DARWIN_USER_TEMP_DIR)/agenix.d` on Darwin.
+
 ## agenix CLI reference {#agenix-cli-reference}
 
 ```
-agenix - edit and rekey age secret files
+agenix - edit, rekey, and check age secret files
 
 agenix -e FILE [-i PRIVATE_KEY]
 agenix -r [-i PRIVATE_KEY]
+agenix -c
 
 options:
 -h, --help                show help
 -e, --edit FILE           edits FILE using $EDITOR
 -r, --rekey               re-encrypts all secrets with specified recipients
+-c, --check               checks encrypted SSH recipients against the rules
 -d, --decrypt FILE        decrypts FILE to STDOUT
 -i, --identity            identity to use when decrypting
 -v, --verbose             verbose output
@@ -244,7 +355,26 @@ PRIVATE_KEY a path to a private SSH key used to decrypt file
 
 EDITOR environment variable of editor to use when editing FILE
 
-If STDIN is not interactive, EDITOR will be set to "cp /dev/stdin"
+If STDIN is not interactive, its contents replace the secret.
+Piped input replaces a secret without decrypting it first.
 
-RULES environment variable with path to Nix file specifying recipient public keys.
-Defaults to './secrets.nix'
+AGENIX_RULES environment variable with path to Nix file specifying recipient public keys. 
+Searches the current directory for agenix-rules.nix, then secrets.nix.
+Searches parent directories for agenix-rules.nix only.
+Resolves relative secret paths from the selected rules file's directory.
+```
+
+`agenix --check` compares the SSH recipient tags in each age file header with
+the public keys in the rules file. It prints `✓` for matching files and `✗`
+with missing or extra recipients for mismatches, and exits with a nonzero status
+if any file differs or cannot be checked. It does not decrypt or change files,
+so no private key is needed. Age's SSH tags are 32-bit identifiers; this check
+shows a full extra key when it can find a matching key literal in the rules
+file, and otherwise shows the tag. It cannot verify native age recipients or
+authenticate the encrypted contents.
+
+> [!WARNING]
+> The legacy `RULES` environment variable and automatic discovery of
+> `secrets.nix` still work, but agenix warns when either is used. Both will be
+> removed in a future version. Explicitly selecting `secrets.nix` with
+> `AGENIX_RULES` does not warn.
