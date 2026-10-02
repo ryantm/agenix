@@ -132,7 +132,7 @@ let
     (
       umask 077
       ${pkgs.python3}/bin/python3 ${../pkgs/render-template.py} \
-        ${escapeShellArg (toString secret.template)} \
+        ${escapeShellArg "${secret.template}"} \
         "${cfg.secretsMountPoint}/$_agenix_generation" \
         ${
           pkgs.writeText "agenix-template-inputs.json" (

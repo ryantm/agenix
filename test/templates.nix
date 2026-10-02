@@ -54,6 +54,10 @@ let
         secrets = [ config.age.secrets.plain ];
       };
       disabled.enable = false;
+      literal-path = {
+        template = ./fixtures/template.txt;
+        secrets = [ config.age.secrets.plain ];
+      };
     };
     system.activationScripts.templateTestFixtures.text = ''
       mkdir -p /run/agenix-test
@@ -79,6 +83,7 @@ pkgs.testers.nixosTest {
         expected = "plain=hello\nrich=" + machine.succeed("cat ${richText}")
         assert machine.succeed("cat /run/agenix/a-config") == expected
         machine.succeed("cmp ${richText} /var/lib/agenix-exact")
+        assert machine.succeed("cat /run/agenix/literal-path") == "literal=hello\n"
         assert machine.succeed("stat -Lc %U:%G:%a /run/agenix/a-config").strip() == "template-owner:users:440"
         machine.fail("test -e /run/agenix/disabled")
         machine.fail("test -e /tmp/agenix-template-pwned")
