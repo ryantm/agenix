@@ -7,7 +7,7 @@
   system ? builtins.currentSystem,
   home-manager ? <home-manager>,
 }:
-pkgs.nixosTest {
+pkgs.testers.nixosTest {
   name = "agenix-integration";
   nodes.system1 =
     {
@@ -26,15 +26,16 @@ pkgs.nixosTest {
       services.openssh.enable = true;
 
       age.secrets = {
+        disabled.enable = false;
         passwordfile-user1.file = ../example/passwordfile-user1.age;
         leading-hyphen.file = ../example/-leading-hyphen-filename.age;
+        named-owner = {
+          file = ../example/secret1.age;
+          owner = "getpsyched";
+        };
       };
 
       age.identityPaths = options.age.identityPaths.default ++ [ "/etc/ssh/this_key_wont_exist" ];
-
-      environment.systemPackages = [
-        (pkgs.callPackage ../pkgs/agenix.nix { })
-      ];
 
       users = {
         mutableUsers = false;
@@ -44,6 +45,12 @@ pkgs.nixosTest {
             isNormalUser = true;
             hashedPasswordFile = config.age.secrets.passwordfile-user1.path;
             uid = 1000;
+          };
+          primary = {
+            name = "getpsyched";
+            isNormalUser = true;
+            group = "users";
+            uid = 1001;
           };
         };
       };
@@ -58,6 +65,8 @@ pkgs.nixosTest {
           home.stateVersion = pkgs.lib.trivial.release;
 
           age = {
+            verbosity = "quiet";
+            secrets.disabled.enable = false;
             identityPaths = options.age.identityPaths.default ++ [ "/home/user1/.ssh/this_key_wont_exist" ];
             secrets.secret2 = {
               # Only decryptable by user1's key
@@ -74,6 +83,46 @@ pkgs.nixosTest {
         };
     };
 
+  nodes.disabled = { pkgs, ... }: {
+    imports = [
+      ../modules/age.nix
+      "${home-manager}/nixos"
+    ];
+    age.secrets.only-disabled.enable = false;
+    home-manager.users.user1 = { ... }: {
+      imports = [ ../modules/age-home.nix ];
+      home.username = "user1";
+      home.homeDirectory = "/home/user1";
+      home.stateVersion = pkgs.lib.trivial.release;
+      age.secrets.only-disabled.enable = false;
+    };
+    users.users.user1 = {
+      isNormalUser = true;
+      uid = 1000;
+    };
+  };
+
+  nodes.forcedDisabled = { pkgs, ... }: {
+    imports = [
+      ../modules/age.nix
+      "${home-manager}/nixos"
+    ];
+    age.enable = false;
+    age.secrets.configured.file = ../example/secret1.age;
+    users.users.user1 = {
+      isNormalUser = true;
+      uid = 1000;
+    };
+    home-manager.users.user1 = { ... }: {
+      imports = [ ../modules/age-home.nix ];
+      home.username = "user1";
+      home.homeDirectory = "/home/user1";
+      home.stateVersion = pkgs.lib.trivial.release;
+      age.enable = false;
+      age.secrets.configured.file = ../example/secret2.age;
+    };
+  };
+
   testScript =
     let
       user = "user1";
@@ -84,6 +133,19 @@ pkgs.nixosTest {
     in
     ''
       system1.wait_for_unit("multi-user.target")
+      system1.succeed("test -e /home/user1/.config/systemd/user/agenix.service")
+      disabled.wait_for_unit("multi-user.target")
+      disabled.fail("test -e /run/agenix")
+      disabled.fail("systemctl cat agenix-install-secrets.service")
+      disabled.fail("systemctl cat agenix-chown.service")
+      disabled.fail("test -e /home/user1/.config/systemd/user/agenix.service")
+      forcedDisabled.wait_for_unit("multi-user.target")
+      forcedDisabled.fail("test -e /run/agenix")
+      forcedDisabled.fail("test -e /home/user1/.config/systemd/user/agenix.service")
+      # The owner is a Linux username, while its users.users attribute is "primary".
+      # The default secret group should come from that user's configuration.
+      owner_group = system1.succeed("stat -Lc '%U:%G' /run/agenix/named-owner").strip()
+      assert owner_group == "getpsyched:users", owner_group
       system1.wait_until_succeeds("pgrep -f 'agetty.*tty1'")
       system1.sleep(2)
       system1.send_key("alt-f2")
@@ -102,41 +164,19 @@ pkgs.nixosTest {
       system1.send_chars("cat /run/user/$(id -u)/agenix/secret2 > /tmp/2\n")
       system1.wait_for_file("/tmp/2")
       assert "${secret2}" in system1.succeed("cat /tmp/2")
+      system1.fail("test -e /run/user/1000/agenix/disabled")
       system1.send_chars("cat /run/user/$(id -u)/agenix/armored-secret > /tmp/3\n")
       system1.wait_for_file("/tmp/3")
       assert "${armored-secret}" in system1.succeed("cat /tmp/3")
 
+      # Home Manager's quiet mode still reports a missing identity on stderr.
+      home_log = system1.succeed("journalctl -b _SYSTEMD_USER_UNIT=agenix.service --no-pager -o cat")
+      assert "[agenix] WARNING: config.age.identityPaths entry /home/user1/.ssh/this_key_wont_exist not present!" in home_log
+      assert "[agenix] decrypting secrets..." not in home_log
+      assert "decrypting '" not in home_log
+
       assert "${hyphen-secret}" in system1.succeed("cat /run/agenix/leading-hyphen")
+      system1.fail("test -e /run/agenix/disabled")
 
-      userDo = lambda input : f"sudo -u user1 -- bash -c 'set -eou pipefail; cd /tmp/secrets; {input}'"
-
-      before_hash = system1.succeed(userDo('sha256sum passwordfile-user1.age')).split()
-      print(system1.succeed(userDo('agenix -r -i /home/user1/.ssh/id_ed25519')))
-      after_hash = system1.succeed(userDo('sha256sum passwordfile-user1.age')).split()
-
-      # Ensure we actually have hashes
-      for h in [before_hash, after_hash]:
-          assert len(h) == 2, "hash should be [hash, filename]"
-          assert h[1] == "passwordfile-user1.age", "filename is incorrect"
-          assert len(h[0].strip()) == 64, "hash length is incorrect"
-      assert before_hash[0] != after_hash[0], "hash did not change with rekeying"
-
-      # user1 can edit passwordfile-user1.age
-      system1.succeed(userDo("EDITOR=cat agenix -e passwordfile-user1.age"))
-
-      # user1 can edit even if bogus id_rsa present
-      system1.succeed(userDo("echo bogus > ~/.ssh/id_rsa"))
-      system1.fail(userDo("EDITOR=cat agenix -e passwordfile-user1.age"))
-      system1.succeed(userDo("EDITOR=cat agenix -e passwordfile-user1.age -i /home/user1/.ssh/id_ed25519"))
-      system1.succeed(userDo("rm ~/.ssh/id_rsa"))
-
-      # user1 can edit a secret by piping in contents
-      system1.succeed(userDo("echo 'secret1234' | agenix -e passwordfile-user1.age"))
-
-      # and get it back out via --decrypt
-      assert "secret1234" in system1.succeed(userDo("agenix -d passwordfile-user1.age"))
-
-      # finally, the plain text should not linger around anywhere in the filesystem.
-      system1.fail("grep -r secret1234 /tmp")
     '';
 }
