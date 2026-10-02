@@ -27,6 +27,20 @@ in
     '';
   };
 
+  identityStrategyOption = mkOption {
+    type = types.enum [
+      "all"
+      "ordered"
+    ];
+    default = "all";
+    description = ''
+      Whether to pass all readable identities to age at once, or try each
+      identity file separately in identityPaths order. Ordered mode stops on
+      the first successful decryption, allowing a local key to precede a
+      hardware plugin. Ordering within one identity file is up to the backend.
+    '';
+  };
+
   secretOptions =
     {
       config,
@@ -133,8 +147,31 @@ in
             umask u=r,g=,o=
             test -f "${file}" || echo '[agenix] WARNING: encrypted file ${file} does not exist!' >&2
             test -d "$(dirname "$TMP_FILE")" || echo "[agenix] WARNING: $(dirname "$TMP_FILE") does not exist!" >&2
-            LANG=${lib.escapeShellArg locale} ${ageBin} --decrypt "''${IDENTITIES[@]}" -o "$TMP_FILE" "${file}"
-          )
+            ${
+              if (cfg.identityStrategy or "all") == "ordered" then
+                ''
+                  _agenix_decrypted=0
+                  rm -f -- "$TMP_FILE" || exit 1
+                  for identity in "''${IDENTITY_FILES[@]}"; do
+                    if LANG=${lib.escapeShellArg locale} ${ageBin} --decrypt -i "$identity" -o "$TMP_FILE" "${file}"; then
+                      _agenix_decrypted=1
+                      break
+                    fi
+                    # A backend can write output before detecting an error. Do not
+                    # feed that partial file to the next attempt or publish it.
+                    rm -f -- "$TMP_FILE" || exit 1
+                  done
+                  if test "$_agenix_decrypted" -ne 1; then
+                    echo '[agenix] no identity could decrypt ${file}' >&2
+                    exit 1
+                  fi
+                ''
+              else
+                ''
+                  LANG=${lib.escapeShellArg locale} ${ageBin} --decrypt "''${IDENTITIES[@]}" -o "$TMP_FILE" "${file}"
+                ''
+            }
+          ) || exit 1
           ${optionalString secret.trimFinalNewline ''
             # Encode the last byte so empty and binary files remain unambiguous.
             if [ "$(tail -c 1 -- "$TMP_FILE" | od -An -tu1 | tr -d '[:space:]')" = 10 ]; then
@@ -156,6 +193,7 @@ in
         '';
       identitySetup = ''
         IDENTITIES=()
+        IDENTITY_FILES=()
         _agenix_identity_paths=( ${lib.escapeShellArgs (map toString cfg.identityPaths)} )
         for identity in "''${_agenix_identity_paths[@]}"; do
           if ! test -f "$identity"; then
@@ -169,6 +207,7 @@ in
           test -r "$identity" || continue
           test -s "$identity" || continue
           IDENTITIES+=(-i "$identity")
+          IDENTITY_FILES+=("$identity")
         done
         ${optionalString (enabledSecrets != [ ]) ''
           if test "''${#IDENTITIES[@]}" -eq 0; then

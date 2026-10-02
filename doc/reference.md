@@ -253,6 +253,31 @@ Overriding `age.ageBin` example:
 }
 ```
 
+### `age.identityStrategy`
+
+Defaults to `"all"`, which passes every readable identity file to the age
+backend in one invocation. The backend controls which identity it tries first.
+Set `"ordered"` to try one file at a time in `age.identityPaths` order and stop
+after the first successful decryption:
+
+```nix
+{
+  age.identityStrategy = "ordered";
+  age.identityPaths = [
+    "/etc/ssh/ssh_host_ed25519_key"
+    "/var/lib/agenix/yubikey-identity.txt"
+  ];
+}
+```
+
+This lets a local key decrypt without invoking a later hardware identity.
+If it cannot decrypt, agenix removes any partial output and tries the next
+file. Backend error messages remain visible, and any identity that is tried
+may prompt for a passphrase or PIN. Multiple identities within one file still
+follow backend ordering; put them in separate files when their order matters.
+Trying files separately can be slower. The default preserves backend features
+that need several identities together, such as threshold plugins.
+
 ### `age.identityPaths`
 
 Only readable, non-empty regular files are passed to age. If secrets are enabled
@@ -328,6 +353,12 @@ remain visible at every level.
 ### `age.package`
 
 The `age` package used to decrypt secrets. Defaults to `pkgs.age`.
+
+### `age.identityStrategy`
+
+Accepts `"all"` (default) or `"ordered"`, with the same behavior as the system
+module option above. This option applies to the Home Manager service on both
+Linux and Darwin.
 
 ### `age.pluginPackages`
 

@@ -120,6 +120,7 @@ in
     verbosity = shared.verbosityOption "other rebuild output";
 
     validateSecrets = shared.validationOption;
+    identityStrategy = shared.identityStrategyOption;
 
     secrets = mkOption {
       type = types.attrsOf secretType;
