@@ -364,11 +364,12 @@ options:
 -d, --decrypt FILE        decrypts FILE to STDOUT
 -i, --identity            identity to use when decrypting
 -j PLUGIN                 decrypt using the data-less plugin PLUGIN
+--yubikey                 discover identities on connected YubiKeys for decryption
 -v, --verbose             verbose output
 
 FILE an age-encrypted file
 
-PRIVATE_KEY a path to a private SSH key used to decrypt file
+PRIVATE_KEY a path to an age, SSH, or plugin identity file used to decrypt FILE
 
 PUBLIC_KEY an exact public key string from the rules; only matching secrets are rekeyed
 
@@ -391,6 +392,23 @@ or rekeying. The corresponding `age-plugin-PLUGIN` executable must be on
 `PATH`. No private key file is needed; supplying `-j` also disables automatic
 discovery of `~/.ssh/id_rsa` and `~/.ssh/id_ed25519`. Encryption still uses
 the recipients in the rules file.
+
+`--yubikey` runs `age-plugin-yubikey --identity` when decryption is first
+needed, then uses the returned identities for the rest of that invocation.
+For example, `agenix --yubikey -e secret.age` discovers connected devices
+without requiring a saved identity file. The plugin must be on `PATH` and
+have access to its hardware; PIN and touch policies still apply. Discovery
+failure or empty output stops the operation. Explicit `-i` identities can
+be supplied alongside this flag, but automatic SSH key discovery is disabled.
+
+The identity metadata is kept in a private temporary directory and removed
+on exit. Checking recipients or replacing a secret through piped input does
+not decrypt, so those operations do not trigger discovery. This option
+affects the CLI only. System and Home Manager services still need configured
+identities and plugin packages. See the
+[upstream YubiKey plugin documentation](https://github.com/str4d/age-plugin-yubikey#configuration)
+for device setup and identity metadata. YubiKey PIV identities differ from
+OpenSSH FIDO `sk-*` identities; this flag does not add SSH security-key support.
 
 `agenix --check` compares the SSH recipient tags in each age file header with
 the public keys in the rules file. It prints `✓` for matching files and `✗`
