@@ -10,12 +10,14 @@ function show_help () {
   echo " "
   echo "${PACKAGE} -e FILE [-i PRIVATE_KEY] [-j PLUGIN]"
   echo "${PACKAGE} -r [PUBLIC_KEY] [-i PRIVATE_KEY] [-j PLUGIN]"
+  echo "${PACKAGE} --rekey-file FILE [-i PRIVATE_KEY] [-j PLUGIN]"
   echo "${PACKAGE} -c"
   echo ' '
   echo 'options:'
   echo '-h, --help                show help'
   echo "-e, --edit FILE           edits FILE using \$EDITOR"
   echo '-r, --rekey [PUBLIC_KEY]  re-encrypts secrets, optionally selecting a recipient'
+  echo '--rekey-file FILE        re-encrypts only FILE with its current recipients'
   echo '-c, --check               checks encrypted SSH recipients against the rules'
   echo '-d, --decrypt FILE        decrypts FILE to STDOUT'
   echo '-i, --identity            identity to use when decrypting'
@@ -61,7 +63,7 @@ function set_file() {
 }
 
 function set_operation() {
-  [[ -z ${OPERATION} ]] || err 'Select only one of --edit, --decrypt, --rekey, or --check.'
+  [[ -z ${OPERATION} ]] || err 'Select only one of --edit, --decrypt, --rekey, --rekey-file, or --check.'
   OPERATION=$1
 }
 
@@ -120,6 +122,13 @@ while test $# -gt 0; do
         [[ -n ${REKEY_PUBLIC_KEY} ]] || err 'PUBLIC_KEY must not be empty'
         shift
       fi
+      ;;
+    --rekey-file)
+      set_operation rekey
+      shift
+      [[ $# -gt 0 ]] || err 'no FILE specified'
+      set_file "$1"
+      shift
       ;;
     -c|--check)
       set_operation check
@@ -228,7 +237,7 @@ RULE_DATA=$(@nixInstantiate@ --impure --json --eval --strict \
     -E '{ rulesPath, operation, file, recipient }:
       let
         rules = import (builtins.toPath rulesPath);
-        names = if operation == "edit" || operation == "decrypt"
+        names = if file != ""
           then [ file ] else builtins.attrNames rules;
         selected = builtins.filter
           (name: recipient == "" || builtins.elem recipient (builtins.getAttr name rules).publicKeys)

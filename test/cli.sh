@@ -83,6 +83,12 @@ before=$(hash passwordfile-user1.age)
 "$agenix" -r -i "$HOME/.ssh/id_ed25519"
 [[ $(hash passwordfile-user1.age) != "$before" ]]
 
+selected_before=$(hash ./-leading-hyphen-filename.age)
+unselected_before=$(hash secret1.age)
+"$agenix" --rekey-file ./-leading-hyphen-filename.age -i "$HOME/.ssh/id_ed25519"
+[[ $(hash ./-leading-hyphen-filename.age) != "$selected_before" ]]
+[[ $(hash secret1.age) == "$unselected_before" ]]
+
 # A recipient filter selects by the current rules and keeps other files intact.
 selected_before=$(hash secret1.age)
 unselected_before=$(hash secret2.age)
