@@ -26,6 +26,9 @@
     {
       checks =
         nixpkgs.lib.genAttrs [ "aarch64-darwin" "x86_64-darwin" ] (system: {
+          ciphertext-validation = import (testDir + "/ciphertext-validation.nix") {
+            pkgs = nixpkgs.legacyPackages.${system};
+          };
           trim-newline = import (testDir + "/trim-newline.nix") {
             pkgs = nixpkgs.legacyPackages.${system};
           };
@@ -55,6 +58,9 @@
             }).system;
         })
         // {
+          x86_64-linux.ciphertext-validation = import (testDir + "/ciphertext-validation.nix") {
+            pkgs = nixpkgs.legacyPackages.x86_64-linux;
+          };
           x86_64-linux.trim-newline = import (testDir + "/trim-newline.nix") {
             pkgs = nixpkgs.legacyPackages.x86_64-linux;
           };

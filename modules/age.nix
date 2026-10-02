@@ -11,6 +11,10 @@ let
   shared = import ./secret-install.nix { inherit lib; };
   installer = shared.installer {
     inherit cfg mountCommand;
+    validateFile = import ./validated-file.nix {
+      inherit lib pkgs;
+      enable = cfg.validateSecrets;
+    };
     ageBin = config.age.ageBin;
     locale = config.i18n.defaultLocale or "C";
   };
@@ -114,6 +118,8 @@ in
       '';
     };
     verbosity = shared.verbosityOption "other rebuild output";
+
+    validateSecrets = shared.validationOption;
 
     secrets = mkOption {
       type = types.attrsOf secretType;
