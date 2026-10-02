@@ -26,6 +26,9 @@
     {
       checks =
         nixpkgs.lib.genAttrs [ "aarch64-darwin" "x86_64-darwin" ] (system: {
+          missing-identities = import (testDir + "/missing-identities.nix") {
+            pkgs = nixpkgs.legacyPackages.${system};
+          };
           ciphertext-validation = import (testDir + "/ciphertext-validation.nix") {
             pkgs = nixpkgs.legacyPackages.${system};
           };
@@ -58,6 +61,9 @@
             }).system;
         })
         // {
+          x86_64-linux.missing-identities = import (testDir + "/missing-identities.nix") {
+            pkgs = nixpkgs.legacyPackages.x86_64-linux;
+          };
           x86_64-linux.ciphertext-validation = import (testDir + "/ciphertext-validation.nix") {
             pkgs = nixpkgs.legacyPackages.x86_64-linux;
           };

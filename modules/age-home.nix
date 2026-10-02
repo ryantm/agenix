@@ -36,6 +36,7 @@ let
         name = "agenix-home-manager-mount-secrets";
         runtimeInputs = with pkgs; [ coreutils ];
         text = ''
+          ${installer.prepareIdentities}
           ${optionalString (cfg.secretsDir == defaultSecretsDir) ''
             # Preserve generation numbering when migrating the previous default.
             # The next installation then removes that old generation normally.

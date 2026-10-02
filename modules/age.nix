@@ -202,6 +202,7 @@ in
         serviceConfig = {
           Type = "oneshot";
           ExecStart = pkgs.writeShellScript "agenix-install" (concatLines [
+            installer.prepareIdentities
             installer.newGeneration
             installer.installSecrets
             # Don't fail the systemd unit if our script ended with a failing test.
@@ -240,14 +241,20 @@ in
       # invalid symlinks).
       system.activationScripts = mkIf (!sysusersEnabled) {
         agenixNewGeneration = {
-          text = installer.newGeneration;
+          # Keep the existing dependency anchor. Actual preparation must follow
+          # key providers listed in agenixInstall.deps, then fail before writes.
+          text = "";
           deps = [
             "specialfs"
           ];
         };
 
         agenixInstall = {
-          text = installer.installSecrets;
+          text = concatLines [
+            installer.prepareIdentities
+            installer.newGeneration
+            installer.installSecrets
+          ];
           deps = [
             "agenixNewGeneration"
             "specialfs"
@@ -280,6 +287,7 @@ in
           set -e
           set -o pipefail
           export PATH="${pkgs.gnugrep}/bin:${pkgs.coreutils}/bin:@out@/sw/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+          ${installer.prepareIdentities}
           ${installer.newGeneration}
           ${installer.installSecrets}
           ${chownSecrets}

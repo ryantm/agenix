@@ -63,6 +63,7 @@ pkgs.runCommand "agenix-trim-newline-test" { } ''
   EOF
   chmod +x "$XDG_RUNTIME_DIR/mock-age"
 
+  ${installer.prepareIdentities}
   ${installer.newGeneration}
   ${installer.installSecrets}
 

@@ -55,6 +55,7 @@ pkgs.runCommand "agenix-shared-installer-test" { } ''
   chmod +x "$XDG_RUNTIME_DIR/mock-age"
 
   run_install() {
+    ${installer.prepareIdentities}
     ${installer.newGeneration}
     ${installer.installSecrets}
     true

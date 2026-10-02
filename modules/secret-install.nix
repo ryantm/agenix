@@ -158,12 +158,24 @@ in
         IDENTITIES=()
         _agenix_identity_paths=( ${lib.escapeShellArgs (map toString cfg.identityPaths)} )
         for identity in "''${_agenix_identity_paths[@]}"; do
-          test -f "$identity" || echo "[agenix] WARNING: config.age.identityPaths entry $identity not present!" >&2
+          if ! test -f "$identity"; then
+            if test -e "$identity"; then
+              echo "[agenix] WARNING: config.age.identityPaths entry $identity is not a regular file!" >&2
+            else
+              echo "[agenix] WARNING: config.age.identityPaths entry $identity not present!" >&2
+            fi
+            continue
+          fi
           test -r "$identity" || continue
           test -s "$identity" || continue
           IDENTITIES+=(-i "$identity")
         done
-        test "''${#IDENTITIES[@]}" -eq 0 && echo "[agenix] WARNING: no readable identities found!" >&2
+        ${optionalString (enabledSecrets != [ ]) ''
+          if test "''${#IDENTITIES[@]}" -eq 0; then
+            echo "[agenix] ERROR: no readable, non-empty identity files found!" >&2
+            exit 1
+          fi
+        ''}
       '';
       cleanupAndLink = ''
         ${currentGeneration}
@@ -184,6 +196,7 @@ in
     in
     {
       inherit currentGeneration enabledSecrets setTruePath;
+      prepareIdentities = identitySetup;
       newGeneration = ''
         ${currentGeneration}
         (( ++_agenix_generation ))
@@ -198,7 +211,6 @@ in
       '';
       installSecrets = builtins.concatStringsSep "\n" (
         (optional (verbosityLevel >= 1) "echo '[agenix] decrypting secrets...'")
-        ++ [ identitySetup ]
         ++ (map installSecret enabledSecrets)
         ++ [ cleanupAndLink ]
       );
