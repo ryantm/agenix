@@ -41,6 +41,7 @@ let
           programs.gh.enable = true;
           age.package = ageWithPlugin;
           age.pluginPackages = [ plugin ];
+          age.identityStrategy = "ordered";
           age.identityPaths = [
             "/home/alice/.ssh/id_ed25519"
           ]

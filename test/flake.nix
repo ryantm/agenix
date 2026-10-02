@@ -26,6 +26,9 @@
     {
       checks =
         nixpkgs.lib.genAttrs [ "aarch64-darwin" "x86_64-darwin" ] (system: {
+          identity-order = import (testDir + "/identity-order.nix") {
+            pkgs = nixpkgs.legacyPackages.${system};
+          };
           missing-identities = import (testDir + "/missing-identities.nix") {
             pkgs = nixpkgs.legacyPackages.${system};
           };
@@ -61,6 +64,9 @@
             }).system;
         })
         // {
+          x86_64-linux.identity-order = import (testDir + "/identity-order.nix") {
+            pkgs = nixpkgs.legacyPackages.x86_64-linux;
+          };
           x86_64-linux.home-service = import (testDir + "/home-service.nix") {
             inherit home-manager;
             pkgs = nixpkgs.legacyPackages.x86_64-linux;

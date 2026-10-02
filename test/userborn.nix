@@ -20,6 +20,7 @@ pkgs.testers.nixosTest {
       # This private key is a public test fixture, never a real identity.
       environment.etc."agenix-test-key".source = ../example_keys/system1;
       age.verbosity = "quiet";
+      age.identityStrategy = "ordered";
       age.identityPaths = [
         "/etc/agenix-test-key"
         "/etc/agenix-missing-key"

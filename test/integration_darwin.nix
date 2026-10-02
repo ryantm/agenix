@@ -21,6 +21,7 @@ in
   ];
 
   age = {
+    identityStrategy = "ordered";
     identityPaths = options.age.identityPaths.default ++ [ "/etc/ssh/this_key_wont_exist" ];
     secrets.system-secret.file = ../example/secret1.age;
     secrets.trimmed = {
