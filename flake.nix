@@ -2,37 +2,56 @@
   description = "Secret management with age";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
   };
 
-  outputs = { self, nixpkgs }:
-  let
-    agenix = system: nixpkgs.legacyPackages.${system}.callPackage ./pkgs/agenix.nix {};
-  in {
+  outputs =
+    {
+      self,
+      nixpkgs,
+    }:
+    let
+      # nixpkgs cannot bootstrap GHC on these systems. Omit nixfmt-tree and
+      # agenix's shellcheck install check there.
+      noGhcSystems = [
+        "armv6l-linux"
+        "armv7l-linux"
+        "powerpc64le-linux"
+        "riscv64-linux"
+        "x86_64-freebsd"
+      ];
+      # age also needs a Go bootstrap that nixpkgs cannot provide on FreeBSD.
+      packageSystems = nixpkgs.lib.filter (
+        system: system != "x86_64-freebsd"
+      ) nixpkgs.lib.systems.flakeExposed;
+      eachSystem = nixpkgs.lib.genAttrs packageSystems;
+      formatterSystems = nixpkgs.lib.filter (
+        system: !(builtins.elem system noGhcSystems)
+      ) nixpkgs.lib.systems.flakeExposed;
+    in
+    {
+      nixosModules.age = ./modules/age.nix;
+      nixosModules.default = self.nixosModules.age;
 
-    nixosModules.age = import ./modules/age.nix;
-    nixosModule = self.nixosModules.age;
+      darwinModules.age = ./modules/age.nix;
+      darwinModules.default = self.darwinModules.age;
 
-    overlay = import ./overlay.nix;
+      homeManagerModules.age = ./modules/age-home.nix;
+      homeManagerModules.default = self.homeManagerModules.age;
 
-    packages."aarch64-linux".agenix = agenix "aarch64-linux";
-    defaultPackage."aarch64-linux" = self.packages."aarch64-linux".agenix;
+      overlays.default = import ./overlay.nix;
 
-    packages."i686-linux".agenix = agenix "i686-linux";
-    defaultPackage."i686-linux" = self.packages."i686-linux".agenix;
+      formatter = nixpkgs.lib.genAttrs formatterSystems (
+        system: nixpkgs.legacyPackages.${system}.nixfmt-tree
+      );
 
-    packages."x86_64-darwin".agenix = agenix "x86_64-darwin";
-    defaultPackage."x86_64-darwin" = self.packages."x86_64-darwin".agenix;
+      packages = eachSystem (system: {
+        agenix = nixpkgs.legacyPackages.${system}.callPackage ./pkgs/agenix.nix {
+          runShellcheck = !(builtins.elem system noGhcSystems);
+        };
+        default = self.packages.${system}.agenix;
+      });
 
-    packages."aarch64-darwin".agenix = agenix "aarch64-darwin";
-    defaultPackage."aarch64-darwin" = self.packages."aarch64-darwin".agenix;
-
-    packages."x86_64-linux".agenix = agenix "x86_64-linux";
-    defaultPackage."x86_64-linux" = self.packages."x86_64-linux".agenix;
-    checks."x86_64-linux".integration = import ./test/integration.nix {
-      inherit nixpkgs; pkgs = nixpkgs.legacyPackages."x86_64-linux"; system = "x86_64-linux";
+      checks.x86_64-linux.cli = self.packages.x86_64-linux.agenix;
     };
-
-  };
-
 }
