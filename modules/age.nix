@@ -8,6 +8,14 @@
 with lib;
 let
   cfg = config.age;
+  verbosityLevel =
+    {
+      quiet = 0;
+      summary = 1;
+      progress = 2;
+      detailed = 3;
+    }
+    .${cfg.verbosity};
 
   isDarwin = lib.attrsets.hasAttrByPath [ "environment" "darwinConfig" ] options;
 
@@ -19,7 +27,10 @@ let
     if isDarwin then
       false
     else
-      options.systemd ? sysusers && (config.systemd.sysusers.enable || config.services.userborn.enable);
+      options.systemd ? sysusers
+      && (
+        config.systemd.sysusers.enable || (options.services ? userborn && config.services.userborn.enable)
+      );
 
   mountCommand =
     if isDarwin then
@@ -36,10 +47,15 @@ let
         grep -q "${cfg.secretsMountPoint} ramfs" /proc/mounts ||
           mount -t ramfs none "${cfg.secretsMountPoint}" -o nodev,nosuid,mode=0751
       '';
-  newGeneration = ''
+  currentGeneration = ''
     _agenix_generation="$(basename "$(readlink ${cfg.secretsDir})" || echo 0)"
+  '';
+  newGeneration = ''
+    ${currentGeneration}
     (( ++_agenix_generation ))
-    echo "[agenix] creating new generation in ${cfg.secretsMountPoint}/$_agenix_generation"
+    ${optionalString (
+      verbosityLevel >= 2
+    ) ''echo "[agenix] creating new generation in ${cfg.secretsMountPoint}/$_agenix_generation"''}
     mkdir -p "${cfg.secretsMountPoint}"
     chmod 0751 "${cfg.secretsMountPoint}"
     ${mountCommand}
@@ -69,7 +85,9 @@ let
 
   installSecret = secretType: ''
     ${setTruePath secretType}
-    echo "decrypting '${secretType.file}' to '$_truePath'..."
+    ${optionalString (
+      verbosityLevel >= 3
+    ) ''echo "decrypting '${secretType.file}' to '$_truePath'..."''}
     TMP_FILE="$_truePath.tmp"
 
     IDENTITIES=()
@@ -80,14 +98,14 @@ let
       IDENTITIES+=("$identity")
     done
 
-    test "''${#IDENTITIES[@]}" -eq 0 && echo "[agenix] WARNING: no readable identities found!"
+    test "''${#IDENTITIES[@]}" -eq 0 && echo "[agenix] WARNING: no readable identities found!" >&2
 
     mkdir -p "$(dirname "$_truePath")"
     [ "${secretType.path}" != "${cfg.secretsDir}/${secretType.name}" ] && mkdir -p "$(dirname "${secretType.path}")"
     (
       umask u=r,g=,o=
-      test -f "${secretType.file}" || echo '[agenix] WARNING: encrypted file ${secretType.file} does not exist!'
-      test -d "$(dirname "$TMP_FILE")" || echo "[agenix] WARNING: $(dirname "$TMP_FILE") does not exist!"
+      test -f "${secretType.file}" || echo '[agenix] WARNING: encrypted file ${secretType.file} does not exist!' >&2
+      test -d "$(dirname "$TMP_FILE")" || echo "[agenix] WARNING: $(dirname "$TMP_FILE") does not exist!" >&2
       LANG=${
         config.i18n.defaultLocale or "C"
       } ${ageBin} --decrypt "''${IDENTITIES[@]}" -o "$TMP_FILE" "${secretType.file}"
@@ -101,25 +119,31 @@ let
   '';
 
   testIdentities = map (path: ''
-    test -f ${path} || echo '[agenix] WARNING: config.age.identityPaths entry ${path} not present!'
+    test -f ${path} || echo '[agenix] WARNING: config.age.identityPaths entry ${path} not present!' >&2
   '') cfg.identityPaths;
 
   cleanupAndLink = ''
-    _agenix_generation="$(basename "$(readlink ${cfg.secretsDir})" || echo 0)"
+    ${currentGeneration}
     (( ++_agenix_generation ))
-    echo "[agenix] symlinking new secrets to ${cfg.secretsDir} (generation $_agenix_generation)..."
+    ${optionalString (verbosityLevel >= 2)
+      ''echo "[agenix] symlinking new secrets to ${cfg.secretsDir} (generation $_agenix_generation)..."''
+    }
     ln -sfT "${cfg.secretsMountPoint}/$_agenix_generation" ${cfg.secretsDir}
 
     (( _agenix_generation > 1 )) && {
-    echo "[agenix] removing old secrets (generation $(( _agenix_generation - 1 )))..."
+    ${optionalString (
+      verbosityLevel >= 2
+    ) ''echo "[agenix] removing old secrets (generation $(( _agenix_generation - 1 )))..."''}
     rm -rf "${cfg.secretsMountPoint}/$(( _agenix_generation - 1 ))"
     }
   '';
 
+  enabledSecrets = lib.filter (secret: secret.enable) (builtins.attrValues cfg.secrets);
+
   installSecrets = builtins.concatStringsSep "\n" (
-    [ "echo '[agenix] decrypting secrets...'" ]
+    (optional (verbosityLevel >= 1) "echo '[agenix] decrypting secrets...'")
     ++ testIdentities
-    ++ (map installSecret (builtins.attrValues cfg.secrets))
+    ++ (map installSecret enabledSecrets)
     ++ [ cleanupAndLink ]
   );
 
@@ -129,15 +153,20 @@ let
   '';
 
   chownSecrets = builtins.concatStringsSep "\n" (
-    [ "echo '[agenix] chowning...'" ]
+    (optional (verbosityLevel >= 2) "echo '[agenix] chowning...'")
     ++ [ chownMountPoint ]
-    ++ (map chownSecret (builtins.attrValues cfg.secrets))
+    ++ (map chownSecret enabledSecrets)
   );
 
   secretType = types.submodule (
     { config, ... }:
     {
       options = {
+        enable = mkOption {
+          type = types.bool;
+          default = true;
+          description = "Whether to decrypt and install this secret.";
+        };
         name = mkOption {
           type = types.str;
           default = config._module.args.name;
@@ -178,9 +207,9 @@ let
         };
         group = mkOption {
           type = types.str;
-          default = users.${config.owner}.group or "0";
+          default = (findFirst (u: u.name == config.owner) { } (attrValues users)).group or "0";
           defaultText = literalExpression ''
-            users.''${config.owner}.group or "0"
+            (findFirst (u: u.name == config.owner) { } (attrValues users)).group or "0"
           '';
           description = ''
             Group of the decrypted secret.
@@ -199,6 +228,10 @@ in
   ];
 
   options.age = {
+    enable = mkEnableOption "agenix" // {
+      default = enabledSecrets != [ ];
+    };
+
     ageBin = mkOption {
       type = types.str;
       default = "${pkgs.age}/bin/age";
@@ -207,6 +240,21 @@ in
       '';
       description = ''
         The age executable to use.
+      '';
+    };
+    verbosity = mkOption {
+      type = types.enum [
+        "quiet"
+        "summary"
+        "progress"
+        "detailed"
+      ];
+      default = "detailed";
+      description = ''
+        Verbosity of agenix activation messages. "quiet" hides routine messages,
+        "summary" prints a summary, "progress" also prints installation steps,
+        and "detailed" also prints one line per secret. Warnings and errors are always shown.
+        This does not affect the agenix command-line tool or other rebuild output.
       '';
     };
     secrets = mkOption {
@@ -270,7 +318,7 @@ in
     };
   };
 
-  config = mkIf (cfg.secrets != { }) (mkMerge [
+  config = mkIf cfg.enable (mkMerge [
     {
       assertions = [
         {
@@ -284,7 +332,8 @@ in
       # because those are started in initrd while sysusers is started later.
       systemd.services.agenix-install-secrets = mkIf sysusersEnabled {
         wantedBy = [ "sysinit.target" ];
-        after = [ "systemd-sysusers.service" ];
+        # So user passwords can be encrypted.
+        before = [ "systemd-sysusers.service" ];
         unitConfig.DefaultDependencies = "no";
 
         path = [ pkgs.mount ];
@@ -293,7 +342,32 @@ in
           ExecStart = pkgs.writeShellScript "agenix-install" (concatLines [
             newGeneration
             installSecrets
+            # Don't fail the systemd unit if our script ended with a failing test.
+            "true"
+          ]);
+          RemainAfterExit = true;
+        };
+      };
+
+      systemd.services.agenix-chown = mkIf sysusersEnabled {
+        wantedBy = [ "sysinit.target" ];
+        # Change ownership and group after users and groups are made.
+        # (And after secrets are created, just in case systemd-sysusers.service is disabled.)
+        after = [
+          "systemd-sysusers.service"
+          "agenix-install-secrets.service"
+        ];
+        # We should get restarted when agenix-install-secrets is (to chown the new secrets).
+        requires = [ "agenix-install-secrets.service" ];
+        unitConfig.DefaultDependencies = "no";
+
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStart = pkgs.writeShellScript "agenix-chown" (concatLines [
+            currentGeneration
             chownSecrets
+            # Don't fail the systemd unit if our script ended with a failing test.
+            "true"
           ]);
           RemainAfterExit = true;
         };
