@@ -24,6 +24,11 @@ pkgs.testers.nixosTest {
       ];
 
       services.openssh.enable = true;
+      services.openssh.settings.PasswordAuthentication = true;
+      environment.systemPackages = [
+        pkgs.sshpass
+        pkgs.util-linux
+      ];
 
       age.secrets = {
         disabled.enable = false;
@@ -146,28 +151,17 @@ pkgs.testers.nixosTest {
       # The default secret group should come from that user's configuration.
       owner_group = system1.succeed("stat -Lc '%U:%G' /run/agenix/named-owner").strip()
       assert owner_group == "getpsyched:users", owner_group
-      system1.wait_until_succeeds("pgrep -f 'agetty.*tty1'")
-      system1.sleep(2)
-      system1.send_key("alt-f2")
-      system1.wait_until_succeeds("[ $(fgconsole) = 2 ]")
-      system1.wait_for_unit("getty@tty2.service")
-      system1.wait_until_succeeds("pgrep -f 'agetty.*tty2'")
-      system1.wait_until_tty_matches("2", "login: ")
-      system1.send_chars("${user}\n")
-      system1.wait_until_tty_matches("2", "login: ${user}")
-      system1.wait_until_succeeds("pgrep login")
-      system1.sleep(2)
-      system1.send_chars("${password}\n")
-      system1.send_chars("whoami > /tmp/1\n")
-      system1.wait_for_file("/tmp/1")
-      assert "${user}" in system1.succeed("cat /tmp/1")
-      system1.send_chars("cat /run/user/$(id -u)/agenix/secret2 > /tmp/2\n")
-      system1.wait_for_file("/tmp/2")
-      assert "${secret2}" in system1.succeed("cat /tmp/2")
+      # Exercise the installed password hash through PAM without racing virtual
+      # keyboard input. Keep the user manager alive after the SSH session ends.
+      system1.wait_for_unit("sshd.service")
+      system1.succeed("loginctl enable-linger ${user}")
+      login = "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o PreferredAuthentications=password -o PubkeyAuthentication=no -o NumberOfPasswordPrompts=1 ${user}@localhost whoami"
+      system1.fail("sshpass -p incorrect-test-password " + login)
+      assert system1.succeed("sshpass -p ${password} " + login).strip() == "${user}"
+      system1.wait_for_file("/run/user/1000/agenix/secret2")
+      assert "${secret2}" in system1.succeed("runuser -u ${user} -- cat /run/user/1000/agenix/secret2")
       system1.fail("test -e /run/user/1000/agenix/disabled")
-      system1.send_chars("cat /run/user/$(id -u)/agenix/armored-secret > /tmp/3\n")
-      system1.wait_for_file("/tmp/3")
-      assert "${armored-secret}" in system1.succeed("cat /tmp/3")
+      assert "${armored-secret}" in system1.succeed("runuser -u ${user} -- cat /run/user/1000/agenix/armored-secret")
 
       # Home Manager's quiet mode still reports a missing identity on stderr.
       home_log = system1.succeed("journalctl -b _SYSTEMD_USER_UNIT=agenix.service --no-pager -o cat")

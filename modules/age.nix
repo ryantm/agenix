@@ -103,6 +103,13 @@ let
     mkdir -p "$(dirname "$_truePath")"
     [ "${secretType.path}" != "${cfg.secretsDir}/${secretType.name}" ] && mkdir -p "$(dirname "${secretType.path}")"
     (
+      # nixos-enter can inherit the installer's TMPDIR outside its chroot.
+      # Give age and its plugins a private directory on the secrets filesystem.
+      TMPDIR="$(umask 077; mktemp -d -- ${escapeShellArg "${cfg.secretsMountPoint}/.plugin-tmp.XXXXXXXX"})" || exit 1
+      export TMPDIR
+      trap 'rm -rf -- "$TMPDIR"' EXIT
+      trap 'exit 130' INT
+      trap 'exit 143' TERM
       umask u=r,g=,o=
       test -f "${secretType.file}" || echo '[agenix] WARNING: encrypted file ${secretType.file} does not exist!' >&2
       test -d "$(dirname "$TMP_FILE")" || echo "[agenix] WARNING: $(dirname "$TMP_FILE") does not exist!" >&2
@@ -112,7 +119,7 @@ let
       LANG=${
         config.i18n.defaultLocale or "C"
       } ${ageBin} --decrypt "''${IDENTITIES[@]}" -o "$TMP_FILE" "${secretType.file}"
-    )
+    ) || exit 1
     chmod ${secretType.mode} "$TMP_FILE"
     mv -f "$TMP_FILE" "$_truePath"
 
