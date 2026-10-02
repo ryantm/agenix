@@ -3,6 +3,7 @@
 * [Introduction](#introduction)
 * [Problem and solution](#problem-and-solution)
 * [Features](#features)
+* [Notices](#notices)
 * Installation
   * [flakes](#install-via-flakes)
   * [niv](#install-via-niv)
@@ -11,7 +12,10 @@
 * [Tutorial](#tutorial)
 * [Reference](#reference)
   * [`age` module reference](#age-module-reference)
+  * [Home Manager module reference](#home-manager-module-reference)
   * [agenix CLI reference](#agenix-cli-reference)
+* [Rekeying](#rekeying)
+* [Overriding age binary](#overriding-age-binary)
 * [Community and Support](#community-and-support)
 * [Threat model/Warnings](#threat-model-warnings)
 * [Contributing](#contributing)
