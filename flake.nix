@@ -32,6 +32,7 @@
     {
       nixosModules.age = ./modules/age.nix;
       nixosModules.default = self.nixosModules.age;
+      nixosModules.systemdCredentials = ./modules/age-systemd-credentials.nix;
 
       darwinModules.age = ./modules/age.nix;
       darwinModules.default = self.darwinModules.age;
