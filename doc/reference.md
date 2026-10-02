@@ -373,6 +373,9 @@ EDITOR environment variable of editor to use when editing FILE
 If STDIN is not interactive, its contents replace the secret.
 Piped input replaces a secret without decrypting it first.
 
+--check compares SSH recipient tags; extra recipients are shown by type and tag.
+It cannot check native age recipients or authenticate encrypted contents.
+
 AGENIX_RULES environment variable with path to Nix file specifying recipient public keys. 
 Searches the current directory for agenix-rules.nix, then secrets.nix.
 Searches parent directories for agenix-rules.nix only.
@@ -390,12 +393,15 @@ the public keys in the rules file. It prints `✓` for matching files and `✗`
 with missing or extra recipients for mismatches, and exits with a nonzero status
 if any file differs or cannot be checked. It does not decrypt or change files,
 so no private key is needed. Age's SSH tags are 32-bit identifiers; this check
-shows a full extra key when it can find a matching key literal in the rules
-file, and otherwise shows the tag. It cannot verify native age recipients or
+shows missing recipients by their configured public key and extra recipients
+by their stanza type and tag, for example `extra: ssh-ed25519 AbCdEw`. It does
+not reconstruct keys from the rules file's source text. It cannot verify native age recipients or
 authenticate the encrypted contents.
 
 > [!WARNING]
 > The legacy `RULES` environment variable and automatic discovery of
-> `secrets.nix` still work, but agenix warns when either is used. Both will be
-> removed in a future version. Explicitly selecting `secrets.nix` with
-> `AGENIX_RULES` does not warn.
+> `secrets.nix` still work, but agenix warns when either is used. Compatibility
+> is retained throughout 0.19.x; removal is scheduled for 0.20.0. Rename a
+> discovered rules file to `agenix-rules.nix` and replace `RULES` with
+> `AGENIX_RULES` in scripts. Explicitly selecting any filename, including
+> `AGENIX_RULES=secrets.nix`, remains supported and does not warn.
