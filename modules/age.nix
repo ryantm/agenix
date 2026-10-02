@@ -294,7 +294,9 @@ in
             "/etc/ssh/ssh_host_ed25519_key"
             "/etc/ssh/ssh_host_rsa_key"
           ]
-        else if (config.services.openssh.enable or false) then
+        else if
+          (config.services.openssh.generateHostKeys or false) || (config.services.openssh.enable or false)
+        then
           map (e: e.path) (
             lib.filter (e: e.type == "rsa" || e.type == "ed25519") config.services.openssh.hostKeys
           )
@@ -306,7 +308,7 @@ in
           "/etc/ssh/ssh_host_ed25519_key"
           "/etc/ssh/ssh_host_rsa_key"
         ]
-        else if (config.services.openssh.enable or false)
+        else if (config.services.openssh.generateHostKeys or false) || (config.services.openssh.enable or false)
         then map (e: e.path) (lib.filter (e: e.type == "rsa" || e.type == "ed25519") config.services.openssh.hostKeys)
         else [];
       '';
