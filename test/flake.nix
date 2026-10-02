@@ -26,6 +26,9 @@
     {
       checks =
         nixpkgs.lib.genAttrs [ "aarch64-darwin" "x86_64-darwin" ] (system: {
+          trim-newline = import (testDir + "/trim-newline.nix") {
+            pkgs = nixpkgs.legacyPackages.${system};
+          };
           shared-installer = import (testDir + "/shared-installer.nix") {
             pkgs = nixpkgs.legacyPackages.${system};
           };
@@ -52,6 +55,9 @@
             }).system;
         })
         // {
+          x86_64-linux.trim-newline = import (testDir + "/trim-newline.nix") {
+            pkgs = nixpkgs.legacyPackages.x86_64-linux;
+          };
           x86_64-linux.integration = import (testDir + "/integration.nix") {
             inherit nixpkgs home-manager;
             pkgs = nixpkgs.legacyPackages.x86_64-linux;

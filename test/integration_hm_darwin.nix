@@ -11,6 +11,10 @@
   age = {
     identityPaths = options.age.identityPaths.default ++ [ "/Users/user1/.ssh/this_key_wont_exist" ];
     secrets.user-secret.file = ../example/secret2.age;
+    secrets.trimmed = {
+      file = ../example/secret2.age;
+      trimFinalNewline = true;
+    };
   };
 
   home = rec {
@@ -32,6 +36,7 @@
           in
           ''
             diff -q "${config.age.secrets.user-secret.path}" <(printf '${secret}\n')
+            diff -q "${config.age.secrets.trimmed.path}" <(printf '%s' '${secret}')
           '';
       };
     };

@@ -10,6 +10,7 @@ let
     name = "agenix-integration";
     text = ''
       grep "${secret}" "${config.age.secrets.system-secret.path}"
+      test "$(wc -c < "${config.age.secrets.trimmed.path}" | tr -d '[:space:]')" = 5
     '';
   };
 in
@@ -22,6 +23,10 @@ in
   age = {
     identityPaths = options.age.identityPaths.default ++ [ "/etc/ssh/this_key_wont_exist" ];
     secrets.system-secret.file = ../example/secret1.age;
+    secrets.trimmed = {
+      file = ../example/secret1.age;
+      trimFinalNewline = true;
+    };
     secrets.owned-secret = {
       file = ../example/secret1.age;
       owner = "runner";
