@@ -25,18 +25,21 @@ hash() { sha256sum "$1" | cut -d ' ' -f 1; }
 
 [[ $(decrypt secret1.age 2>/dev/null) == hello ]] || fail 'fixture decryption failed'
 "$agenix" --check
-sed 's/"secret2.age".publicKeys = \[ user1 \];/"secret2.age".publicKeys = [ system1 ];/' secrets.nix > changed-rules.nix
+sed 's/"secret2.age".publicKeys = \[ user1 \];/"secret2.age".publicKeys = [ system1 ];/' agenix-rules.nix > changed-rules.nix
 if AGENIX_RULES=changed-rules.nix "$agenix" --check > check-report; then
   fail 'recipient check accepted changed rules'
 fi
 grep -q '^✗ secret2.age$' check-report
 grep -q '^  missing: ssh-ed25519 ' check-report
-grep -q '^  extra: ssh-ed25519 ' check-report
+# Even though the old key remains literal in changed-rules.nix, show its tag.
+grep -Eq '^  extra: ssh-ed25519 [A-Za-z0-9+/]{6}$' check-report
 
 # Filename normalization, edit, and discovery of old and new rules files.
 [[ $(decrypt ./secret1.age 2>/dev/null) == hello ]]
 EDITOR=: "$agenix" -e ./secret1.age -i "$HOME/.ssh/id_ed25519"
 [[ $(decrypt secret1.age 2>/dev/null) == hello ]]
+cp agenix-rules.nix secrets.nix
+mv agenix-rules.nix agenix-rules.nix.hidden
 output=$(env -u AGENIX_RULES -u RULES "$agenix" -d secret1.age 2>&1)
 has "$output" 'automatic discovery of secrets.nix are deprecated'
 has "$output" hello
@@ -44,7 +47,7 @@ output=$(RULES=secrets.nix "$agenix" -d secret1.age 2>&1)
 has "$output" 'RULES and automatic discovery of secrets.nix are deprecated'
 output=$(AGENIX_RULES=secrets.nix "$agenix" -d secret1.age 2>&1)
 lacks "$output" deprecated
-cp secrets.nix agenix-rules.nix
+mv agenix-rules.nix.hidden agenix-rules.nix
 output=$(env -u AGENIX_RULES -u RULES "$agenix" -d secret1.age 2>&1)
 lacks "$output" deprecated
 output=$(RULES=agenix-rules.nix "$agenix" -d secret1.age 2>&1)

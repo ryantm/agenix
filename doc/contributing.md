@@ -59,3 +59,29 @@ HTML version, `man/` pages, and an EPUB. The deployment workflow publishes
 retired; use the action or the local command above to build documentation.
 Edit `doc/toc.md` when adding or rearranging pages so the site's navigation
 stays in sync.
+
+## CLI scope and compatibility plan
+
+Keep `agenix --check` as an SSH recipient drift check that does not require a
+private key. Extra recipients are reported by their stanza type and short tag;
+scanning Nix source to guess a full public key is no longer part of its scope.
+This keeps results independent of whether rules use inline keys, imported
+files, or computed expressions. The checker still needs OpenSSH to derive SSH
+tags and GNU sed to read headers and armor. This simplification does not remove
+those dependencies, add a new interpreter, or introduce package variants.
+
+The rules-discovery migration follows this release plan:
+
+* Retain the `RULES` variable and current-directory `secrets.nix` discovery
+  throughout 0.19.x, with warnings. Include the migration and removal version
+  in the 0.19.0 release notes.
+* In 0.20.0, remove those two deprecated discovery paths and their compatibility
+  tests. Announce the removal in the release notes. Keep explicit filenames,
+  including `AGENIX_RULES=secrets.nix`.
+* If the announcement misses 0.19.0, postpone removal until after a full minor
+  release series containing the announcement; update the warning and reference
+  documentation together.
+
+Examples and ordinary tests use `agenix-rules.nix` and `AGENIX_RULES`. Dedicated
+compatibility tests continue to exercise the deprecated discovery behavior
+until its scheduled removal.

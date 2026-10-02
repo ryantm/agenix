@@ -125,7 +125,7 @@ pkgs.testers.nixosTest {
     machine.succeed("mkdir -p /tmp/agenix-home/.ssh /tmp/agenix-secrets")
     machine.succeed("cp ${../example_keys/user1} /tmp/agenix-home/.ssh/id_ed25519")
     machine.succeed("chmod 600 /tmp/agenix-home/.ssh/id_ed25519")
-    machine.succeed("cp ${../example/secrets.nix} /tmp/agenix-secrets/secrets.nix")
+    machine.succeed("cp ${../example/agenix-rules.nix} /tmp/agenix-secrets/agenix-rules.nix")
     machine.succeed("cp ${../example}/*.age /tmp/agenix-secrets/")
     machine.succeed("mv /tmp/agenix-secrets/secret1.age /tmp/agenix-secrets/secret1.age.hidden")
     cli = "cd /tmp/agenix-secrets && HOME=/tmp/agenix-home agenix"
@@ -135,9 +135,9 @@ pkgs.testers.nixosTest {
 
     machine.succeed("mv /tmp/agenix-secrets/secret1.age.hidden /tmp/agenix-secrets/secret1.age")
     machine.succeed("cp /tmp/agenix-secrets/secret1.age '/tmp/agenix-secrets/space secret.age'")
-    machine.succeed("printf '%s\\n' 'let old = import ./secrets.nix; in old // { \"space secret.age\" = old.\"secret1.age\"; }' > /tmp/agenix-secrets/spaces.nix")
-    machine.succeed("cd /tmp/agenix-secrets && HOME=/tmp/agenix-home RULES=./spaces.nix agenix -r -i /tmp/agenix-home/.ssh/id_ed25519")
-    assert machine.succeed("cd /tmp/agenix-secrets && HOME=/tmp/agenix-home RULES=./spaces.nix agenix -d 'space secret.age' -i /tmp/agenix-home/.ssh/id_ed25519").strip() == "hello"
+    machine.succeed("printf '%s\\n' 'let old = import ./agenix-rules.nix; in old // { \"space secret.age\" = old.\"secret1.age\"; }' > /tmp/agenix-secrets/spaces.nix")
+    machine.succeed("cd /tmp/agenix-secrets && HOME=/tmp/agenix-home AGENIX_RULES=./spaces.nix agenix -r -i /tmp/agenix-home/.ssh/id_ed25519")
+    assert machine.succeed("cd /tmp/agenix-secrets && HOME=/tmp/agenix-home AGENIX_RULES=./spaces.nix agenix -d 'space secret.age' -i /tmp/agenix-home/.ssh/id_ed25519").strip() == "hello"
 
     status, output = machine.execute("cd /tmp/agenix-secrets && HOME=/tmp/agenix-home EDITOR=false timeout 20s script -q -e -c 'agenix -e secret2.age -i /tmp/agenix-home/.ssh/id_ed25519' /dev/null < /dev/null")
     assert status != 0 and status != 124 and "Editor failed" in output

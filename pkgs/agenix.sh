@@ -35,6 +35,9 @@ function show_help () {
   echo 'If STDIN is not interactive, its contents replace the secret.'
   echo 'Piped input replaces a secret without decrypting it first.'
   echo ' '
+  echo '--check compares SSH recipient tags; extra recipients are shown by type and tag.'
+  echo 'It cannot check native age recipients or authenticate encrypted contents.'
+  echo ' '
   echo 'AGENIX_RULES environment variable with path to Nix file specifying recipient public keys.'
   echo 'Searches the current directory for agenix-rules.nix, then secrets.nix.'
   echo 'Searches parent directories for agenix-rules.nix only.'
@@ -209,7 +212,7 @@ fi
 RULES_DIR=$(cd -P -- "${rules_parent}" && printf '%s/.' "${PWD}") || err "Cannot access rules directory for '${RULES}'."
 RULES="${RULES_DIR}/${RULES##*/}"
 if (( legacy_rules_variable )) || [[ -z "${rules_variable}" && ${RULES##*/} == secrets.nix ]]; then
-    warn 'warning: RULES and automatic discovery of secrets.nix are deprecated and will be removed in a future version of agenix; use AGENIX_RULES and agenix-rules.nix instead.'
+    warn 'warning: RULES and automatic discovery of secrets.nix are deprecated and are scheduled for removal in agenix 0.20.0; use AGENIX_RULES and agenix-rules.nix instead.'
 fi
 cd "${RULES_DIR}" || err "Cannot access rules directory '${RULES_DIR}'."
 
@@ -370,7 +373,7 @@ function ssh_tag {
 
 function check_file {
     local file=$1 rule_keys=$2 input=$1 line key tag stanza found_header=0 mismatch=0
-    local -A expected=() actual=() known=() ambiguous=()
+    local -A expected=() actual=()
     local -a expected_order=() actual_order=()
 
     if [[ ! -f ${file} ]]; then
@@ -401,18 +404,6 @@ function check_file {
             expected_order+=("${stanza}")
         fi
     done <<< "${rule_keys}"
-
-    # A stanza only contains a short tag, so recover a full key when it is
-    # still present as a literal elsewhere in the rules file.
-    while IFS= read -r key; do
-        tag=$(ssh_tag "${key}" 2>/dev/null) || continue
-        stanza="${key%% *} ${tag}"
-        if [[ -v known[${stanza}] && ${known[${stanza}]} != "${key}" ]]; then
-            ambiguous[${stanza}]=1
-        else
-            known[${stanza}]=${key}
-        fi
-    done < <(@jqBin@ -Rr 'scan("ssh-(?:ed25519|rsa) [A-Za-z0-9+/=]+")' -- "${RULES}")
 
     if IFS= read -r line < "${input}" && [[ ${line} == 'age-encryption.org/v1' ]]; then
         found_header=1
@@ -457,11 +448,7 @@ function check_file {
         done
         for stanza in "${actual_order[@]}"; do
             if [[ ! -v expected[${stanza}] ]]; then
-                if [[ -v known[${stanza}] && ! -v ambiguous[${stanza}] ]]; then
-                    printf '  extra: %s\n' "${known[${stanza}]}"
-                else
-                    printf '  extra: %s\n' "${stanza}"
-                fi
+                printf '  extra: %s\n' "${stanza}"
             elif (( actual[${stanza}] > 1 )); then
                 printf '  extra: %s (duplicate)\n' "${stanza}"
                 actual[${stanza}]=1
