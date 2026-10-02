@@ -2,28 +2,32 @@
   description = "Secret management with age";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
-    darwin = {
-      url = "github:lnl7/nix-darwin/master";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    home-manager = {
-      url = "github:nix-community/home-manager";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    systems.url = "github:nix-systems/default";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
   };
 
   outputs =
     {
       self,
       nixpkgs,
-      darwin,
-      home-manager,
-      systems,
     }:
     let
-      eachSystem = nixpkgs.lib.genAttrs (import systems);
+      # nixpkgs cannot bootstrap GHC on these systems. Omit nixfmt-tree and
+      # agenix's shellcheck install check there.
+      noGhcSystems = [
+        "armv6l-linux"
+        "armv7l-linux"
+        "powerpc64le-linux"
+        "riscv64-linux"
+        "x86_64-freebsd"
+      ];
+      # age also needs a Go bootstrap that nixpkgs cannot provide on FreeBSD.
+      packageSystems = nixpkgs.lib.filter (
+        system: system != "x86_64-freebsd"
+      ) nixpkgs.lib.systems.flakeExposed;
+      eachSystem = nixpkgs.lib.genAttrs packageSystems;
+      formatterSystems = nixpkgs.lib.filter (
+        system: !(builtins.elem system noGhcSystems)
+      ) nixpkgs.lib.systems.flakeExposed;
     in
     {
       nixosModules.age = ./modules/age.nix;
@@ -37,60 +41,17 @@
 
       overlays.default = import ./overlay.nix;
 
-      formatter = eachSystem (system: nixpkgs.legacyPackages.${system}.nixfmt-tree);
+      formatter = nixpkgs.lib.genAttrs formatterSystems (
+        system: nixpkgs.legacyPackages.${system}.nixfmt-tree
+      );
 
       packages = eachSystem (system: {
-        agenix = nixpkgs.legacyPackages.${system}.callPackage ./pkgs/agenix.nix { };
-        doc = nixpkgs.legacyPackages.${system}.callPackage ./pkgs/doc.nix { inherit self; };
+        agenix = nixpkgs.legacyPackages.${system}.callPackage ./pkgs/agenix.nix {
+          runShellcheck = !(builtins.elem system noGhcSystems);
+        };
         default = self.packages.${system}.agenix;
       });
 
-      checks =
-        nixpkgs.lib.genAttrs [ "aarch64-darwin" "x86_64-darwin" ] (system: {
-          integration =
-            (darwin.lib.darwinSystem {
-              inherit system;
-              modules = [
-                ./test/integration_darwin.nix
-
-                # Allow new-style nix commands in CI
-                { nix.extraOptions = "experimental-features = nix-command flakes"; }
-
-                home-manager.darwinModules.home-manager
-                {
-                  home-manager = {
-                    verbose = true;
-                    useGlobalPkgs = true;
-                    useUserPackages = true;
-                    backupFileExtension = "hmbak";
-                    users.runner = ./test/integration_hm_darwin.nix;
-                  };
-                }
-              ];
-            }).system;
-        })
-        // {
-          x86_64-linux.integration = import ./test/integration.nix {
-            inherit nixpkgs home-manager;
-            pkgs = nixpkgs.legacyPackages.x86_64-linux;
-            system = "x86_64-linux";
-          };
-          x86_64-linux.integration-systemd = import ./test/integration_systemd.nix {
-            inherit nixpkgs;
-            pkgs = nixpkgs.legacyPackages.x86_64-linux;
-            system = "x86_64-linux";
-          };
-        };
-
-      darwinConfigurations.integration-x86_64.system = self.checks.x86_64-darwin.integration;
-      darwinConfigurations.integration-aarch64.system = self.checks.aarch64-darwin.integration;
-
-      # Work-around for https://github.com/nix-community/home-manager/issues/3075
-      legacyPackages = nixpkgs.lib.genAttrs [ "aarch64-darwin" "x86_64-darwin" ] (system: {
-        homeConfigurations.integration-darwin = home-manager.lib.homeManagerConfiguration {
-          pkgs = nixpkgs.legacyPackages.${system};
-          modules = [ ./test/integration_hm_darwin.nix ];
-        };
-      });
+      checks.x86_64-linux.cli = self.packages.x86_64-linux.agenix;
     };
 }

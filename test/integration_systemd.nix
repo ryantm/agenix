@@ -1,30 +1,25 @@
 # Test for age.installationMode = "systemd"
 # This verifies that secrets are correctly decrypted by the systemd service
 # and that dependent services can access them.
-{
-  nixpkgs ? <nixpkgs>,
-  pkgs ? import <nixpkgs> {
-    inherit system;
-    config = { };
-  },
-  system ? builtins.currentSystem,
-}:
-pkgs.nixosTest {
+{ pkgs }:
+pkgs.testers.nixosTest {
   name = "agenix-systemd-mode";
   nodes.system1 =
     {
       config,
       pkgs,
-      options,
       ...
     }:
     {
       imports = [
         ../modules/age.nix
-        ./install_ssh_host_keys_simple.nix
       ];
 
-      services.openssh.enable = true;
+      systemd.sysusers.enable = true;
+      users.users.secret-reader = {
+        isSystemUser = true;
+        group = "users";
+      };
 
       # Use systemd mode for secret decryption
       age.installationMode = "systemd";
@@ -33,22 +28,34 @@ pkgs.nixosTest {
         testsecret = {
           file = ../example/secret1.age;
           mode = "0400";
-          owner = "root";
-          group = "root";
+          owner = "secret-reader";
+          group = "users";
         };
+        disabled.enable = false;
       };
 
-      age.identityPaths = options.age.identityPaths.default;
+      age.identityPaths = [ "/var/lib/agenix-test/identity" ];
+      systemd.services.agenix-install-secrets = {
+        requires = [ "provide-identity.service" ];
+        after = [ "provide-identity.service" ];
+      };
+      systemd.services.provide-identity = {
+        serviceConfig.Type = "oneshot";
+        script = ''
+          install -Dm0600 ${../example_keys/system1} /var/lib/agenix-test/identity
+        '';
+      };
 
       # Create a service that depends on agenix and reads the secret
       systemd.services.secret-consumer = {
         description = "Test service that consumes agenix secrets";
         after = [ "agenix-install-secrets.service" ];
-        wants = [ "agenix-install-secrets.service" ];
+        requires = [ "agenix-install-secrets.service" ];
         wantedBy = [ "multi-user.target" ];
         serviceConfig = {
           Type = "oneshot";
           RemainAfterExit = true;
+          User = "secret-reader";
           ExecStart = pkgs.writeShellScript "consume-secret" ''
             set -euo pipefail
             if [ -r "${config.age.secrets.testsecret.path}" ]; then
@@ -63,6 +70,15 @@ pkgs.nixosTest {
       };
     };
 
+  nodes.barrier = { ... }: {
+    imports = [ ../modules/age.nix ];
+    systemd.sysusers.enable = false;
+    services.userborn.enable = false;
+    age.identityPaths = [ "${../example_keys/system1}" ];
+    age.secrets.secret.file = ../example/secret1.age;
+    age.secrets.disabled.enable = false;
+  };
+
   testScript = ''
     # Wait for the system to boot
     system1.wait_for_unit("multi-user.target")
@@ -72,6 +88,8 @@ pkgs.nixosTest {
 
     # Verify the secret was decrypted
     system1.succeed("test -f /run/agenix/testsecret")
+    assert system1.succeed("stat -Lc %U /run/agenix/testsecret").strip() == "secret-reader"
+    system1.fail("test -e /run/agenix/disabled")
 
     # Verify the dependent service ran and consumed the secret
     system1.succeed("systemctl is-active secret-consumer.service")
@@ -85,6 +103,15 @@ pkgs.nixosTest {
     consumed_content = system1.succeed("cat /tmp/secret-consumed").strip()
     assert consumed_content == "hello", f"Expected 'hello', got '{consumed_content}'"
 
-    print("All systemd mode tests passed!")
+    # The activation-mode service verifies every enabled secret and reports
+    # missing files. It never decrypts them itself.
+    barrier.wait_for_unit("multi-user.target")
+    barrier.succeed("systemctl is-active agenix-install-secrets.service")
+    barrier.succeed("rm /run/agenix/secret")
+    barrier.fail("systemctl restart agenix-install-secrets.service")
+    barrier.fail("test -f /run/agenix/secret")
+    barrier.succeed("/run/current-system/activate")
+    barrier.succeed("systemctl restart agenix-install-secrets.service")
+    assert barrier.succeed("cat /run/agenix/secret").strip() == "hello"
   '';
 }

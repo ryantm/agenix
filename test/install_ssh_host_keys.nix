@@ -1,8 +1,6 @@
 # Do not copy this! It is insecure. This is only okay because we are testing.
 { config, ... }:
 {
-  # Install SSH host keys via activation script (must run before agenix activation)
-  # This ensures keys are available for decryption during activation.
   system.activationScripts.agenixInstall.deps = [ "installSSHHostKeys" ];
 
   system.activationScripts.installSSHHostKeys.text = ''
@@ -24,8 +22,5 @@
       chown $USER1_UID:$USERS_GID /home/user1/.ssh/id_ed25519
       touch /etc/ssh/ssh_host_rsa_key
     )
-    cp -r "${../example}" /tmp/secrets
-    chmod -R u+rw /tmp/secrets
-    chown -R $USER1_UID:$USERS_GID /tmp/secrets
   '';
 }

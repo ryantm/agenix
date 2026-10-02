@@ -1,61 +1,43 @@
 {
   lib,
-  stdenv,
+  stdenvNoCC,
   age,
   jq,
   nix,
-  mktemp,
   diffutils,
+  coreutils,
+  openssh,
+  gnused,
   replaceVars,
   ageBin ? "${age}/bin/age",
   shellcheck,
+  runShellcheck ? true,
 }:
 let
   bin = "${placeholder "out"}/bin/agenix";
 in
-stdenv.mkDerivation rec {
+stdenvNoCC.mkDerivation rec {
   pname = "agenix";
   version = "0.15.0";
   src = replaceVars ./agenix.sh {
     inherit ageBin version;
     jqBin = "${jq}/bin/jq";
     nixInstantiate = "${nix}/bin/nix-instantiate";
-    mktempBin = "${mktemp}/bin/mktemp";
+    mktempBin = "${coreutils}/bin/mktemp";
     diffBin = "${diffutils}/bin/diff";
+    sshKeygenBin = "${openssh}/bin/ssh-keygen";
+    base64Bin = "${coreutils}/bin/base64";
+    headBin = "${coreutils}/bin/head";
+    trBin = "${coreutils}/bin/tr";
+    sedBin = "${gnused}/bin/sed";
   };
   dontUnpack = true;
   doInstallCheck = true;
-  installCheckInputs = [ shellcheck ];
+  installCheckInputs = [ coreutils ] ++ lib.optional runShellcheck shellcheck;
   postInstallCheck = ''
-    shellcheck ${bin}
+    ${lib.optionalString runShellcheck "shellcheck --norc --enable=all ${bin}"}
     ${bin} -h | grep ${version}
-
-    test_tmp=$(mktemp -d 2>/dev/null || mktemp -d -t 'mytmpdir')
-    export HOME="$test_tmp/home"
-    export NIX_STORE_DIR="$test_tmp/nix/store"
-    export NIX_STATE_DIR="$test_tmp/nix/var"
-    mkdir -p "$HOME" "$NIX_STORE_DIR" "$NIX_STATE_DIR"
-    function cleanup {
-      rm -rf "$test_tmp"
-    }
-    trap "cleanup" 0 2 3 15
-
-    mkdir -p $HOME/.ssh
-    cp -r "${../example}" $HOME/secrets
-    chmod -R u+rw $HOME/secrets
-    (
-    umask u=rw,g=r,o=r
-    cp ${../example_keys/user1.pub} $HOME/.ssh/id_ed25519.pub
-    chown $UID $HOME/.ssh/id_ed25519.pub
-    )
-    (
-    umask u=rw,g=,o=
-    cp ${../example_keys/user1} $HOME/.ssh/id_ed25519
-    chown $UID $HOME/.ssh/id_ed25519
-    )
-
-    cd $HOME/secrets
-    test $(${bin} -d secret1.age) = "hello"
+    bash ${../test/cli.sh} ${bin} ${../example} ${../example_keys} ${../test/fixtures/one-way/agenix-rules.nix}
   '';
 
   installPhase = ''
