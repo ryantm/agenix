@@ -34,7 +34,7 @@ let
     let
       app = pkgs.writeShellApplication {
         name = "agenix-home-manager-mount-secrets";
-        runtimeInputs = with pkgs; [ coreutils ];
+        runtimeInputs = [ pkgs.coreutils ] ++ cfg.pluginPackages;
         text = ''
           ${installer.prepareIdentities}
           ${optionalString (cfg.secretsDir == defaultSecretsDir) ''
@@ -76,6 +76,16 @@ in
     };
 
     package = mkPackageOption pkgs "age" { };
+
+    pluginPackages = mkOption {
+      type = types.listOf types.package;
+      default = [ ];
+      example = literalExpression "[ pkgs.age-plugin-yubikey ]";
+      description = ''
+        Packages providing age plugins. Their executables are added to the
+        decryption script's PATH, including when its service starts at login.
+      '';
+    };
 
     verbosity = shared.verbosityOption "other activation output";
 

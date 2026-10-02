@@ -329,6 +329,27 @@ remain visible at every level.
 
 The `age` package used to decrypt secrets. Defaults to `pkgs.age`.
 
+### `age.pluginPackages`
+
+Packages providing age plugins, added to the decryption script's `PATH`.
+Defaults to `[]`. This applies to both the Linux user service and the Darwin
+launch agent, so plugin discovery does not depend on an interactive shell.
+
+For example, in your Home Manager configuration:
+
+```nix
+{ pkgs, ... }: {
+  age.pluginPackages = [ pkgs.age-plugin-yubikey ];
+  age.identityPaths = [ "/home/alice/.config/age/yubikey-identity.txt" ];
+}
+```
+
+The identity file must already contain the plugin identity for the recipient.
+This option provides the executable; it does not provision the hardware or
+provide a PIN entry agent. Configure the plugin's required device access and
+interaction separately. Installing the plugin in a user profile alone does
+not ensure that a login service can discover it.
+
 ### `age.validateSecrets`
 
 Defaults to `true`, with the same build-time ciphertext checks and limitations
