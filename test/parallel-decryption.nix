@@ -1,5 +1,5 @@
 { pkgs }:
-pkgs.nixosTest {
+pkgs.testers.nixosTest {
   name = "agenix-parallel-decryption";
 
   nodes.machine =
@@ -31,18 +31,21 @@ pkgs.nixosTest {
         set -e
         ${config.system.activationScripts.agenixNewGeneration.text}
         ${config.system.activationScripts.agenixInstall.text}
+        ${config.system.activationScripts.agenixChown.text}
       '';
     in
     {
       imports = [ ../modules/age.nix ];
 
       systemd.sysusers.enable = false;
+      services.userborn.enable = false;
       age.ageBin = "${ageWithBarrier}";
       age.identityPaths = [
         "/run/agenix-test/system1"
         "/run/agenix-test/passkey"
       ];
       age.secrets.a.file = ../example/secret1.age;
+      age.secrets.disabled.enable = false;
       age.secrets.b.file = "/run/agenix-test/b.age";
 
       system.activationScripts.agenixTestFixtures = {
@@ -82,6 +85,15 @@ pkgs.nixosTest {
     assert status == 0, output
     machine.succeed("test $(find /tmp/agenix-decryption-barrier -name 'started.*' | wc -l) -eq 2")
     machine.succeed("rm -rf /tmp/agenix-decryption-barrier")
+
+    # A failed worker must be waited on and must not publish partial results.
+    generation = machine.succeed("readlink /run/agenix").strip()
+    machine.succeed("printf invalid > /run/agenix-test/b.age")
+    machine.fail("timeout 30s activate-test-secrets < /dev/null")
+    assert machine.succeed("readlink /run/agenix").strip() == generation
+    assert machine.succeed("cat /run/agenix/a").strip() == "hello"
+    assert machine.succeed("cat /run/agenix/b").strip() == "hello"
+    machine.succeed("cp ${../example/secret1.age} /run/agenix-test/b.age")
 
     # Replace one ciphertext with one encrypted for a passphrase-protected SSH key.
     machine.succeed("ssh-keygen -q -t ed25519 -N test-passphrase -f /run/agenix-test/passkey")
