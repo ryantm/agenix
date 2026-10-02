@@ -1,14 +1,21 @@
 { pkgs }:
 let
+  keyName = "domain\\tuser's \"key\" $HOME `id` $(id)";
+  identityFiles = pkgs.runCommand "agenix-identity-fixtures" { } ''
+    mkdir "$out"
+    touch "$out/empty"
+    printf key > "$out"/${pkgs.lib.escapeShellArg keyName}
+  '';
+  key = "${identityFiles}/${keyName}";
   installer = (import ../modules/secret-install.nix { inherit (pkgs) lib; }).installer {
     cfg = {
       verbosity = "quiet";
       secretsDir = "\${XDG_RUNTIME_DIR}/agenix";
       secretsMountPoint = "\${XDG_RUNTIME_DIR}/agenix.d";
       identityPaths = [
-        "$XDG_RUNTIME_DIR/missing"
-        "$XDG_RUNTIME_DIR/empty"
-        "$XDG_RUNTIME_DIR/key"
+        "${identityFiles}/missing"
+        "${identityFiles}/empty"
+        key
       ];
       secrets.example = {
         enable = true;
@@ -27,8 +34,6 @@ pkgs.runCommand "agenix-shared-installer-test" { } ''
   set -eu
   export XDG_RUNTIME_DIR="$PWD/runtime"
   mkdir -p "$XDG_RUNTIME_DIR"
-  touch "$XDG_RUNTIME_DIR/empty"
-  echo key > "$XDG_RUNTIME_DIR/key"
   echo first > "$XDG_RUNTIME_DIR/encrypted"
   cat > "$XDG_RUNTIME_DIR/mock-age" <<'EOF'
   #!${pkgs.runtimeShell}
@@ -36,7 +41,7 @@ pkgs.runCommand "agenix-shared-installer-test" { } ''
   test "$1" = --decrypt
   shift
   test "$1" = -i
-  test "$2" = "$XDG_RUNTIME_DIR/key"
+  test "$2" = ${pkgs.lib.escapeShellArg key}
   shift 2
   test "$1" = -o
   cp "$3" "$2"
@@ -50,7 +55,7 @@ pkgs.runCommand "agenix-shared-installer-test" { } ''
   }
 
   run_install 2> "$XDG_RUNTIME_DIR/warnings"
-  grep -F 'entry '"$XDG_RUNTIME_DIR"'/missing not present!' "$XDG_RUNTIME_DIR/warnings"
+  grep -F ${pkgs.lib.escapeShellArg "entry ${identityFiles}/missing not present!"} "$XDG_RUNTIME_DIR/warnings"
   test "$(cat "$XDG_RUNTIME_DIR/custom/example")" = first
   test "$(readlink "$XDG_RUNTIME_DIR/agenix")" = "$XDG_RUNTIME_DIR/agenix.d/1"
   test "$(stat -c %a "$XDG_RUNTIME_DIR/agenix.d/1/example")" = 400

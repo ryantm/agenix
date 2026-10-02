@@ -225,6 +225,10 @@ secret in question. Overriding `age.identityPaths` example:
 }
 ```
 
+Identity paths are literal filesystem paths. Spaces, backslashes, and shell
+metacharacters are preserved; variables such as `$HOME` are not expanded.
+Construct paths with Nix interpolation when needed.
+
 ### `age.secretsDir`
 
 `age.secretsDir` is the directory where secrets are symlinked to by
@@ -319,6 +323,10 @@ Paths to SSH private keys to try for decryption. By default, the module tries
 be available when secrets are decrypted. Use strings containing absolute paths
 when overriding this option; a Nix path would copy the private key into the
 world-readable Nix store.
+
+Paths are passed literally to age. For example, use
+`"${config.home.homeDirectory}/.ssh/id_ed25519"` rather than a shell expression
+containing `$HOME`. Backslashes and quotes in the home directory are preserved.
 
 ### `age.secretsDir`
 
