@@ -49,6 +49,9 @@
             }).system;
         })
         // {
+          x86_64-linux.change-actions = import (testDir + "/change-actions.nix") {
+            pkgs = nixpkgs.legacyPackages.x86_64-linux;
+          };
           x86_64-linux.failure-safety = import (testDir + "/failure-safety.nix") {
             pkgs = nixpkgs.legacyPackages.x86_64-linux;
           };

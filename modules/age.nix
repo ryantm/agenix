@@ -3,6 +3,7 @@
   options,
   lib,
   pkgs,
+  utils ? { },
   ...
 }:
 with lib;
@@ -223,6 +224,102 @@ let
     ++ (map chownSecret enabledSecrets)
   );
 
+  watchedSecrets = filter (
+    s: s.onChange != "" || s.reloadUnits != [ ] || s.restartUnits != [ ]
+  ) enabledSecrets;
+  changeBackup = s: "before-${builtins.hashString "sha256" s.name}";
+  savePreviousSecrets = concatMapStringsSep "\n" (s: ''
+    if test -f ${escapeShellArg s.path}; then
+      cp -pL -- ${escapeShellArg s.path} "$_agenix_backup/${changeBackup s}"
+    fi
+  '') watchedSecrets;
+  detectChanges = ''
+    _agenix_changed=()
+    ${concatMapStringsSep "\n" (s: ''
+      _before="$_agenix_backup/${changeBackup s}"
+      _after=${escapeShellArg s.path}
+      if ! test -f "$_before" ||
+         ! ${pkgs.diffutils}/bin/cmp -s -- "$_before" "$_after" ||
+         [ "$(stat -Lc '%a:%u:%g' -- "$_before")" != "$(stat -Lc '%a:%u:%g' -- "$_after")" ]; then
+        _agenix_changed+=(${escapeShellArg s.name})
+      fi
+    '') watchedSecrets}
+  '';
+  notifyChanges = mode: ''
+    _agenix_notify=0
+    ${
+      if mode == "activation" then
+        ''
+          if test -e /run/booted-system; then _agenix_notify=1; fi
+        ''
+      else if mode == "systemd" then
+        ''
+          case "$(${pkgs.systemd}/bin/systemctl is-system-running 2>/dev/null || true)" in
+            running|degraded) _agenix_notify=1 ;;
+          esac
+        ''
+      else
+        ''
+          if (( _agenix_generation > 1 )); then _agenix_notify=1; fi
+        ''
+    }
+    if (( _agenix_notify )); then
+      _agenix_hook_failed=0
+      declare -A _agenix_restart=() _agenix_reload=()
+      for _agenix_name in "''${_agenix_changed[@]}"; do
+        case "$_agenix_name" in
+          ${concatMapStringsSep "\n" (s: ''
+            ${escapeShellArg s.name})
+              ${optionalString (s.onChange != "") ''
+                ${pkgs.writeShellScript "agenix-on-change" ("set -e\n" + s.onChange)} || _agenix_hook_failed=1
+              ''}
+              ${concatMapStringsSep "\n" (u: "_agenix_restart[${escapeShellArg u}]=1") s.restartUnits}
+              ${concatMapStringsSep "\n" (u: "_agenix_reload[${escapeShellArg u}]=1") s.reloadUnits}
+              ;;
+          '') watchedSecrets}
+        esac
+      done
+      ${optionalString (!isDarwin) ''
+        for _agenix_unit in "''${!_agenix_restart[@]}"; do
+          ${
+            if mode == "activation" then
+              ''
+                if [[ ''${NIXOS_ACTION:-} == switch || ''${NIXOS_ACTION:-} == test ]]; then
+                  printf '%s\n' "$_agenix_unit" >> /run/nixos/activation-restart-list
+                else
+                  ${pkgs.systemd}/bin/systemctl --no-block try-restart "$_agenix_unit"
+                fi
+              ''
+            else
+              ''
+                ${pkgs.systemd}/bin/systemctl --no-block try-restart "$_agenix_unit"
+              ''
+          }
+        done
+        for _agenix_unit in "''${!_agenix_reload[@]}"; do
+          [[ -v _agenix_restart[$_agenix_unit] ]] && continue
+          ${
+            if mode == "activation" then
+              ''
+                if [[ ''${NIXOS_ACTION:-} == switch || ''${NIXOS_ACTION:-} == test ]]; then
+                  printf '%s\n' "$_agenix_unit" >> /run/nixos/activation-reload-list
+                elif ${pkgs.systemd}/bin/systemctl is-active --quiet "$_agenix_unit"; then
+                  ${pkgs.systemd}/bin/systemctl --no-block reload "$_agenix_unit"
+                fi
+              ''
+            else
+              ''
+                if ${pkgs.systemd}/bin/systemctl is-active --quiet "$_agenix_unit"; then
+                  ${pkgs.systemd}/bin/systemctl --no-block reload "$_agenix_unit"
+                fi
+              ''
+          }
+        done
+      ''}
+      exit "$_agenix_hook_failed"
+    fi
+  '';
+
   installGeneration = ''
     (
       set -e
@@ -231,13 +328,14 @@ let
       ${installSecrets}
       mkdir -m 0700 "$_agenix_backup"
       ${backupPaths}
+      ${savePreviousSecrets}
       touch "$_agenix_backup/ready"
       ${publishSecrets}
       ${linkNewGeneration}
       trap - EXIT
     )
   '';
-  finishGeneration = ''
+  finishGeneration = mode: ''
     (
       set -e
       ${currentGeneration}
@@ -245,9 +343,11 @@ let
       if test -d "$_agenix_backup"; then
         ${rollbackTrap}
         ${chownSecrets}
+        ${detectChanges}
         trap - EXIT
         rm -rf -- "$_agenix_backup"
         ${cleanupOldGeneration}
+        ${notifyChanges mode}
       fi
     )
   '';
@@ -311,6 +411,21 @@ let
         };
         symlink = mkEnableOption "symlinking secrets to their destination" // {
           default = true;
+        };
+        onChange = mkOption {
+          type = types.lines;
+          default = "";
+          description = "Shell script run as root after this secret's contents or permissions change. Not run at boot.";
+        };
+        reloadUnits = mkOption {
+          type = types.listOf (if isDarwin then types.str else utils.systemdUtils.lib.unitNameType);
+          default = [ ];
+          description = "Systemd units to reload after this secret changes. Linux only.";
+        };
+        restartUnits = mkOption {
+          type = types.listOf (if isDarwin then types.str else utils.systemdUtils.lib.unitNameType);
+          default = [ ];
+          description = "Systemd units to restart after this secret changes. Linux only.";
         };
       };
     }
@@ -417,6 +532,10 @@ in
           assertion = cfg.identityPaths != [ ];
           message = "age.identityPaths must be set, for example by enabling openssh.";
         }
+        {
+          assertion = !isDarwin || all (s: s.restartUnits == [ ] && s.reloadUnits == [ ]) enabledSecrets;
+          message = "agenix: restartUnits and reloadUnits are only supported on Linux.";
+        }
       ];
     }
     (optionalAttrs (!isDarwin) {
@@ -451,7 +570,7 @@ in
 
         serviceConfig = {
           Type = "oneshot";
-          ExecStart = pkgs.writeShellScript "agenix-chown" finishGeneration;
+          ExecStart = pkgs.writeShellScript "agenix-chown" (finishGeneration "systemd");
           RemainAfterExit = true;
         };
       };
@@ -481,7 +600,7 @@ in
 
         # Change ownership and group after users and groups are made.
         agenixChown = {
-          text = finishGeneration;
+          text = finishGeneration "activation";
           deps = [
             "users"
             "groups"
@@ -503,7 +622,7 @@ in
           set -o pipefail
           export PATH="${pkgs.gnugrep}/bin:${pkgs.coreutils}/bin:@out@/sw/bin:/usr/bin:/bin:/usr/sbin:/sbin"
           ${installGeneration}
-          ${finishGeneration}
+          ${finishGeneration "darwin"}
           exit 0
         '';
         serviceConfig = {

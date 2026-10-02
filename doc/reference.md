@@ -195,6 +195,35 @@ Example of a secret with a name different from its attrpath:
 }
 ```
 
+### `age.secrets.<name>.onChange`
+
+A shell script to run as root after an update changes this secret's plaintext,
+mode, owner, or group, or installs it at a new destination. Defaults to `""`.
+Hooks run after all secrets are installed and ownership is assigned, and are
+skipped during boot. A re-encryption with unchanged plaintext and permissions
+does not run the hook. The new configuration's hook is used.
+
+If installation fails, hooks are skipped. If a hook fails, the error is reported
+and the successfully installed secrets remain in place.
+
+### `age.secrets.<name>.reloadUnits` and `restartUnits`
+
+Lists of systemd units to reload or restart when this secret changes. Both
+default to `[]` and apply only on Linux. Units that are inactive remain
+inactive. A restart takes precedence if a unit is listed in both options.
+
+```nix
+age.secrets.service-config = {
+  file = ./service-config.age;
+  restartUnits = [ "my-service.service" ];
+};
+```
+
+During a traditional NixOS configuration switch, requests are passed to
+`switch-to-configuration`. During service-based installation or manual
+activation, requests are queued with systemd after secret installation. Queuing
+avoids blocking on a consumer that itself waits for agenix to finish.
+
 ### `age.ageBin`
 
 `age.ageBin` the string of the path to the `age` binary. Usually, you
