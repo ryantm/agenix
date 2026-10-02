@@ -209,7 +209,41 @@ let
   installSecrets = builtins.concatStringsSep "\n" (
     (optional (verbosityLevel >= 1) "echo '[agenix] decrypting secrets...'")
     ++ testIdentities
-    ++ (map installSecret enabledSecrets)
+    ++ [
+      ''
+        # Background jobs cannot prompt for passphrases via the caller's terminal.
+        # Keep unencrypted SSH identities parallel during interactive switches.
+        _agenix_needs_terminal=0
+        if [ -t 0 ]; then
+          for _agenix_identity in ${toString cfg.identityPaths}; do
+            [ -r "$_agenix_identity" ] && [ -s "$_agenix_identity" ] || continue
+            if ! ${pkgs.openssh}/bin/ssh-keygen -y -P "" -f "$_agenix_identity" >/dev/null 2>&1; then
+              _agenix_needs_terminal=1
+              break
+            fi
+          done
+        fi
+        # NixOS creates this link after boot activation has finished.
+        if ${optionalString (!isDarwin) "[ ! -e /run/booted-system ] || "}(( _agenix_needs_terminal )); then
+          ${concatMapStringsSep "\n" installSecret enabledSecrets}
+        else
+          _agenix_decryption_pids=()
+          ${concatMapStringsSep "\n" (secretType: ''
+            (
+              ${installSecret secretType}
+            ) &
+            _agenix_decryption_pids+=("$!")
+          '') enabledSecrets}
+          _agenix_decryption_failed=0
+          for _agenix_decryption_pid in "''${_agenix_decryption_pids[@]}"; do
+            wait "$_agenix_decryption_pid" || _agenix_decryption_failed=1
+          done
+          if (( _agenix_decryption_failed )); then
+            exit 1
+          fi
+        fi
+      ''
+    ]
   );
 
   chownSecret = secretType: ''

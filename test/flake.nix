@@ -49,6 +49,9 @@
             }).system;
         })
         // {
+          x86_64-linux.parallel-decryption = import (testDir + "/parallel-decryption.nix") {
+            pkgs = nixpkgs.legacyPackages.x86_64-linux;
+          };
           x86_64-linux.failure-safety = import (testDir + "/failure-safety.nix") {
             pkgs = nixpkgs.legacyPackages.x86_64-linux;
           };
