@@ -22,11 +22,12 @@ function show_help () {
   echo '-d, --decrypt FILE        decrypts FILE to STDOUT'
   echo '-i, --identity            identity to use when decrypting'
   echo '-j PLUGIN                 decrypt using the data-less plugin PLUGIN'
+  echo '--yubikey                 discover identities on connected YubiKeys for decryption'
   echo '-v, --verbose             verbose output'
   echo ' '
   echo 'FILE an age-encrypted file'
   echo ' '
-  echo 'PRIVATE_KEY a path to a private SSH key used to decrypt file'
+  echo 'PRIVATE_KEY a path to an age, SSH, or plugin identity file used to decrypt FILE'
   echo ' '
   echo 'PUBLIC_KEY an exact public key string from the rules; only matching secrets are rekeyed'
   echo ' '
@@ -75,6 +76,7 @@ FILE=
 REKEY_PUBLIC_KEY=
 DEFAULT_DECRYPT=(--decrypt)
 EXPLICIT_IDENTITY=0
+DISCOVER_YUBIKEY=0
 
 while test $# -gt 0; do
   case "$1" in
@@ -106,6 +108,10 @@ while test $# -gt 0; do
         echo "no PRIVATE_KEY specified"
         exit 1
       fi
+      shift
+      ;;
+    --yubikey)
+      DISCOVER_YUBIKEY=1
       shift
       ;;
     -j)
@@ -256,6 +262,9 @@ function finish {
         *) ;;
     esac
     cleanup
+    if [[ -n ${YUBIKEY_IDENTITY_DIR+x} ]]; then
+        rm -rf -- "${YUBIKEY_IDENTITY_DIR}"
+    fi
 }
 
 trap finish EXIT
@@ -306,6 +315,19 @@ function decrypt {
     local file=$1 output=$2 have_identity=${EXPLICIT_IDENTITY}
     local -a args=("${DEFAULT_DECRYPT[@]}")
     [[ -f ${file} ]] || err "${file} does not exist."
+    if (( DISCOVER_YUBIKEY )); then
+        if [[ -z ${YUBIKEY_IDENTITY_DIR+x} ]]; then
+            command -v age-plugin-yubikey >/dev/null || err '--yubikey requires age-plugin-yubikey on PATH.'
+            YUBIKEY_IDENTITY_DIR=$(@mktempBin@ -d)
+            (
+                umask 077
+                age-plugin-yubikey --identity > "${YUBIKEY_IDENTITY_DIR}/identities"
+            ) || err 'Could not discover YubiKey identities.'
+            [[ -s ${YUBIKEY_IDENTITY_DIR}/identities ]] || err 'No YubiKey identities were discovered.'
+        fi
+        args+=(--identity "${YUBIKEY_IDENTITY_DIR}/identities")
+        have_identity=1
+    fi
     if (( ! have_identity )); then
         if [[ -f "${HOME}/.ssh/id_rsa" ]]; then
             args+=(--identity "${HOME}/.ssh/id_rsa")
@@ -317,7 +339,7 @@ function decrypt {
         fi
     fi
     if (( ! have_identity )); then
-        err "No identity found to decrypt ${file}. Try adding an SSH key at ${HOME}/.ssh/id_rsa or ${HOME}/.ssh/id_ed25519, using --identity to specify a file, or using -j to specify a plugin."
+        err "No identity found to decrypt ${file}. Try adding an SSH key at ${HOME}/.ssh/id_rsa or ${HOME}/.ssh/id_ed25519, using --identity to specify a file, using -j to specify a data-less plugin, or using --yubikey to discover connected YubiKeys."
     fi
     @ageBin@ "${args[@]}" -o "${output}" -- "${file}" || exit 1
 }

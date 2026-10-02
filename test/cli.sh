@@ -161,3 +161,65 @@ fi
 "$agenix" -r -i "$keys/system1" </dev/null
 [[ $(hash one-way.age) != "$before" ]]
 [[ $(decrypt one-way.age -i "$keys/system1" </dev/null) == nose1234 ]]
+
+# Model the discovery command with public SSH fixtures so real age verifies
+# decryption. Physical YubiKey access and the plugin protocol are separate.
+(
+  mkdir "$test_tmp/yubikey-bin" "$test_tmp/yubikey-tmp"
+  export TMPDIR="$test_tmp/yubikey-tmp"
+  export PATH="$test_tmp/yubikey-bin:$PATH"
+  export HOME="$test_tmp/without-identity"
+  export YUBIKEY_TEST_KEY="$keys/system1"
+  export YUBIKEY_TEST_LOG="$test_tmp/yubikey-calls"
+  export YUBIKEY_TEST_MODE=valid
+  printf '#!%s\n' "$BASH" > "$test_tmp/yubikey-bin/age-plugin-yubikey"
+  cat >> "$test_tmp/yubikey-bin/age-plugin-yubikey" <<'PLUGIN'
+set -euo pipefail
+[[ $# -eq 1 && $1 == --identity ]]
+printf 'discovered\n' >> "$YUBIKEY_TEST_LOG"
+case "$YUBIKEY_TEST_MODE" in
+  valid) cat "$YUBIKEY_TEST_KEY" ;;
+  empty) exit 0 ;;
+  failed) cat "$YUBIKEY_TEST_KEY"; exit 17 ;;
+  invalid) printf 'invalid identity\n' ;;
+esac
+PLUGIN
+  chmod +x "$test_tmp/yubikey-bin/age-plugin-yubikey"
+  cp agenix-rules.nix original-rules.nix
+  printf '%s\n' 'let rules = import ./original-rules.nix; in rules // { "second.age" = rules."one-way.age"; }' > agenix-rules.nix
+  cp one-way.age second.age
+
+  [[ $("$agenix" --yubikey -d one-way.age) == nose1234 ]]
+  [[ -z $(find "$TMPDIR" -mindepth 1 -print) ]]
+  # Explicit file identities can supplement discovered identities.
+  [[ $("$agenix" --yubikey -i "$keys/user1" -d one-way.age) == nose1234 ]]
+  EDITOR=: "$agenix" --yubikey -e one-way.age </dev/null
+  : > "$YUBIKEY_TEST_LOG"
+  "$agenix" --yubikey -r </dev/null
+  [[ $(wc -l < "$YUBIKEY_TEST_LOG") -eq 1 ]]
+  [[ -z $(find "$TMPDIR" -mindepth 1 -print) ]]
+  [[ $("$agenix" --yubikey -d second.age) == nose1234 ]]
+
+  before=$(hash one-way.age)
+  for YUBIKEY_TEST_MODE in empty failed invalid; do
+    export YUBIKEY_TEST_MODE
+    if "$agenix" --yubikey --rekey-file one-way.age > "$test_tmp/yubikey-error" 2>&1; then
+      fail "YubiKey discovery accepted $YUBIKEY_TEST_MODE output"
+    fi
+    [[ $(hash one-way.age) == "$before" ]]
+    [[ -z $(find "$TMPDIR" -mindepth 1 -print) ]]
+  done
+
+  # No decryption means no hardware discovery, even with the flag enabled.
+  : > "$YUBIKEY_TEST_LOG"
+  YUBIKEY_TEST_MODE=failed "$agenix" --yubikey --check
+  printf replacement | YUBIKEY_TEST_MODE=failed "$agenix" --yubikey -e one-way.age
+  [[ ! -s $YUBIKEY_TEST_LOG ]]
+  [[ $(decrypt one-way.age -i "$keys/system1") == replacement ]]
+  mv "$test_tmp/yubikey-bin/age-plugin-yubikey" "$test_tmp/yubikey-bin/disabled-plugin"
+  if "$agenix" --yubikey -d one-way.age > "$test_tmp/yubikey-error" 2>&1; then
+    fail 'missing YubiKey plugin was accepted'
+  fi
+  grep -q -- '--yubikey requires age-plugin-yubikey on PATH.' "$test_tmp/yubikey-error"
+  [[ -z $(find "$TMPDIR" -mindepth 1 -print) ]]
+)
