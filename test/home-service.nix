@@ -1,5 +1,13 @@
 { pkgs, home-manager }:
 let
+  plugin = pkgs.writeShellScriptBin "age-plugin-fixture" ''
+    touch "$XDG_RUNTIME_DIR/agenix-plugin-found"
+  '';
+  ageWithPlugin = pkgs.writeShellScriptBin "age" ''
+    set -e
+    age-plugin-fixture
+    exec ${pkgs.age}/bin/age "$@"
+  '';
   # These credentials and keys are public test fixtures, not real accounts.
   fixtures = pkgs.runCommand "agenix-home-service-fixtures" { nativeBuildInputs = [ pkgs.age ]; } ''
     mkdir "$out"
@@ -31,6 +39,8 @@ let
             stateVersion = "26.05";
           };
           programs.gh.enable = true;
+          age.package = ageWithPlugin;
+          age.pluginPackages = [ plugin ];
           age.identityPaths = [
             "/home/alice/.ssh/id_ed25519"
           ]
@@ -78,8 +88,10 @@ pkgs.testers.nixosTest {
         machine.succeed(alice("/etc/agenix-home-first/activate"))
         machine.wait_until_succeeds(alice("test -f /home/alice/.config/gh/hosts.yml"))
         assert machine.succeed(alice(token)).strip() == "agenix-public-test-first"
+        machine.succeed("test -f /run/user/1000/agenix-plugin-found")
         machine.succeed("test -L /home/alice/.config/gh/hosts.yml")
         machine.succeed("test $(stat -Lc %U:%a /home/alice/.config/gh/hosts.yml) = alice:400")
+
         old_exec = machine.succeed(alice("systemctl --user show agenix.service -p ExecStart --value"))
 
     with subtest("A switch reloads the service and uses a newly configured native identity"):
@@ -92,5 +104,13 @@ pkgs.testers.nixosTest {
         # No test command performs daemon-reload or restarts agenix manually.
         machine.succeed("test ! -e /run/user/1000/agenix.d/1")
         machine.succeed("test $(stat -Lc %U:%a /home/alice/.config/gh/hosts.yml) = alice:400")
+
+    with subtest("The login service finds its plugins after reboot without a shell PATH"):
+        machine.shutdown()
+        machine.wait_for_unit("multi-user.target")
+        machine.wait_for_unit("user@1000.service")
+        machine.wait_until_succeeds(alice("test -f /home/alice/.config/gh/hosts.yml"))
+        assert machine.succeed(alice(token)).strip() == "agenix-public-test-second"
+        machine.succeed("test -f /run/user/1000/agenix-plugin-found")
   '';
 }
