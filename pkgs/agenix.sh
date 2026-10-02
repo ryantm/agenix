@@ -188,11 +188,11 @@ function cleanup {
 trap "cleanup" 0 2 3 15
 
 function keys {
-    (@nixInstantiate@ --json --eval --strict -E "(let rules = import ${RULES}; in rules.\"$1\".publicKeys)" | @jqBin@ -r .[]) || exit 1
+    (@nixInstantiate@ --impure --json --eval --strict -E "(let rules = import ${RULES}; in rules.\"$1\".publicKeys)" | @jqBin@ -r .[]) || exit 1
 }
 
 function armor {
-    (@nixInstantiate@ --json --eval --strict -E "(let rules = import ${RULES}; in (builtins.hasAttr \"armor\" rules.\"$1\" && rules.\"$1\".armor))") || exit 1
+    (@nixInstantiate@ --impure --json --eval --strict -E "(let rules = import ${RULES}; in (builtins.hasAttr \"armor\" rules.\"$1\" && rules.\"$1\".armor))") || exit 1
 }
 
 function decrypt {
@@ -281,7 +281,7 @@ function edit {
 }
 
 function rekey {
-    FILES_JSON=$(@nixInstantiate@ --json --eval -E "(let rules = import ${RULES}; in builtins.attrNames rules)") || exit 1
+    FILES_JSON=$(@nixInstantiate@ --impure --json --eval -E "(let rules = import ${RULES}; in builtins.attrNames rules)") || exit 1
     mapfile -d '' -t FILES < <(printf '%s' "${FILES_JSON}" | @jqBin@ -jr '.[] + "\u0000"')
 
     for FILE in "${FILES[@]}"
@@ -408,7 +408,7 @@ function check_file {
 
 function check {
     local files file rule_keys status=0
-    files=$(@nixInstantiate@ --json --eval -E "(let rules = import ${RULES}; in builtins.attrNames rules)" | @jqBin@ -r .[]) || return 1
+    files=$(@nixInstantiate@ --impure --json --eval -E "(let rules = import ${RULES}; in builtins.attrNames rules)" | @jqBin@ -r .[]) || return 1
     [[ -n ${files} ]] || return 0
     while IFS= read -r file; do
         rule_keys=$(keys "${file}") || return 1

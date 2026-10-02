@@ -333,6 +333,10 @@ Directory where generations are created before they are linked. Defaults to
 
 ## agenix CLI reference {#agenix-cli-reference}
 
+The CLI evaluates your local rules file with impure evaluation enabled, even
+when `pure-eval = true` is set in `nix.conf`. This allows it to read the selected
+file and any local files imported by those rules.
+
 ```
 agenix - edit, rekey, and check age secret files
 
