@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Keep the existing conditional function calls and command substitutions: changing
-# their set -e behavior would alter how edit, rekey, and decrypt report failures.
+# The recipient checker explicitly handles failures in conditional calls.
 # shellcheck disable=SC2310,SC2312
 set -Eeuo pipefail
 
@@ -9,22 +8,25 @@ PACKAGE="agenix"
 function show_help () {
   echo "${PACKAGE} - edit, rekey, and check age secret files"
   echo " "
-  echo "${PACKAGE} -e FILE [-i PRIVATE_KEY]"
-  echo "${PACKAGE} -r [-i PRIVATE_KEY]"
+  echo "${PACKAGE} -e FILE [-i PRIVATE_KEY] [-j PLUGIN]"
+  echo "${PACKAGE} -r [PUBLIC_KEY] [-i PRIVATE_KEY] [-j PLUGIN]"
   echo "${PACKAGE} -c"
   echo ' '
   echo 'options:'
   echo '-h, --help                show help'
   echo "-e, --edit FILE           edits FILE using \$EDITOR"
-  echo '-r, --rekey               re-encrypts all secrets with specified recipients'
+  echo '-r, --rekey [PUBLIC_KEY]  re-encrypts secrets, optionally selecting a recipient'
   echo '-c, --check               checks encrypted SSH recipients against the rules'
   echo '-d, --decrypt FILE        decrypts FILE to STDOUT'
   echo '-i, --identity            identity to use when decrypting'
+  echo '-j PLUGIN                 decrypt using the data-less plugin PLUGIN'
   echo '-v, --verbose             verbose output'
   echo ' '
   echo 'FILE an age-encrypted file'
   echo ' '
   echo 'PRIVATE_KEY a path to a private SSH key used to decrypt file'
+  echo ' '
+  echo 'PUBLIC_KEY an exact public key string from the rules; only matching secrets are rekeyed'
   echo ' '
   echo 'EDITOR environment variable of editor to use when editing FILE'
   echo ' '
@@ -55,15 +57,19 @@ function set_file() {
   while [[ ${FILE} == ./* ]]; do
     FILE=${FILE#./}
   done
-  export FILE
+  [[ -n ${FILE} ]] || err 'FILE must not be empty'
 }
 
-test $# -eq 0 && (show_help && exit 1)
+function set_operation() {
+  [[ -z ${OPERATION} ]] || err 'Select only one of --edit, --decrypt, --rekey, or --check.'
+  OPERATION=$1
+}
 
-REKEY=0
-CHECK=0
-DECRYPT_ONLY=0
+OPERATION=
+FILE=
+REKEY_PUBLIC_KEY=
 DEFAULT_DECRYPT=(--decrypt)
+EXPLICIT_IDENTITY=0
 
 while test $# -gt 0; do
   case "$1" in
@@ -72,6 +78,7 @@ while test $# -gt 0; do
       exit 0
       ;;
     -e|--edit)
+      set_operation edit
       shift
       if test $# -gt 0; then
         set_file "$1"
@@ -89,23 +96,38 @@ while test $# -gt 0; do
           identity_path="${PWD}/${identity_path}"
         fi
         DEFAULT_DECRYPT+=(--identity "${identity_path}")
+        EXPLICIT_IDENTITY=1
       else
         echo "no PRIVATE_KEY specified"
         exit 1
       fi
       shift
       ;;
-    -r|--rekey)
+    -j)
       shift
-      REKEY=1
+      if [[ $# -eq 0 || -z $1 || $1 == -* ]]; then
+        err 'no PLUGIN specified'
+      fi
+      DEFAULT_DECRYPT+=(-j "$1")
+      EXPLICIT_IDENTITY=1
+      shift
+      ;;
+    -r|--rekey)
+      set_operation rekey
+      shift
+      if [[ $# -gt 0 && $1 != -* ]]; then
+        REKEY_PUBLIC_KEY="$1"
+        [[ -n ${REKEY_PUBLIC_KEY} ]] || err 'PUBLIC_KEY must not be empty'
+        shift
+      fi
       ;;
     -c|--check)
+      set_operation check
       shift
-      CHECK=1
       ;;
     -d|--decrypt)
+      set_operation decrypt
       shift
-      DECRYPT_ONLY=1
       if test $# -gt 0; then
         set_file "$1"
       else
@@ -125,6 +147,11 @@ while test $# -gt 0; do
   esac
 done
 
+if [[ -z ${OPERATION} ]]; then
+  show_help
+  exit 1
+fi
+
 function find_rules {
     # Keep secrets.nix discovery limited to the current directory.
     local cwd="${PWD}"
@@ -138,7 +165,8 @@ function find_rules {
     fi
     while [[ "${cwd}" != '/' ]]
     do
-        cwd=$(dirname "${cwd}")
+        cwd=${cwd%/*}
+        [[ -n ${cwd} ]] || cwd=/
         if [[ -f "${cwd}/agenix-rules.nix" ]]; then
             printf '%s\n' "${cwd}/agenix-rules.nix"
             return 0
@@ -163,13 +191,14 @@ if [[ -n "${rules_variable}" && ! -f "${RULES}" ]]; then
     err "Rules file '${RULES}' specified via the variable ${rules_variable} not found."
 fi
 [[ -r "${RULES}" ]] || err "Cannot read rules file '${RULES}'."
-# Nix path literals need an explicit ./ prefix for relative bare filenames.
-case ${RULES} in
-    /*|./*|../*) ;;
-    *) RULES="./${RULES}" ;;
-esac
-RULES_DIR=$(cd "$(dirname "${RULES}")" && pwd -P) || err "Cannot access rules directory for '${RULES}'."
-RULES="${RULES_DIR}/$(basename "${RULES}")"
+rules_parent=.
+if [[ ${RULES} == */* ]]; then
+    rules_parent=${RULES%/*}
+    [[ -n ${rules_parent} ]] || rules_parent=/
+fi
+# The final /. preserves directory names ending in a newline in this substitution.
+RULES_DIR=$(cd -P -- "${rules_parent}" && printf '%s/.' "${PWD}") || err "Cannot access rules directory for '${RULES}'."
+RULES="${RULES_DIR}/${RULES##*/}"
 if (( legacy_rules_variable )) || [[ -z "${rules_variable}" && ${RULES##*/} == secrets.nix ]]; then
     warn 'warning: RULES and automatic discovery of secrets.nix are deprecated and will be removed in a future version of agenix; use AGENIX_RULES and agenix-rules.nix instead.'
 fi
@@ -179,72 +208,99 @@ function cleanup {
     if [[ -n "${CLEARTEXT_DIR+x}" ]]
     then
         rm -rf -- "${CLEARTEXT_DIR}"
+        unset CLEARTEXT_DIR
     fi
     if [[ -n "${REENCRYPTED_DIR+x}" ]]
     then
         rm -rf -- "${REENCRYPTED_DIR}"
+        unset REENCRYPTED_DIR
     fi
 }
-trap "cleanup" 0 2 3 15
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 131' QUIT
+trap 'exit 143' TERM
 
-function keys {
-    (@nixInstantiate@ --json --eval --strict -E "(let rules = import ${RULES}; in rules.\"$1\".publicKeys)" | @jqBin@ -r .[]) || exit 1
-}
+# Pass paths and filenames as data, and force only fields used by this operation.
+RULE_DATA=$(@nixInstantiate@ --impure --json --eval --strict \
+    --argstr rulesPath "${RULES}" --argstr operation "${OPERATION}" \
+    --argstr file "${FILE}" --argstr recipient "${REKEY_PUBLIC_KEY}" \
+    -E '{ rulesPath, operation, file, recipient }:
+      let
+        rules = import (builtins.toPath rulesPath);
+        names = if operation == "edit" || operation == "decrypt"
+          then [ file ] else builtins.attrNames rules;
+        selected = builtins.filter
+          (name: recipient == "" || builtins.elem recipient (builtins.getAttr name rules).publicKeys)
+          names;
+      in builtins.listToAttrs (map (name: let rule = builtins.getAttr name rules; in {
+        inherit name;
+        value = {
+          publicKeys = rule.publicKeys;
+          armor = if operation == "edit" || operation == "rekey"
+            then rule.armor or false else false;
+        };
+      }) selected)') || exit 1
 
-function armor {
-    (@nixInstantiate@ --json --eval --strict -E "(let rules = import ${RULES}; in (builtins.hasAttr \"armor\" rules.\"$1\" && rules.\"$1\".armor))") || exit 1
+@jqBin@ -e 'all(to_entries[];
+    (.key | length > 0 and index("\u0000") == null) and
+    (.value.armor | type == "boolean") and
+    (.value.publicKeys | type == "array" and length > 0 and
+      all(.[]; type == "string" and length > 0 and index("\u0000") == null)))' \
+    <<< "${RULE_DATA}" >/dev/null || err 'Rules require a nonempty filename, a nonempty list of public key strings, and a boolean armor setting.'
+
+mapfile -d '' -t FILES < <(@jqBin@ -jr 'keys[] + "\u0000"' <<< "${RULE_DATA}")
+if [[ -n ${REKEY_PUBLIC_KEY} && ${#FILES[@]} -eq 0 ]]; then
+    err 'No secrets in the rules match PUBLIC_KEY'
+fi
+
+function load_rule {
+    mapfile -d '' -t RULE_KEYS < <(@jqBin@ -jr --arg file "$1" \
+        '.[$file].publicKeys[] + "\u0000"' <<< "${RULE_DATA}")
+    ARMOR=$(@jqBin@ -r --arg file "$1" '.[$file].armor' <<< "${RULE_DATA}")
 }
 
 function decrypt {
-    FILE=$1
-    KEYS=$2
-    if [[ -z "${KEYS}" ]]
-    then
-        err "There is no rule for ${FILE} in ${RULES}."
-    fi
-
-    if [[ -f "${FILE}" ]]
-    then
-        DECRYPT=("${DEFAULT_DECRYPT[@]}")
-        if [[ "${DECRYPT[*]}" != *"--identity"* ]]; then
-            if [[ -f "${HOME}/.ssh/id_rsa" ]]; then
-                DECRYPT+=(--identity "${HOME}/.ssh/id_rsa")
-            fi
-            if [[ -f "${HOME}/.ssh/id_ed25519" ]]; then
-                DECRYPT+=(--identity "${HOME}/.ssh/id_ed25519")
-            fi
+    local file=$1 output=$2 have_identity=${EXPLICIT_IDENTITY}
+    local -a args=("${DEFAULT_DECRYPT[@]}")
+    [[ -f ${file} ]] || err "${file} does not exist."
+    if (( ! have_identity )); then
+        if [[ -f "${HOME}/.ssh/id_rsa" ]]; then
+            args+=(--identity "${HOME}/.ssh/id_rsa")
+            have_identity=1
         fi
-        if [[ "${DECRYPT[*]}" != *"--identity"* ]]; then
-          err "No identity found to decrypt ${FILE}. Try adding an SSH key at ${HOME}/.ssh/id_rsa or ${HOME}/.ssh/id_ed25519 or using the --identity flag to specify a file."
+        if [[ -f "${HOME}/.ssh/id_ed25519" ]]; then
+            args+=(--identity "${HOME}/.ssh/id_ed25519")
+            have_identity=1
         fi
-
-        @ageBin@ "${DECRYPT[@]}" -- "${FILE}" || exit 1
-    elif [[ ${REKEY} -eq 1 || ${DECRYPT_ONLY} -eq 1 ]]; then
-        err "${FILE} does not exist."
     fi
+    if (( ! have_identity )); then
+        err "No identity found to decrypt ${file}. Try adding an SSH key at ${HOME}/.ssh/id_rsa or ${HOME}/.ssh/id_ed25519, using --identity to specify a file, or using -j to specify a plugin."
+    fi
+    @ageBin@ "${args[@]}" -o "${output}" -- "${file}" || exit 1
+}
+
+function prepare_cleartext {
+    CLEARTEXT_DIR=$(@mktempBin@ -d)
+    CLEARTEXT_FILE="${CLEARTEXT_DIR}/${1##*/}"
 }
 
 function edit {
-    FILE=$1
-    KEYS=$(keys "${FILE}") || exit 1
-    ARMOR=$(armor "${FILE}") || exit 1
-
-    CLEARTEXT_DIR=$(@mktempBin@ -d)
-    CLEARTEXT_FILE="${CLEARTEXT_DIR}/$(basename -- "${FILE}")"
-    DEFAULT_DECRYPT+=(-o "${CLEARTEXT_FILE}")
+    local file=$1
+    prepare_cleartext "${file}"
 
     # Piped input replaces the cleartext without needing a decryption identity.
-    # Rekeying still needs the old cleartext, even when stdin is not a terminal.
-    if [[ -t 0 || "${EDITOR:-}" == ":" ]]; then
-      decrypt "${FILE}" "${KEYS}" || exit 1
+    # Preserve EDITOR=: as a user-requested no-op editor, including without a tty.
+    if [[ -f ${file} && ( -t 0 || ${EDITOR:-} == : ) ]]; then
+      decrypt "${file}" "${CLEARTEXT_FILE}"
     fi
 
     [[ ! -f "${CLEARTEXT_FILE}" ]] || cp -- "${CLEARTEXT_FILE}" "${CLEARTEXT_FILE}.before"
 
-    # only edit if we're not rekeying
     if [[ "${EDITOR:-}" != ":" ]]; then
       if [[ -t 0 ]]; then
-        ${EDITOR} "${CLEARTEXT_FILE}" || err "Editor failed for ${FILE}."
+        [[ -n ${EDITOR:-} ]] || err 'Set EDITOR to edit a secret interactively.'
+        ${EDITOR} "${CLEARTEXT_FILE}" || err "Editor failed for ${file}."
       else
         cat > "${CLEARTEXT_FILE}"
       fi
@@ -252,45 +308,45 @@ function edit {
 
     if [[ ! -f "${CLEARTEXT_FILE}" ]]
     then
-      warn "${FILE} wasn't created."
+      warn "${file} wasn't created."
       return
     fi
-    [[ -f "${CLEARTEXT_FILE}.before" ]] && [[ "${EDITOR:-}" != ":" ]] && @diffBin@ -q -- "${CLEARTEXT_FILE}.before" "${CLEARTEXT_FILE}" && warn "${FILE} wasn't changed, skipping re-encryption." && return
-
-    ENCRYPT=()
-    if [[ "${ARMOR}" == "true" ]]; then
-        ENCRYPT+=(--armor)
+    if [[ -f ${CLEARTEXT_FILE}.before && ${EDITOR:-} != : ]] && \
+        @diffBin@ -q -- "${CLEARTEXT_FILE}.before" "${CLEARTEXT_FILE}"; then
+        warn "${file} wasn't changed, skipping re-encryption."
+        return
     fi
-    while IFS= read -r key
-    do
-        if [[ -n "${key}" ]]; then
-            ENCRYPT+=(--recipient "${key}")
-        fi
-    done <<< "${KEYS}"
+    encrypt "${file}"
+}
+
+function encrypt {
+    local file=$1 key directory=.
+    local -a args=()
+    if [[ "${ARMOR}" == "true" ]]; then
+        args+=(--armor)
+    fi
+    for key in "${RULE_KEYS[@]}"; do
+        args+=(--recipient "${key}")
+    done
 
     # Publish with a same-filesystem rename even when TMPDIR is elsewhere.
     # Keep plaintext in CLEARTEXT_DIR; only encrypted output goes here.
-    mkdir -p -- "$(dirname -- "${FILE}")"
-    REENCRYPTED_DIR=$(@mktempBin@ -d -- "$(dirname -- "${FILE}")/.agenix.XXXXXXXXXX")
-    REENCRYPTED_FILE="${REENCRYPTED_DIR}/$(basename -- "${FILE}")"
-
-    ENCRYPT+=(-o "${REENCRYPTED_FILE}")
-
-    @ageBin@ "${ENCRYPT[@]}" <"${CLEARTEXT_FILE}" || exit 1
-
-    mv -f -- "${REENCRYPTED_FILE}" "${FILE}"
+    if [[ ${file} == */* ]]; then
+        directory=${file%/*}
+        [[ -n ${directory} ]] || directory=/
+    fi
+    mkdir -p -- "${directory}"
+    REENCRYPTED_DIR=$(@mktempBin@ -d -- "${directory}/.agenix.XXXXXXXXXX")
+    local output="${REENCRYPTED_DIR}/${file##*/}"
+    @ageBin@ "${args[@]}" -o "${output}" <"${CLEARTEXT_FILE}" || exit 1
+    mv -f -- "${output}" "${file}"
 }
 
 function rekey {
-    FILES_JSON=$(@nixInstantiate@ --json --eval -E "(let rules = import ${RULES}; in builtins.attrNames rules)") || exit 1
-    mapfile -d '' -t FILES < <(printf '%s' "${FILES_JSON}" | @jqBin@ -jr '.[] + "\u0000"')
-
-    for FILE in "${FILES[@]}"
-    do
-        warn "rekeying ${FILE}..."
-        EDITOR=: edit "${FILE}" || return 1
-        cleanup
-    done
+    warn "rekeying $1..."
+    prepare_cleartext "$1"
+    decrypt "$1" "${CLEARTEXT_FILE}"
+    encrypt "$1"
 }
 
 # age stores the first four bytes of the SSH public key's SHA-256 hash as a
@@ -407,21 +463,16 @@ function check_file {
     printf '✓ %s\n' "${file}"
 }
 
-function check {
-    local files file rule_keys status=0
-    files=$(@nixInstantiate@ --json --eval -E "(let rules = import ${RULES}; in builtins.attrNames rules)" | @jqBin@ -r .[]) || return 1
-    [[ -n ${files} ]] || return 0
-    while IFS= read -r file; do
-        rule_keys=$(keys "${file}") || return 1
-        check_file "${file}" "${rule_keys}" || status=1
-    done <<< "${files}"
-    return "${status}"
-}
-
-if [[ ${CHECK} -eq 1 ]]; then
-    check
-    exit $?
-fi
-[[ ${REKEY} -eq 1 ]] && rekey && exit 0
-[[ ${DECRYPT_ONLY} -eq 1 ]] && DEFAULT_DECRYPT+=("-o" "-") && decrypt "${FILE}" "$(keys "${FILE}")" && exit 0
-edit "${FILE}" && cleanup && exit 0
+status=0
+for file in "${FILES[@]}"; do
+    load_rule "${file}"
+    case ${OPERATION} in
+        check) check_file "${file}" "$(printf '%s\n' "${RULE_KEYS[@]}")" || status=1 ;;
+        rekey) rekey "${file}" ;;
+        decrypt) decrypt "${file}" - ;;
+        edit) edit "${file}" ;;
+        *) err "Unknown operation: ${OPERATION}" ;;
+    esac
+    cleanup
+done
+exit "${status}"

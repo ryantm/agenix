@@ -333,25 +333,38 @@ Directory where generations are created before they are linked. Defaults to
 
 ## agenix CLI reference {#agenix-cli-reference}
 
+The CLI evaluates your local rules file with impure evaluation enabled, even
+when `pure-eval = true` is set in `nix.conf`. This allows it to read the selected
+file and any local files imported by those rules.
+
+Select one operation per invocation: edit, decrypt, rekey, or check. Each command
+evaluates the rules it needs once. Editing or decrypting a single file does not
+evaluate unrelated secrets, and checking or decrypting does not evaluate armor
+settings. Secret filenames are literal rule names and may contain spaces or
+quotes. Relative filenames resolve from the selected rules file's directory.
+
 ```
 agenix - edit, rekey, and check age secret files
 
-agenix -e FILE [-i PRIVATE_KEY]
-agenix -r [-i PRIVATE_KEY]
+agenix -e FILE [-i PRIVATE_KEY] [-j PLUGIN]
+agenix -r [PUBLIC_KEY] [-i PRIVATE_KEY] [-j PLUGIN]
 agenix -c
 
 options:
 -h, --help                show help
 -e, --edit FILE           edits FILE using $EDITOR
--r, --rekey               re-encrypts all secrets with specified recipients
+-r, --rekey [PUBLIC_KEY]  re-encrypts secrets, optionally selecting a recipient
 -c, --check               checks encrypted SSH recipients against the rules
 -d, --decrypt FILE        decrypts FILE to STDOUT
 -i, --identity            identity to use when decrypting
+-j PLUGIN                 decrypt using the data-less plugin PLUGIN
 -v, --verbose             verbose output
 
 FILE an age-encrypted file
 
 PRIVATE_KEY a path to a private SSH key used to decrypt file
+
+PUBLIC_KEY an exact public key string from the rules; only matching secrets are rekeyed
 
 EDITOR environment variable of editor to use when editing FILE
 
@@ -363,6 +376,12 @@ Searches the current directory for agenix-rules.nix, then secrets.nix.
 Searches parent directories for agenix-rules.nix only.
 Resolves relative secret paths from the selected rules file's directory.
 ```
+
+`-j PLUGIN` passes a data-less plugin identity to age for decryption, editing,
+or rekeying. The corresponding `age-plugin-PLUGIN` executable must be on
+`PATH`. No private key file is needed; supplying `-j` also disables automatic
+discovery of `~/.ssh/id_rsa` and `~/.ssh/id_ed25519`. Encryption still uses
+the recipients in the rules file.
 
 `agenix --check` compares the SSH recipient tags in each age file header with
 the public keys in the rules file. It prints `✓` for matching files and `✗`
