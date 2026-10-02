@@ -26,6 +26,9 @@
     {
       checks =
         nixpkgs.lib.genAttrs [ "aarch64-darwin" "x86_64-darwin" ] (system: {
+          cli-encryption = import (testDir + "/cli-encryption.nix") {
+            pkgs = nixpkgs.legacyPackages.${system};
+          };
           integration =
             (darwin.lib.darwinSystem {
               inherit system;
@@ -49,6 +52,9 @@
             }).system;
         })
         // {
+          x86_64-linux.cli-encryption = import (testDir + "/cli-encryption.nix") {
+            pkgs = nixpkgs.legacyPackages.x86_64-linux;
+          };
           x86_64-linux.failure-safety = import (testDir + "/failure-safety.nix") {
             pkgs = nixpkgs.legacyPackages.x86_64-linux;
           };
