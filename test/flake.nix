@@ -61,6 +61,9 @@
             }).system;
         })
         // {
+          x86_64-linux.ssh-agent = import (testDir + "/ssh-agent.nix") {
+            pkgs = nixpkgs.legacyPackages.x86_64-linux;
+          };
           x86_64-linux.cli-terminal = import (testDir + "/cli-terminal.nix") {
             pkgs = nixpkgs.legacyPackages.x86_64-linux;
           };

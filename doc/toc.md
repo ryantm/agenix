@@ -15,6 +15,7 @@
   * [Home Manager module reference](#home-manager-module-reference)
   * [agenix CLI reference](#agenix-cli-reference)
 * [Rekeying](#rekeying)
+* [Using identities backed by an SSH agent](#ssh-agent)
 * [Project rules discovery](#project-rules-discovery)
 * [Overriding age binary](#overriding-age-binary)
 * [Community and Support](#community-and-support)
