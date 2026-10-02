@@ -7,38 +7,52 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    - uses: cachix/install-nix-action@v22
+    - uses: cachix/install-nix-action@v30
       with:
         extra_nix_config: |
           system-features = nixos-test recursive-nix benchmark big-parallel kvm
           extra-experimental-features = recursive-nix nix-command flakes
     - run: nix build
-    - run: nix build .#doc
-    - run: nix fmt . -- --check
+    - run: nix build .#checks.x86_64-linux.cli
+    - uses: ryantm/mmdoc-action@v1
+      with:
+        src: doc
+    - run: nix fmt . -- --ci
+    - run: jq -e --slurp '.[0].nodes.nixpkgs.locked == .[1].nodes.nixpkgs.locked' flake.lock test/flake.lock
     - run: nix flake check
+    - run: nix flake check ./test
   tests-darwin:
-    runs-on: macos-12
+    runs-on: macos-latest
     steps:
     - uses: actions/checkout@v3
-    - uses: cachix/install-nix-action@v24
+    - uses: cachix/install-nix-action@v30
       with:
         extra_nix_config: |
           system-features = nixos-test recursive-nix benchmark big-parallel kvm
           extra-experimental-features = recursive-nix nix-command flakes
     - run: nix build
-    - run: nix build .#doc
-    - run: nix fmt . -- --check
     - run: nix flake check
+    - run: nix flake check ./test
     - name: "Install nix-darwin module"
       run: |
+        # Determine architecture of GitHub runner
+        ARCH=x86_64
+        if [ "$(arch)" = arm64 ]; then
+          ARCH=aarch64
+        fi
         # https://github.com/ryantm/agenix/pull/230#issuecomment-1867025385
 
         sudo mv /etc/nix/nix.conf{,.bak}
         nix \
           --extra-experimental-features 'nix-command flakes' \
-          build .#checks.x86_64-darwin.integration
+          build ./test#checks."${ARCH}"-darwin.integration
 
-        ./result/activate-user
+        # The GitHub runner has shell profiles that nix-darwin refuses to overwrite.
+        for file in /etc/zshrc /etc/zprofile; do
+          if [ -e "$file" ] || [ -L "$file" ]; then
+            sudo mv "$file" "$file.before-nix-darwin"
+          fi
+        done
         sudo ./result/activate
     - name: "Test nix-darwin module"
       run: |
@@ -46,6 +60,6 @@ jobs:
     - name: "Test home-manager module"
       run: |
         # Do the job of `home-manager switch` in-line to avoid rate limiting
-        nix build .#homeConfigurations.integration-darwin.activationPackage
+        nix build ./test#homeConfigurations.integration-darwin.activationPackage
         ./result/activate
         ~/agenix-home-integration/bin/agenix-home-integration
