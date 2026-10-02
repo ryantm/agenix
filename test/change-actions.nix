@@ -109,6 +109,9 @@ let
       };
     };
 in
+assert
+  builtins.hashFile "sha256" ../example/secret1.age
+  != builtins.hashFile "sha256" ../example/secret1-copy.age;
 pkgs.testers.nixosTest {
   name = "agenix-change-actions";
   nodes.activation = makeNode false;
