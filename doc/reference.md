@@ -195,6 +195,19 @@ Example of a secret with a name different from its attrpath:
 }
 ```
 
+### `age.pluginPackages`
+
+Packages containing age plugins to put on `PATH` during system secret
+decryption. Defaults to `[]`. The existing `PATH` remains available.
+For example:
+
+```nix
+age.pluginPackages = [ pkgs.age-plugin-yubikey ];
+```
+
+This option applies to the NixOS and Darwin system modules. For the CLI,
+make plugin executables available in your shell's `PATH`.
+
 ### `age.ageBin`
 
 `age.ageBin` the string of the path to the `age` binary. Usually, you

@@ -106,6 +106,9 @@ let
       umask u=r,g=,o=
       test -f "${secretType.file}" || echo '[agenix] WARNING: encrypted file ${secretType.file} does not exist!' >&2
       test -d "$(dirname "$TMP_FILE")" || echo "[agenix] WARNING: $(dirname "$TMP_FILE") does not exist!" >&2
+      ${optionalString (cfg.pluginPackages != [ ]) ''
+        export PATH=${escapeShellArg (lib.makeBinPath cfg.pluginPackages)}''${PATH:+:$PATH}
+      ''}
       LANG=${
         config.i18n.defaultLocale or "C"
       } ${ageBin} --decrypt "''${IDENTITIES[@]}" -o "$TMP_FILE" "${secretType.file}"
@@ -240,6 +243,15 @@ in
       '';
       description = ''
         The age executable to use.
+      '';
+    };
+    pluginPackages = mkOption {
+      type = types.listOf types.package;
+      default = [ ];
+      description = ''
+        Age plugin packages to add to PATH during secret decryption.
+        Existing PATH entries remain available. This applies to the NixOS
+        and Darwin system modules, not to the agenix CLI or Home Manager.
       '';
     };
     verbosity = mkOption {
