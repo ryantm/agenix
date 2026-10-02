@@ -30,8 +30,28 @@ The CLI's `-v` option enables shell tracing independently of this setting.
 
 ### `age.secrets`
 
+See `age.validateSecrets` below for checks performed before activation.
+
 `age.secrets` attrset of secrets. You always need to use this
 configuration option. Defaults to `{}`.
+
+### `age.validateSecrets`
+
+Defaults to `true`. For Nix path literals and files in the Nix store, agenix
+checks the public age file structure during the build. Empty files, malformed
+headers or armor, and structurally impossible payload lengths stop the build
+before a system switch or Home Manager activation can use them. Checked
+ciphertext is copied unchanged into the activation closure.
+
+This is a build-time check, not a Nix evaluation check: Nix strings cannot
+represent arbitrary binary ciphertext. It needs no private keys. It cannot
+authenticate ciphertext, prove that a recipient can decrypt it, or detect
+every kind of truncation or corruption. Those checks still happen during
+decryption. Absolute string paths outside the Nix store refer to runtime
+files, so their checks also happen during activation.
+
+Set `age.validateSecrets = false` to bypass the build check when using a
+custom encryption backend with a different file format.
 
 ### `age.secrets.<name>.enable`
 
@@ -303,6 +323,12 @@ remain visible at every level.
 ### `age.package`
 
 The `age` package used to decrypt secrets. Defaults to `pkgs.age`.
+
+### `age.validateSecrets`
+
+Defaults to `true`, with the same build-time ciphertext checks and limitations
+described in the system module reference above. Set it to `false` for a custom
+backend using a different format. Private keys are never needed during the build.
 
 ### `age.secrets`
 

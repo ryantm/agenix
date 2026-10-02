@@ -12,6 +12,10 @@ let
   shared = import ./secret-install.nix { inherit lib; };
   installer = shared.installer {
     inherit cfg;
+    validateFile = import ./validated-file.nix {
+      inherit lib pkgs;
+      enable = cfg.validateSecrets;
+    };
     ageBin = lib.getExe config.age.package;
     locale = config.i18n.defaultLocale or "C";
   };
@@ -73,6 +77,8 @@ in
     package = mkPackageOption pkgs "age" { };
 
     verbosity = shared.verbosityOption "other activation output";
+
+    validateSecrets = shared.validationOption;
 
     secrets = mkOption {
       type = types.attrsOf secretType;

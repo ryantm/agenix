@@ -17,6 +17,16 @@ in
 {
   inherit verbosityLevels;
 
+  validationOption = mkOption {
+    type = types.bool;
+    default = true;
+    description = ''
+      Check the public structure of store-backed ciphertext during the build,
+      before activation. Runtime file paths are checked by age during activation.
+      Authentication and recipient access still require decryption on the target.
+    '';
+  };
+
   secretOptions =
     {
       config,
@@ -90,6 +100,7 @@ in
       ageBin,
       locale,
       mountCommand ? "",
+      validateFile ? (file: file),
     }:
     let
       verbosityLevel = verbosityLevels.${cfg.verbosity};
@@ -105,39 +116,44 @@ in
         }
       '';
       enabledSecrets = lib.filter (secret: secret.enable) (builtins.attrValues cfg.secrets);
-      installSecret = secret: ''
-        ${setTruePath secret}
-        ${optionalString (verbosityLevel >= 3) ''echo "decrypting '${secret.file}' to '$_truePath'..."''}
-        TMP_FILE="$_truePath.tmp"
+      installSecret =
+        secret:
+        let
+          file = validateFile secret.file;
+        in
+        ''
+          ${setTruePath secret}
+          ${optionalString (verbosityLevel >= 3) ''echo "decrypting '${secret.file}' to '$_truePath'..."''}
+          TMP_FILE="$_truePath.tmp"
 
-        mkdir -p "$(dirname "$_truePath")"
-        # shellcheck disable=SC2193,SC2050
-        [ "${secret.path}" != "${cfg.secretsDir}/${secret.name}" ] && mkdir -p "$(dirname "${secret.path}")"
-        (
-          umask u=r,g=,o=
-          test -f "${secret.file}" || echo '[agenix] WARNING: encrypted file ${secret.file} does not exist!' >&2
-          test -d "$(dirname "$TMP_FILE")" || echo "[agenix] WARNING: $(dirname "$TMP_FILE") does not exist!" >&2
-          LANG=${lib.escapeShellArg locale} ${ageBin} --decrypt "''${IDENTITIES[@]}" -o "$TMP_FILE" "${secret.file}"
-        )
-        ${optionalString secret.trimFinalNewline ''
-          # Encode the last byte so empty and binary files remain unambiguous.
-          if [ "$(tail -c 1 -- "$TMP_FILE" | od -An -tu1 | tr -d '[:space:]')" = 10 ]; then
-            # age creates the file with the restrictive decryption umask.
-            chmod u+w "$TMP_FILE"
-            truncate --size=-1 -- "$TMP_FILE"
-            if [ "$(tail -c 1 -- "$TMP_FILE" | od -An -tu1 | tr -d '[:space:]')" = 13 ]; then
-              truncate --size=-1 -- "$TMP_FILE"
-            fi
-          fi
-        ''}
-        chmod ${secret.mode} "$TMP_FILE"
-        mv -f "$TMP_FILE" "$_truePath"
-
-        ${optionalString secret.symlink ''
+          mkdir -p "$(dirname "$_truePath")"
           # shellcheck disable=SC2193,SC2050
-          [ "${secret.path}" != "${cfg.secretsDir}/${secret.name}" ] && ln -sfT "${cfg.secretsDir}/${secret.name}" "${secret.path}"
-        ''}
-      '';
+          [ "${secret.path}" != "${cfg.secretsDir}/${secret.name}" ] && mkdir -p "$(dirname "${secret.path}")"
+          (
+            umask u=r,g=,o=
+            test -f "${file}" || echo '[agenix] WARNING: encrypted file ${file} does not exist!' >&2
+            test -d "$(dirname "$TMP_FILE")" || echo "[agenix] WARNING: $(dirname "$TMP_FILE") does not exist!" >&2
+            LANG=${lib.escapeShellArg locale} ${ageBin} --decrypt "''${IDENTITIES[@]}" -o "$TMP_FILE" "${file}"
+          )
+          ${optionalString secret.trimFinalNewline ''
+            # Encode the last byte so empty and binary files remain unambiguous.
+            if [ "$(tail -c 1 -- "$TMP_FILE" | od -An -tu1 | tr -d '[:space:]')" = 10 ]; then
+              # age creates the file with the restrictive decryption umask.
+              chmod u+w "$TMP_FILE"
+              truncate --size=-1 -- "$TMP_FILE"
+              if [ "$(tail -c 1 -- "$TMP_FILE" | od -An -tu1 | tr -d '[:space:]')" = 13 ]; then
+                truncate --size=-1 -- "$TMP_FILE"
+              fi
+            fi
+          ''}
+          chmod ${secret.mode} "$TMP_FILE"
+          mv -f "$TMP_FILE" "$_truePath"
+
+          ${optionalString secret.symlink ''
+            # shellcheck disable=SC2193,SC2050
+            [ "${secret.path}" != "${cfg.secretsDir}/${secret.name}" ] && ln -sfT "${cfg.secretsDir}/${secret.name}" "${secret.path}"
+          ''}
+        '';
       identitySetup = ''
         IDENTITIES=()
         _agenix_identity_paths=( ${lib.escapeShellArgs (map toString cfg.identityPaths)} )
