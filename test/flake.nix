@@ -22,10 +22,20 @@
     }:
     let
       testDir = self.outPath;
+      rendererTest =
+        system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+        in
+        pkgs.runCommand "agenix-template-renderer" { } ''
+          ${pkgs.python3}/bin/python3 ${testDir}/render-template.py ${testDir}/../pkgs/render-template.py
+          touch "$out"
+        '';
     in
     {
       checks =
         nixpkgs.lib.genAttrs [ "aarch64-darwin" "x86_64-darwin" ] (system: {
+          template-renderer = rendererTest system;
           integration =
             (darwin.lib.darwinSystem {
               inherit system;
@@ -58,12 +68,7 @@
           x86_64-linux.template-options = import (testDir + "/template-options.nix") {
             pkgs = nixpkgs.legacyPackages.x86_64-linux;
           };
-          x86_64-linux.template-renderer =
-            nixpkgs.legacyPackages.x86_64-linux.runCommand "agenix-template-renderer" { }
-              ''
-                ${nixpkgs.legacyPackages.x86_64-linux.python3}/bin/python3 ${testDir}/render-template.py ${testDir}/../pkgs/render-template.py
-                touch "$out"
-              '';
+          x86_64-linux.template-renderer = rendererTest "x86_64-linux";
           x86_64-linux.change-actions = import (testDir + "/change-actions.nix") {
             pkgs = nixpkgs.legacyPackages.x86_64-linux;
           };

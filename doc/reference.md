@@ -81,17 +81,29 @@ secrets: store paths and files created with `pkgs.writeText` are public.
 The `secrets` list defaults to `[]` and must reference enabled entries in
 `config.age.secrets`. Each input's `@name@` placeholder uses its `name` option,
 which defaults to its attribute name. Only listed inputs are replaced; other
-text remains unchanged. Substitution is literal and happens once, so quotes,
-backslashes, and placeholder text inside a secret are preserved. The renderer
-does not escape values for a particular configuration format.
+text remains unchanged. Substitution happens once, so placeholder text inside a
+secret is not expanded again. The default `format = "text"` inserts literal bytes.
+
+`environmentFiles` defaults to `[]` and also references enabled entries in
+`config.age.secrets`. These files contain single-line `KEY=value` assignments.
+They supply `$KEY` and `${KEY}` placeholders without evaluating shell code or
+reading the process environment. Later files override earlier definitions.
+An undefined variable or malformed assignment fails rendering.
+
+Set `format = "json"` to escape inserted values as JSON string contents and
+validate the complete output. Put placeholders inside JSON quotes. This applies
+to both `secrets` and `environmentFiles` substitutions and requires UTF-8 values.
+See [Environment templates](#environment-templates) for the supported assignment
+syntax and a complete example.
 
 `trimFinalNewline` defaults to `true`, removing at most one final LF or CRLF
-from each input before substitution. Set it to `false` to preserve every byte.
+from each `secrets` input before substitution. Set it to `false` to preserve every byte.
 Inputs without a final newline are unchanged.
 
 Derived secrets support the same `enable`, `name`, `path`, `mode`, `owner`,
 `group`, `symlink`, `onChange`, `reloadUnits`, and `restartUnits` options as
-encrypted secrets below. They use `template` and `secrets` instead of `file`.
+encrypted secrets below. They use `template`, `secrets`, and `environmentFiles`
+instead of `file`.
 Enabled encrypted and derived secrets must have distinct names. A disabled
 derived secret does not need a template.
 
