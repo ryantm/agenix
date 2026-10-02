@@ -26,6 +26,9 @@
     {
       checks =
         nixpkgs.lib.genAttrs [ "aarch64-darwin" "x86_64-darwin" ] (system: {
+          cli-terminal = import (testDir + "/cli-terminal.nix") {
+            pkgs = nixpkgs.legacyPackages.${system};
+          };
           cli-rules = import (testDir + "/cli-rules.nix") {
             pkgs = nixpkgs.legacyPackages.${system};
           };
@@ -58,6 +61,9 @@
             }).system;
         })
         // {
+          x86_64-linux.cli-terminal = import (testDir + "/cli-terminal.nix") {
+            pkgs = nixpkgs.legacyPackages.x86_64-linux;
+          };
           x86_64-linux.cli-rules = import (testDir + "/cli-rules.nix") {
             pkgs = nixpkgs.legacyPackages.x86_64-linux;
           };

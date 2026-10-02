@@ -343,6 +343,10 @@ evaluate unrelated secrets, and checking or decrypting does not evaluate armor
 settings. Secret filenames are literal rule names and may contain spaces or
 quotes. Relative filenames resolve from the selected rules file's directory.
 
+When a backend prompts for a passphrase in a terminal, cancelling with Ctrl+C
+restores the terminal settings, including character echo, and removes temporary
+plaintext. The existing ciphertext is preserved.
+
 ```
 agenix - edit, rekey, and check age secret files
 

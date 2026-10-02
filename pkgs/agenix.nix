@@ -29,6 +29,7 @@ stdenvNoCC.mkDerivation rec {
     base64Bin = "${coreutils}/bin/base64";
     headBin = "${coreutils}/bin/head";
     trBin = "${coreutils}/bin/tr";
+    sttyBin = "${coreutils}/bin/stty";
     sedBin = "${gnused}/bin/sed";
   };
   dontUnpack = true;
