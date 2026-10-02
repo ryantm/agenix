@@ -52,6 +52,10 @@ let
   '';
   newGeneration = ''
     ${currentGeneration}
+    if test -d "${cfg.secretsMountPoint}/.backup-$_agenix_generation"; then
+      echo '[agenix] previous installation is awaiting its ownership step' >&2
+      exit 1
+    fi
     (( ++_agenix_generation ))
     ${optionalString (
       verbosityLevel >= 2
@@ -59,6 +63,7 @@ let
     mkdir -p "${cfg.secretsMountPoint}"
     chmod 0751 "${cfg.secretsMountPoint}"
     ${mountCommand}
+    rm -rf -- "${cfg.secretsMountPoint}/$_agenix_generation"
     mkdir -p "${cfg.secretsMountPoint}/$_agenix_generation"
     chmod 0751 "${cfg.secretsMountPoint}/$_agenix_generation"
   '';
@@ -84,7 +89,7 @@ let
   '';
 
   installSecret = secretType: ''
-    ${setTruePath secretType}
+    _truePath="${cfg.secretsMountPoint}/$_agenix_generation/${secretType.name}"
     ${optionalString (
       verbosityLevel >= 3
     ) ''echo "decrypting '${secretType.file}' to '$_truePath'..."''}
@@ -112,30 +117,91 @@ let
     )
     chmod ${secretType.mode} "$TMP_FILE"
     mv -f "$TMP_FILE" "$_truePath"
-
-    ${optionalString secretType.symlink ''
-      [ "${secretType.path}" != "${cfg.secretsDir}/${secretType.name}" ] && ln -sfT "${cfg.secretsDir}/${secretType.name}" "${secretType.path}"
-    ''}
   '';
+
+  # Keep copies of custom destinations until ownership has been assigned. User
+  # creation needs the new password files before the ownership step can run.
+  customSecrets = filter (s: s.path != "${cfg.secretsDir}/${s.name}") enabledSecrets;
+  backupName = s: builtins.hashString "sha256" s.path;
+  backupPaths = concatMapStringsSep "\n" (s: ''
+    if test -d ${escapeShellArg s.path} && ! test -L ${escapeShellArg s.path}; then
+      echo '[agenix] secret destination is a directory: ${s.path}' >&2
+      exit 1
+    fi
+    if test -e ${escapeShellArg s.path} || test -L ${escapeShellArg s.path}; then
+      cp -a -- ${escapeShellArg s.path} "$_agenix_backup/${backupName s}"
+    fi
+  '') customSecrets;
+  restorePaths = concatMapStringsSep "\n" (s: ''
+    rm -f -- ${escapeShellArg s.path} || _agenix_restore_failed=1
+    if test -e "$_agenix_backup/${backupName s}" || test -L "$_agenix_backup/${backupName s}"; then
+      cp -a -- "$_agenix_backup/${backupName s}" ${escapeShellArg s.path} || _agenix_restore_failed=1
+    fi
+  '') customSecrets;
+
+  rollback = ''
+    _agenix_status=$?
+    trap - EXIT
+    set +e
+    _agenix_restore_failed=0
+    if test -f "$_agenix_backup/ready"; then
+      ${restorePaths}
+      if (( _agenix_generation > 1 )); then
+        ln -sfT "${cfg.secretsMountPoint}/$(( _agenix_generation - 1 ))" ${escapeShellArg cfg.secretsDir} || _agenix_restore_failed=1
+      else
+        rm -f -- ${escapeShellArg cfg.secretsDir} || _agenix_restore_failed=1
+      fi
+    fi
+    if (( _agenix_restore_failed )); then
+      echo "[agenix] rollback failed; recovery copies remain in $_agenix_backup" >&2
+      exit 1
+    fi
+    rm -rf -- "$_agenix_backup" "${cfg.secretsMountPoint}/$_agenix_generation"
+    exit "$_agenix_status"
+  '';
+  rollbackTrap = ''
+    _agenix_backup="${cfg.secretsMountPoint}/.backup-$_agenix_generation"
+    _agenix_rollback() {
+      ${rollback}
+    }
+    trap _agenix_rollback EXIT
+  '';
+
+  publishSecrets = concatMapStringsSep "\n" (
+    s:
+    if s.symlink then
+      ''
+        ln -sfT ${escapeShellArg "${cfg.secretsDir}/${s.name}"} ${escapeShellArg s.path}
+      ''
+    else
+      ''
+        _stagedPath="${cfg.secretsMountPoint}/$_agenix_generation/${s.name}"
+        _targetTemp="$(mktemp ${escapeShellArg "${s.path}.XXXXXX"})"
+        if ! cp -p -- "$_stagedPath" "$_targetTemp" || ! mv -f -- "$_targetTemp" ${escapeShellArg s.path}; then
+          rm -f -- "$_targetTemp"
+          exit 1
+        fi
+        rm -f -- "$_stagedPath"
+      ''
+  ) customSecrets;
 
   testIdentities = map (path: ''
     test -f ${path} || echo '[agenix] WARNING: config.age.identityPaths entry ${path} not present!' >&2
   '') cfg.identityPaths;
 
-  cleanupAndLink = ''
-    ${currentGeneration}
-    (( ++_agenix_generation ))
+  linkNewGeneration = ''
     ${optionalString (verbosityLevel >= 2)
       ''echo "[agenix] symlinking new secrets to ${cfg.secretsDir} (generation $_agenix_generation)..."''
     }
     ln -sfT "${cfg.secretsMountPoint}/$_agenix_generation" ${cfg.secretsDir}
-
-    (( _agenix_generation > 1 )) && {
+  '';
+  cleanupOldGeneration = ''
+    if (( _agenix_generation > 1 )); then
     ${optionalString (
       verbosityLevel >= 2
     ) ''echo "[agenix] removing old secrets (generation $(( _agenix_generation - 1 )))..."''}
     rm -rf "${cfg.secretsMountPoint}/$(( _agenix_generation - 1 ))"
-    }
+    fi
   '';
 
   enabledSecrets = lib.filter (secret: secret.enable) (builtins.attrValues cfg.secrets);
@@ -144,7 +210,6 @@ let
     (optional (verbosityLevel >= 1) "echo '[agenix] decrypting secrets...'")
     ++ testIdentities
     ++ (map installSecret enabledSecrets)
-    ++ [ cleanupAndLink ]
   );
 
   chownSecret = secretType: ''
@@ -157,6 +222,35 @@ let
     ++ [ chownMountPoint ]
     ++ (map chownSecret enabledSecrets)
   );
+
+  installGeneration = ''
+    (
+      set -e
+      ${newGeneration}
+      ${rollbackTrap}
+      ${installSecrets}
+      mkdir -m 0700 "$_agenix_backup"
+      ${backupPaths}
+      touch "$_agenix_backup/ready"
+      ${publishSecrets}
+      ${linkNewGeneration}
+      trap - EXIT
+    )
+  '';
+  finishGeneration = ''
+    (
+      set -e
+      ${currentGeneration}
+      _agenix_backup="${cfg.secretsMountPoint}/.backup-$_agenix_generation"
+      if test -d "$_agenix_backup"; then
+        ${rollbackTrap}
+        ${chownSecrets}
+        trap - EXIT
+        rm -rf -- "$_agenix_backup"
+        ${cleanupOldGeneration}
+      fi
+    )
+  '';
 
   secretType = types.submodule (
     { config, ... }:
@@ -337,12 +431,7 @@ in
         path = [ pkgs.mount ];
         serviceConfig = {
           Type = "oneshot";
-          ExecStart = pkgs.writeShellScript "agenix-install" (concatLines [
-            newGeneration
-            installSecrets
-            # Don't fail the systemd unit if our script ended with a failing test.
-            "true"
-          ]);
+          ExecStart = pkgs.writeShellScript "agenix-install" installGeneration;
           RemainAfterExit = true;
         };
       };
@@ -357,16 +446,12 @@ in
         ];
         # We should get restarted when agenix-install-secrets is (to chown the new secrets).
         requires = [ "agenix-install-secrets.service" ];
+        partOf = [ "agenix-install-secrets.service" ];
         unitConfig.DefaultDependencies = "no";
 
         serviceConfig = {
           Type = "oneshot";
-          ExecStart = pkgs.writeShellScript "agenix-chown" (concatLines [
-            currentGeneration
-            chownSecrets
-            # Don't fail the systemd unit if our script ended with a failing test.
-            "true"
-          ]);
+          ExecStart = pkgs.writeShellScript "agenix-chown" finishGeneration;
           RemainAfterExit = true;
         };
       };
@@ -376,14 +461,15 @@ in
       # invalid symlinks).
       system.activationScripts = mkIf (!sysusersEnabled) {
         agenixNewGeneration = {
-          text = newGeneration;
+          # Preserve the dependency name; staging now runs inside agenixInstall.
+          text = "";
           deps = [
             "specialfs"
           ];
         };
 
         agenixInstall = {
-          text = installSecrets;
+          text = installGeneration;
           deps = [
             "agenixNewGeneration"
             "specialfs"
@@ -395,7 +481,7 @@ in
 
         # Change ownership and group after users and groups are made.
         agenixChown = {
-          text = chownSecrets;
+          text = finishGeneration;
           deps = [
             "users"
             "groups"
@@ -416,9 +502,8 @@ in
           set -e
           set -o pipefail
           export PATH="${pkgs.gnugrep}/bin:${pkgs.coreutils}/bin:@out@/sw/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-          ${newGeneration}
-          ${installSecrets}
-          ${chownSecrets}
+          ${installGeneration}
+          ${finishGeneration}
           exit 0
         '';
         serviceConfig = {
