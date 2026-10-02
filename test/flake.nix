@@ -61,6 +61,9 @@
             }).system;
         })
         // {
+          x86_64-linux.runtime-config = import (testDir + "/runtime-config.nix") {
+            pkgs = nixpkgs.legacyPackages.x86_64-linux;
+          };
           x86_64-linux.missing-identities = import (testDir + "/missing-identities.nix") {
             pkgs = nixpkgs.legacyPackages.x86_64-linux;
           };
