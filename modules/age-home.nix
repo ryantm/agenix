@@ -55,6 +55,7 @@ let
     _agenix_identity_paths=( ${toString cfg.identityPaths} )
     for identity in "''${_agenix_identity_paths[@]}"; do
       test -r "$identity" || continue
+      test -s "$identity" || continue
       IDENTITIES+=(-i)
       IDENTITIES+=("$identity")
     done
