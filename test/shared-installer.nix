@@ -8,7 +8,7 @@ let
   '';
   key = "${identityFiles}/${keyName}";
   installer = (import ../modules/secret-install.nix { inherit (pkgs) lib; }).installer {
-    cfg = {
+    cfg = rec {
       verbosity = "quiet";
       secretsDir = "\${XDG_RUNTIME_DIR}/agenix";
       secretsMountPoint = "\${XDG_RUNTIME_DIR}/agenix.d";
@@ -25,6 +25,11 @@ let
         mode = "0400";
         trimFinalNewline = false;
         symlink = true;
+      };
+      secrets.direct-default = secrets.example // {
+        name = "direct-default";
+        path = "${secretsDir}/direct-default";
+        symlink = false;
       };
     };
     ageBin = "$XDG_RUNTIME_DIR/mock-age";
@@ -58,12 +63,16 @@ pkgs.runCommand "agenix-shared-installer-test" { } ''
   run_install 2> "$XDG_RUNTIME_DIR/warnings"
   grep -F ${pkgs.lib.escapeShellArg "entry ${identityFiles}/missing not present!"} "$XDG_RUNTIME_DIR/warnings"
   test "$(cat "$XDG_RUNTIME_DIR/custom/example")" = first
+  test "$(cat "$XDG_RUNTIME_DIR/agenix/direct-default")" = first
+  test ! -L "$XDG_RUNTIME_DIR/agenix/direct-default"
   test "$(readlink "$XDG_RUNTIME_DIR/agenix")" = "$XDG_RUNTIME_DIR/agenix.d/1"
   test "$(stat -c %a "$XDG_RUNTIME_DIR/agenix.d/1/example")" = 400
 
   echo second > "$XDG_RUNTIME_DIR/encrypted"
   run_install 2> "$XDG_RUNTIME_DIR/warnings"
   test "$(cat "$XDG_RUNTIME_DIR/custom/example")" = second
+  test "$(cat "$XDG_RUNTIME_DIR/agenix/direct-default")" = second
+  test ! -L "$XDG_RUNTIME_DIR/agenix/direct-default"
   test "$(readlink "$XDG_RUNTIME_DIR/agenix")" = "$XDG_RUNTIME_DIR/agenix.d/2"
   test ! -e "$XDG_RUNTIME_DIR/agenix.d/1"
   mkdir -p "$out"

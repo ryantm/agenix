@@ -98,7 +98,7 @@ in
       '';
       setTruePath = secret: ''
         ${
-          if secret.symlink then
+          if secret.symlink || secret.path == "${cfg.secretsDir}/${secret.name}" then
             ''_truePath="${cfg.secretsMountPoint}/$_agenix_generation/${secret.name}"''
           else
             ''_truePath="${secret.path}"''
