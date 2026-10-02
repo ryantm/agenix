@@ -49,6 +49,10 @@
             }).system;
         })
         // {
+          x86_64-linux.home-empty-identity = import (testDir + "/home-empty-identity.nix") {
+            inherit home-manager;
+            pkgs = nixpkgs.legacyPackages.x86_64-linux;
+          };
           x86_64-linux.integration = import (testDir + "/integration.nix") {
             inherit nixpkgs home-manager;
             pkgs = nixpkgs.legacyPackages.x86_64-linux;
