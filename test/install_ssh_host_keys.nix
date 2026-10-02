@@ -1,6 +1,7 @@
 # Do not copy this! It is insecure. This is only okay because we are testing.
-{config, ...}: {
-  system.activationScripts.agenixInstall.deps = ["installSSHHostKeys"];
+{ config, ... }:
+{
+  system.activationScripts.agenixInstall.deps = [ "installSSHHostKeys" ];
 
   system.activationScripts.installSSHHostKeys.text = ''
     USER1_UID="${toString config.users.users.user1.uid}"
@@ -21,8 +22,5 @@
       chown $USER1_UID:$USERS_GID /home/user1/.ssh/id_ed25519
       touch /etc/ssh/ssh_host_rsa_key
     )
-    cp -r "${../example}" /tmp/secrets
-    chmod -R u+rw /tmp/secrets
-    chown -R $USER1_UID:$USERS_GID /tmp/secrets
   '';
 }
