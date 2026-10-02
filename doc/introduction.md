@@ -11,6 +11,11 @@ public keys. The deployment modules do not read that rules file; they use
 the encrypted paths declared in `age.secrets` and the private identities in
 `age.identityPaths`.
 
+The CLI does not read NixOS or Home Manager settings such as
+`age.identityPaths` or `age.secrets.<name>.path`. Pass `-i` to select a CLI
+decryption identity. `agenix -d secret.age` writes plaintext to standard
+output; the deployment module installs it at the configured `path`.
+
 ## Editing, building, and deployment {#secret-lifecycle}
 
 | Stage | What it needs |
