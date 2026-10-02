@@ -16,6 +16,7 @@
   * [agenix CLI reference](#agenix-cli-reference)
 * [Rekeying](#rekeying)
 * [Overriding age binary](#overriding-age-binary)
+* [Plugins during NixOS installation](#install-plugins)
 * [Community and Support](#community-and-support)
 * [Threat model/Warnings](#threat-model-warnings)
 * [Contributing](#contributing)

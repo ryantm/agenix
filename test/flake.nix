@@ -49,6 +49,9 @@
             }).system;
         })
         // {
+          x86_64-linux.plugin-chroot = import (testDir + "/plugin-chroot.nix") {
+            pkgs = nixpkgs.legacyPackages.x86_64-linux;
+          };
           x86_64-linux.plugin-path = import (testDir + "/plugin-path.nix") {
             pkgs = nixpkgs.legacyPackages.x86_64-linux;
           };
