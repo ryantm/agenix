@@ -49,6 +49,12 @@
             }).system;
         })
         // {
+          x86_64-linux.integration-systemd = import (testDir + "/integration_systemd.nix") {
+            pkgs = nixpkgs.legacyPackages.x86_64-linux;
+          };
+          x86_64-linux.systemd-mode-options = import (testDir + "/systemd-mode-options.nix") {
+            pkgs = nixpkgs.legacyPackages.x86_64-linux;
+          };
           x86_64-linux.integration = import (testDir + "/integration.nix") {
             inherit nixpkgs home-manager;
             pkgs = nixpkgs.legacyPackages.x86_64-linux;

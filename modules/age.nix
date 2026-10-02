@@ -32,6 +32,26 @@ let
         config.systemd.sysusers.enable || (options.services ? userborn && config.services.userborn.enable)
       );
 
+  lateSystemd = cfg.installationMode == "systemd";
+  decryptDuringActivation = !lateSystemd && !sysusersEnabled;
+  secretMountPaths = unique (
+    [
+      cfg.secretsDir
+      cfg.secretsMountPoint
+    ]
+    ++ cfg.identityPaths
+    ++ map (s: s.path) enabledSecrets
+  );
+  usersWithAgenixPasswords =
+    if isDarwin then
+      { }
+    else
+      filterAttrs (
+        _: user:
+        (user.hashedPasswordFile or null) != null
+        && elem (toString user.hashedPasswordFile) (map (s: toString s.path) enabledSecrets)
+      ) users;
+
   mountCommand =
     if isDarwin then
       ''
@@ -130,12 +150,12 @@ let
     }
     ln -sfT "${cfg.secretsMountPoint}/$_agenix_generation" ${cfg.secretsDir}
 
-    (( _agenix_generation > 1 )) && {
+    if (( _agenix_generation > 1 )); then
     ${optionalString (
       verbosityLevel >= 2
     ) ''echo "[agenix] removing old secrets (generation $(( _agenix_generation - 1 )))..."''}
     rm -rf "${cfg.secretsMountPoint}/$(( _agenix_generation - 1 ))"
-    }
+    fi
   '';
 
   enabledSecrets = lib.filter (secret: secret.enable) (builtins.attrValues cfg.secrets);
@@ -157,6 +177,13 @@ let
     ++ [ chownMountPoint ]
     ++ (map chownSecret enabledSecrets)
   );
+
+  barrierChecks = concatMapStringsSep "\n" (secret: ''
+    if ! test -r ${escapeShellArg secret.path}; then
+      printf '%s\n' ${escapeShellArg "[agenix] secret ${secret.name} is missing or unreadable at ${secret.path}"} >&2
+      _agenix_missing=1
+    fi
+  '') enabledSecrets;
 
   secretType = types.submodule (
     { config, ... }:
@@ -230,6 +257,25 @@ in
   options.age = {
     enable = mkEnableOption "agenix" // {
       default = enabledSecrets != [ ];
+    };
+
+    installationMode = mkOption {
+      type = types.enum [
+        "activation"
+        "systemd"
+      ];
+      default = "activation";
+      description = ''
+        When to decrypt system secrets on Linux. The default, "activation",
+        preserves early decryption for user passwords: during activation with
+        traditional user management, or before sysusers/userborn with ownership
+        assigned afterward. A verification service is provided in activation mode.
+
+        "systemd" decrypts after filesystems and users are available, allowing
+        dependencies on services or mounts that provide identities. Secrets in
+        this mode cannot supply users.users.<name>.hashedPasswordFile or other
+        activation-time inputs. Darwin always uses launchd.
+      '';
     };
 
     ageBin = mkOption {
@@ -323,31 +369,75 @@ in
           assertion = cfg.identityPaths != [ ];
           message = "age.identityPaths must be set, for example by enabling openssh.";
         }
+        {
+          assertion = isDarwin || !lateSystemd || usersWithAgenixPasswords == { };
+          message =
+            "agenix: age.installationMode = \"systemd\" cannot supply hashedPasswordFile for users: "
+            + concatStringsSep ", " (attrNames usersWithAgenixPasswords)
+            + ". Use the default \"activation\" mode for user passwords.";
+        }
       ];
     }
     (optionalAttrs (!isDarwin) {
       # When using sysusers we no longer be started as an activation script
       # because those are started in initrd while sysusers is started later.
-      systemd.services.agenix-install-secrets = mkIf sysusersEnabled {
-        wantedBy = [ "sysinit.target" ];
-        # So user passwords can be encrypted.
-        before = [ "systemd-sysusers.service" ];
-        unitConfig.DefaultDependencies = "no";
+      systemd.services.agenix-install-secrets =
+        if !lateSystemd && sysusersEnabled then
+          {
+            wantedBy = [ "sysinit.target" ];
+            # So user passwords can be encrypted.
+            before = [ "systemd-sysusers.service" ];
+            unitConfig.DefaultDependencies = "no";
 
-        path = [ pkgs.mount ];
-        serviceConfig = {
-          Type = "oneshot";
-          ExecStart = pkgs.writeShellScript "agenix-install" (concatLines [
-            newGeneration
-            installSecrets
-            # Don't fail the systemd unit if our script ended with a failing test.
-            "true"
-          ]);
-          RemainAfterExit = true;
-        };
-      };
+            path = [ pkgs.mount ];
+            serviceConfig = {
+              Type = "oneshot";
+              ExecStart = pkgs.writeShellScript "agenix-install" (concatLines [
+                newGeneration
+                installSecrets
+                # Don't fail the systemd unit if our script ended with a failing test.
+                "true"
+              ]);
+              RemainAfterExit = true;
+            };
+          }
+        else
+          {
+            description = if lateSystemd then "Decrypt agenix secrets" else "Verify agenix secrets";
+            wantedBy = [ "multi-user.target" ];
+            after = optionals lateSystemd [
+              "local-fs.target"
+              "systemd-sysusers.service"
+              "userborn.service"
+            ];
+            unitConfig = optionalAttrs lateSystemd { RequiresMountsFor = secretMountPaths; };
+            path = [ pkgs.mount ];
+            serviceConfig = {
+              Type = "oneshot";
+              RemainAfterExit = true;
+              ExecStart = pkgs.writeShellScript "agenix-install" (
+                if lateSystemd then
+                  concatLines [
+                    "set -e"
+                    newGeneration
+                    installSecrets
+                    chownSecrets
+                  ]
+                else
+                  ''
+                    _agenix_missing=0
+                    ${barrierChecks}
+                    exit "$_agenix_missing"
+                  ''
+              );
+            }
+            // optionalAttrs lateSystemd {
+              Restart = "on-failure";
+              RestartSec = "2s";
+            };
+          };
 
-      systemd.services.agenix-chown = mkIf sysusersEnabled {
+      systemd.services.agenix-chown = mkIf (sysusersEnabled && !lateSystemd) {
         wantedBy = [ "sysinit.target" ];
         # Change ownership and group after users and groups are made.
         # (And after secrets are created, just in case systemd-sysusers.service is disabled.)
@@ -374,7 +464,7 @@ in
       # Create a new directory full of secrets for symlinking (this helps
       # ensure removed secrets are actually removed, or at least become
       # invalid symlinks).
-      system.activationScripts = mkIf (!sysusersEnabled) {
+      system.activationScripts = mkIf decryptDuringActivation {
         agenixNewGeneration = {
           text = newGeneration;
           deps = [
