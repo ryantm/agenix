@@ -49,6 +49,9 @@
             }).system;
         })
         // {
+          x86_64-linux.native-init = import (testDir + "/native-init.nix") {
+            pkgs = nixpkgs.legacyPackages.x86_64-linux;
+          };
           x86_64-linux.integration-systemd = import (testDir + "/integration_systemd.nix") {
             pkgs = nixpkgs.legacyPackages.x86_64-linux;
           };
