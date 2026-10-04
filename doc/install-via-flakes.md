@@ -4,6 +4,7 @@
 
 ```nix
 {
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
   inputs.agenix.url = "github:ryantm/agenix";
   # optional, not necessary for the module
   #inputs.agenix.inputs.nixpkgs.follows = "nixpkgs";
@@ -16,6 +17,32 @@
       modules = [
         ./configuration.nix
         agenix.nixosModules.default
+      ];
+    };
+  };
+}
+```
+
+## Install Home Manager module via Flakes
+
+```nix
+{
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
+  inputs.agenix.url = "github:ryantm/agenix";
+  inputs.home-manager.url = "github:nix-community/home-manager/release-26.05";
+  inputs.home-manager.inputs.nixpkgs.follows = "nixpkgs";
+
+  outputs = { self, nixpkgs, agenix, home-manager, ... }: {
+    homeConfigurations.username = home-manager.lib.homeManagerConfiguration {
+      # Change the system to match your machine.
+      pkgs = nixpkgs.legacyPackages.x86_64-linux;
+      modules = [
+        agenix.homeManagerModules.default
+        {
+          home.username = "username";
+          home.homeDirectory = "/home/username";
+          home.stateVersion = "26.05";
+        }
       ];
     };
   };

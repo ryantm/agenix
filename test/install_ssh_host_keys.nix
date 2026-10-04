@@ -22,12 +22,5 @@
       chown $USER1_UID:$USERS_GID /home/user1/.ssh/id_ed25519
       touch /etc/ssh/ssh_host_rsa_key
     )
-    cp -r "${../example}" /tmp/secrets
-    chmod -R u+rw /tmp/secrets
-    chown -R $USER1_UID:$USERS_GID /tmp/secrets
-
-    cp -r "${./fixtures/one-way}" /tmp/secrets-one-way
-    chmod -R u+rw /tmp/secrets-one-way
-    chown -R $USER1_UID:$USERS_GID /tmp/secrets-one-way
   '';
 }
