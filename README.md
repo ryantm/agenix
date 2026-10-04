@@ -389,6 +389,12 @@ e.g. inside your `flake.nix` file:
    ```ShellSession
    $ agenix -e secret1.age -i ~/.ssh/id_ed25519
    ```
+   If the private key is in a password manager, you do not have to save it to
+   disk. Pass it through a pipe:
+   ```ShellSession
+   $ agenix -e secret1.age -i <(pass show agenix-key)
+   $ agenix -r -i <(pass show agenix-key)
+   ```
    To create or replace a secret without access to a decryption key, pipe its
    complete new contents to `agenix -e secret1.age`. This overwrites the old
    secret; it cannot preserve or edit any of its previous contents.
@@ -768,6 +774,7 @@ options:
 FILE an age-encrypted file
 
 PRIVATE_KEY a path to a private SSH key used to decrypt file
+PRIVATE_KEY can be a pipe, for example <(pass show agenix-key)
 
 EDITOR environment variable of editor to use when editing FILE
 

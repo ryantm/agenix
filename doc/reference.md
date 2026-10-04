@@ -275,6 +275,7 @@ options:
 FILE an age-encrypted file
 
 PRIVATE_KEY a path to a private SSH key used to decrypt file
+PRIVATE_KEY can be a pipe, for example <(pass show agenix-key)
 
 EDITOR environment variable of editor to use when editing FILE
 

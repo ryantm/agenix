@@ -25,6 +25,7 @@ function show_help () {
   echo 'FILE an age-encrypted file'
   echo ' '
   echo 'PRIVATE_KEY a path to a private SSH key used to decrypt file'
+  echo 'PRIVATE_KEY can be a pipe, for example <(pass show agenix-key)'
   echo ' '
   echo 'EDITOR environment variable of editor to use when editing FILE'
   echo ' '
@@ -60,6 +61,31 @@ function set_file() {
 
 test $# -eq 0 && (show_help && exit 1)
 
+# Rekeying calls cleanup after each file, but the identities must stay until exit.
+function cleanup_identities {
+    if [[ -n "${IDENTITY_DIR+x}" ]]
+    then
+        rm -rf -- "${IDENTITY_DIR}"
+    fi
+}
+trap "cleanup_identities" 0 2 3 15
+
+# age reads a pipe only once, and a rekey decrypts many files. Save the
+# content of the pipe in a private temporary file and use that file instead.
+# The path of the saved file is returned in SAVED_IDENTITY, because a command
+# substitution would run this function in a subshell and lose IDENTITY_DIR.
+function save_identity {
+    local pipe=$1
+    if [[ -z "${IDENTITY_DIR+x}" ]]; then
+        IDENTITY_DIR=$(@mktempBin@ -d)
+        IDENTITY_COUNT=0
+    fi
+    IDENTITY_COUNT=$(( IDENTITY_COUNT + 1 ))
+    SAVED_IDENTITY="${IDENTITY_DIR}/identity-${IDENTITY_COUNT}"
+    (umask 077 && cat -- "${pipe}" > "${SAVED_IDENTITY}") || err "Cannot read identity from ${pipe}."
+    [[ -s "${SAVED_IDENTITY}" ]] || err "The identity ${pipe} is empty."
+}
+
 REKEY=0
 CHECK=0
 DECRYPT_ONLY=0
@@ -85,7 +111,10 @@ while test $# -gt 0; do
       shift
       if test $# -gt 0; then
         identity_path=$1
-        if [[ ${identity_path} != /* ]]; then
+        if [[ -p ${identity_path} ]]; then
+          save_identity "${identity_path}"
+          identity_path=${SAVED_IDENTITY}
+        elif [[ ${identity_path} != /* ]]; then
           identity_path="${PWD}/${identity_path}"
         fi
         DEFAULT_DECRYPT+=(--identity "${identity_path}")
@@ -185,7 +214,7 @@ function cleanup {
         rm -rf -- "${REENCRYPTED_DIR}"
     fi
 }
-trap "cleanup" 0 2 3 15
+trap "cleanup; cleanup_identities" 0 2 3 15
 
 function keys {
     (@nixInstantiate@ --json --eval --strict -E "(let rules = import ${RULES}; in rules.\"$1\".publicKeys)" | @jqBin@ -r .[]) || exit 1

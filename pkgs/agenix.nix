@@ -66,6 +66,27 @@ stdenv.mkDerivation rec {
     cd $HOME/secrets
     test $(${bin} -d secret1.age) = "hello"
     ${bin} --check
+
+    # An identity from a pipe is read once and used for every file of a rekey.
+    identity="$HOME/.ssh/id_ed25519"
+    mv "$identity" "$HOME/identity"
+    test $(${bin} -d secret1.age -i <(cat "$HOME/identity")) = "hello"
+    test $(cat "$HOME/identity" | ${bin} -d secret1.age -i /dev/stdin) = "hello"
+    before=$(sha256sum secret1.age secret2.age)
+    export TMPDIR="$test_tmp/agenix-tmp"
+    mkdir "$TMPDIR"
+    ${bin} -r -i <(cat "$HOME/identity") 2> rekey-log
+    test "$before" != "$(sha256sum secret1.age secret2.age)"
+    grep -q 'rekeying secret2.age' rekey-log
+    test $(${bin} -d secret1.age -i <(cat "$HOME/identity")) = "hello"
+    test -z "$(ls -A "$TMPDIR")"
+    if ${bin} -d secret1.age -i <(true) 2> empty-log; then
+      echo 'agenix -i should fail for an empty pipe' >&2
+      exit 1
+    fi
+    grep -q 'is empty' empty-log
+    unset TMPDIR
+    mv "$HOME/identity" "$identity"
     sed 's/"secret2.age".publicKeys = \[ user1 \];/"secret2.age".publicKeys = [ system1 ];/' secrets.nix > changed-rules.nix
     if AGENIX_RULES=changed-rules.nix ${bin} --check > check-report; then
       echo 'agenix --check should fail when recipients differ' >&2
