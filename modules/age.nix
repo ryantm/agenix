@@ -43,6 +43,13 @@ let
         fi
       ''
     else
+    # tmpfs supports noswap from kernel 6.4
+    if lib.versionAtLeast config.boot.kernelPackages.kernel.version "6.4.0" then
+      ''
+        grep -q "${cfg.secretsMountPoint} tmpfs" /proc/mounts ||
+          mount -t tmpfs none "${cfg.secretsMountPoint}" -o nodev,nosuid,mode=0751,noswap
+      ''
+    else
       ''
         grep -q "${cfg.secretsMountPoint} ramfs" /proc/mounts ||
           mount -t ramfs none "${cfg.secretsMountPoint}" -o nodev,nosuid,mode=0751
