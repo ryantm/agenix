@@ -49,6 +49,10 @@
             }).system;
         })
         // {
+          x86_64-linux.home-age-bin = import (testDir + "/home-age-bin.nix") {
+            inherit home-manager;
+            pkgs = nixpkgs.legacyPackages.x86_64-linux;
+          };
           x86_64-linux.integration = import (testDir + "/integration.nix") {
             inherit nixpkgs home-manager;
             pkgs = nixpkgs.legacyPackages.x86_64-linux;
