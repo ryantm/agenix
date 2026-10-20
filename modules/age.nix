@@ -42,9 +42,14 @@ let
             mount -t hfs -o nobrowse,nodev,nosuid,-m=0751 "$dev" "${cfg.secretsMountPoint}"
         fi
       ''
-    else
-    # tmpfs supports noswap from kernel 6.4
-    if lib.versionAtLeast config.boot.kernelPackages.kernel.version "6.4.0" then
+    else if
+      # tmpfs in containers may not support turning off swap: "Turning off swap in unprivileged
+      # tmpfs mounts unsupported"
+      # https://github.com/ryantm/agenix/issues/455
+      !(config ? boot && config.boot ? isContainer && config.boot.isContainer)
+      # tmpfs supports noswap from kernel 6.4
+      && lib.versionAtLeast config.boot.kernelPackages.kernel.version "6.4.0"
+    then
       ''
         grep -q "${cfg.secretsMountPoint} tmpfs" /proc/mounts ||
           mount -t tmpfs none "${cfg.secretsMountPoint}" -o nodev,nosuid,mode=0751,noswap
