@@ -337,13 +337,13 @@ Directory where generations are created before they are linked. Defaults to
 agenix - edit, rekey, and check age secret files
 
 agenix -e FILE [-i PRIVATE_KEY]
-agenix -r [-i PRIVATE_KEY]
+agenix -r [PUBLIC_KEY...] [-i PRIVATE_KEY]
 agenix -c
 
 options:
 -h, --help                show help
 -e, --edit FILE           edits FILE using $EDITOR
--r, --rekey               re-encrypts all secrets with specified recipients
+-r, --rekey [PUBLIC_KEY...]  re-encrypts secrets matching any selected recipient
 -c, --check               checks encrypted SSH recipients against the rules
 -d, --decrypt FILE        decrypts FILE to STDOUT
 -i, --identity            identity to use when decrypting
@@ -352,6 +352,8 @@ options:
 FILE an age-encrypted file
 
 PRIVATE_KEY a path to a private SSH key used to decrypt file
+
+PUBLIC_KEY exact public key strings from the rules; any match selects a secret
 
 EDITOR environment variable of editor to use when editing FILE
 
