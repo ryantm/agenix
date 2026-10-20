@@ -21,6 +21,16 @@ in
 
   age = {
     identityPaths = options.age.identityPaths.default ++ [ "/etc/ssh/this_key_wont_exist" ];
+    pluginPackages = [
+      (pkgs.writeShellScriptBin "agenix-test-plugin" ''
+        printf 'plugin ran\n' | grep -q 'plugin ran'
+      '')
+    ];
+    ageBin = "${pkgs.writeShellScript "age-with-test-plugin" ''
+      set -e
+      agenix-test-plugin
+      exec ${pkgs.age}/bin/age "$@"
+    ''}";
     secrets.system-secret.file = ../example/secret1.age;
     secrets.owned-secret = {
       file = ../example/secret1.age;
