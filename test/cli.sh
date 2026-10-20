@@ -83,6 +83,23 @@ before=$(hash passwordfile-user1.age)
 "$agenix" -r -i "$HOME/.ssh/id_ed25519"
 [[ $(hash passwordfile-user1.age) != "$before" ]]
 
+# An identity from a pipe is read once and used for every file of a rekey.
+mv "$HOME/.ssh/id_ed25519" "$HOME/identity"
+[[ $(decrypt secret1.age -i <(cat "$HOME/identity") 2>/dev/null) == hello ]]
+[[ $(cat "$HOME/identity" | decrypt secret1.age -i /dev/stdin 2>/dev/null) == hello ]]
+before=$(hash passwordfile-user1.age)
+mkdir "$test_tmp/agenix-tmp"
+output=$(TMPDIR="$test_tmp/agenix-tmp" "$agenix" -r -i <(cat "$HOME/identity") 2>&1)
+has "$output" 'rekeying secret2.age'
+[[ $(hash passwordfile-user1.age) != "$before" ]]
+[[ $(decrypt secret1.age -i <(cat "$HOME/identity") 2>/dev/null) == hello ]]
+[[ -z $(ls -A "$test_tmp/agenix-tmp") ]] || fail 'saved identity remained after rekey'
+if output=$(decrypt secret1.age -i <(true) 2>&1); then
+  fail 'empty identity pipe was accepted'
+fi
+has "$output" 'is empty'
+mv "$HOME/identity" "$HOME/.ssh/id_ed25519"
+
 EDITOR=: "$agenix" -e passwordfile-user1.age </dev/null
 printf 'bogus\n' > "$HOME/.ssh/id_rsa"
 before=$(hash passwordfile-user1.age)

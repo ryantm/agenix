@@ -40,6 +40,14 @@
    ```ShellSession
    $ agenix -e secret1.age
    ```
+   If the private key is not in `~/.ssh/`, pass it with `-i`. The argument can
+   be a pipe, so a key from a password manager does not have to be saved to
+   disk:
+   ```ShellSession
+   $ agenix -e secret1.age -i ~/.ssh/other_key
+   $ agenix -e secret1.age -i <(pass show agenix-key)
+   $ agenix -r -i <(pass show agenix-key)
+   ```
    You can also pipe complete contents into `agenix -e secret1.age` to create
    or replace a secret without a decryption key. This overwrites the previous
    contents rather than editing them.
