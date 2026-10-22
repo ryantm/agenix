@@ -32,6 +32,12 @@
           in
           ''
             diff -q "${config.age.secrets.user-secret.path}" <(printf '${secret}\n')
+            agent="$HOME/Library/LaunchAgents/${config.launchd.agents.activate-agenix.config.Label}.plist"
+            test "$(/usr/bin/plutil -extract KeepAlive.SuccessfulExit raw "$agent")" = false
+            if /usr/bin/plutil -extract KeepAlive.Crashed raw "$agent"; then
+              echo 'KeepAlive.Crashed must be absent to avoid restarting after successful exits' >&2
+              exit 1
+            fi
           '';
       };
     };
