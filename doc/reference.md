@@ -52,6 +52,27 @@ Example:
 }
 ```
 
+A Nix path such as `../secrets/monitrc.age` includes the encrypted file in
+the system's Nix store closure. An absolute string such as
+`"/etc/agenix/monitrc.age"` instead refers to a file already present on the
+target at activation time; it is not copied from the build machine.
+
+When constructing paths to repository files, keep the root as a Nix path:
+
+```nix
+let
+  secretRoot = ../secrets;
+in
+{
+  age.secrets.monitrc.file = secretRoot + "/monitrc.age";
+}
+```
+
+String interpolation of a Nix path, such as `"${../secrets/monitrc.age}"`,
+also preserves the store dependency. A plain absolute string assembled
+from other strings does not. Use runtime strings only when another part
+of your deployment provisions the encrypted file there.
+
 ### `age.secrets.<name>.path`
 
 `age.secrets.<name>.path` is the path where the secret is decrypted
