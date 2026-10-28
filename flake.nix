@@ -39,6 +39,9 @@
       homeManagerModules.age = ./modules/age-home.nix;
       homeManagerModules.default = self.homeManagerModules.age;
 
+      finixModules.age = ./modules/age-finix.nix;
+      finixModules.default = self.finixModules.age;
+
       overlays.default = import ./overlay.nix;
 
       formatter = nixpkgs.lib.genAttrs formatterSystems (
