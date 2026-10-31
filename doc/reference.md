@@ -195,6 +195,34 @@ Example of a secret with a name different from its attrpath:
 }
 ```
 
+### `age.installationMode`
+
+Controls when the NixOS module decrypts secrets. Defaults to `"activation"`.
+With traditional user management, secrets are decrypted during activation.
+With sysusers or userborn, decryption runs before user creation and ownership
+is assigned afterward. Both support secrets used as `hashedPasswordFile`.
+
+Set `"systemd"` to decrypt after users and filesystems are available. This
+allows dependencies on services or mounts that provide a decryption key.
+Secrets in this mode are unavailable during activation and cannot supply
+`users.users.<name>.hashedPasswordFile`; such configurations fail evaluation.
+Darwin continues to use launchd.
+
+```nix
+age.installationMode = "systemd";
+age.identityPaths = [ "/mnt/usb/age-key" ];
+systemd.services.agenix-install-secrets = {
+  requires = [ "mnt-usb.mount" ];
+  after = [ "mnt-usb.mount" ];
+};
+```
+
+Services using secrets can declare `after` and `requires` dependencies on
+`agenix-install-secrets.service`. In traditional activation mode this unit
+verifies that every enabled secret is readable. With sysusers or userborn in
+the default mode, depend on `agenix-chown.service` instead to wait for both
+decryption and ownership assignment.
+
 ### `age.ageBin`
 
 `age.ageBin` the string of the path to the `age` binary. Usually, you
