@@ -219,6 +219,8 @@ function decrypt {
         fi
 
         @ageBin@ "${DECRYPT[@]}" -- "${FILE}" || exit 1
+    elif [[ ${REKEY} -eq 1 || ${DECRYPT_ONLY} -eq 1 ]]; then
+        err "${FILE} does not exist."
     fi
 }
 
@@ -242,7 +244,7 @@ function edit {
     # only edit if we're not rekeying
     if [[ "${EDITOR:-}" != ":" ]]; then
       if [[ -t 0 ]]; then
-        ${EDITOR} "${CLEARTEXT_FILE}"
+        ${EDITOR} "${CLEARTEXT_FILE}" || err "Editor failed for ${FILE}."
       else
         cat > "${CLEARTEXT_FILE}"
       fi
@@ -279,12 +281,13 @@ function edit {
 }
 
 function rekey {
-    FILES=$( (@nixInstantiate@ --json --eval -E "(let rules = import ${RULES}; in builtins.attrNames rules)"  | @jqBin@ -r .[]) || exit 1)
+    FILES_JSON=$(@nixInstantiate@ --json --eval -E "(let rules = import ${RULES}; in builtins.attrNames rules)") || exit 1
+    mapfile -d '' -t FILES < <(printf '%s' "${FILES_JSON}" | @jqBin@ -jr '.[] + "\u0000"')
 
-    for FILE in ${FILES}
+    for FILE in "${FILES[@]}"
     do
         warn "rekeying ${FILE}..."
-        EDITOR=: edit "${FILE}"
+        EDITOR=: edit "${FILE}" || return 1
         cleanup
     done
 }
