@@ -18,7 +18,7 @@ let
 in
 stdenvNoCC.mkDerivation rec {
   pname = "agenix";
-  version = "0.15.0";
+  version = "0.18.0";
   src = replaceVars ./agenix.sh {
     inherit ageBin version;
     jqBin = "${jq}/bin/jq";
