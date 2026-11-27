@@ -336,8 +336,8 @@ Directory where generations are created before they are linked. Defaults to
 ```
 agenix - edit, rekey, and check age secret files
 
-agenix -e FILE [-i PRIVATE_KEY]
-agenix -r [-i PRIVATE_KEY]
+agenix -e FILE [-i PRIVATE_KEY] [-j PLUGIN]
+agenix -r [-i PRIVATE_KEY] [-j PLUGIN]
 agenix -c
 
 options:
@@ -347,6 +347,7 @@ options:
 -c, --check               checks encrypted SSH recipients against the rules
 -d, --decrypt FILE        decrypts FILE to STDOUT
 -i, --identity            identity to use when decrypting
+-j PLUGIN                 decrypt using the data-less plugin PLUGIN
 -v, --verbose             verbose output
 
 FILE an age-encrypted file
@@ -363,6 +364,12 @@ Searches the current directory for agenix-rules.nix, then secrets.nix.
 Searches parent directories for agenix-rules.nix only.
 Resolves relative secret paths from the selected rules file's directory.
 ```
+
+`-j PLUGIN` passes a data-less plugin identity to age for decryption, editing,
+or rekeying. The corresponding `age-plugin-PLUGIN` executable must be on
+`PATH`. No private key file is needed; supplying `-j` also disables automatic
+discovery of `~/.ssh/id_rsa` and `~/.ssh/id_ed25519`. Encryption still uses
+the recipients in the rules file.
 
 `agenix --check` compares the SSH recipient tags in each age file header with
 the public keys in the rules file. It prints `✓` for matching files and `✗`
