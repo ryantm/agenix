@@ -33,6 +33,18 @@ pkgs.testers.nixosTest {
           file = ../example/secret1.age;
           owner = "getpsyched";
         };
+        "nested/subsecret" = {
+          file = ../example/secret1.age;
+          owner = "user1";
+        };
+        direct = {
+          file = ../example/secret1.age;
+          path = "/var/lib/agenix-direct/secret";
+          symlink = false;
+          owner = "user1";
+          group = "users";
+          mode = "0400";
+        };
       };
 
       age.identityPaths = options.age.identityPaths.default ++ [ "/etc/ssh/this_key_wont_exist" ];
@@ -177,6 +189,40 @@ pkgs.testers.nixosTest {
 
       assert "${hyphen-secret}" in system1.succeed("cat /run/agenix/leading-hyphen")
       system1.fail("test -e /run/agenix/disabled")
+
+      # Nested secret subdirectory should be 0751 (not world-listable 0755).
+      assert system1.succeed("cat /run/agenix/nested/subsecret").strip() == "hello"
+      nested_dir_mode = system1.succeed("stat -Lc '%a' /run/agenix/nested").strip()
+      assert nested_dir_mode == "751", nested_dir_mode
+
+      # Direct (symlink = false) secret should have proper content, mode, and ownership,
+      # and must not follow a symlink planted by a non-root directory owner.
+      assert system1.succeed("cat /var/lib/agenix-direct/secret").strip() == "hello"
+      direct_meta = system1.succeed("stat -c '%U:%G:%a' /var/lib/agenix-direct/secret").strip()
+      assert direct_meta == "user1:users:400", direct_meta
+      system1.succeed("printf 'sentinel\\n' > /etc/agenix-victim && chmod 0600 /etc/agenix-victim")
+      system1.succeed("chown user1:users /var/lib/agenix-direct")
+      system1.succeed("rm -f /var/lib/agenix-direct/secret && ln -s /etc/agenix-victim /var/lib/agenix-direct/secret")
+      # Also plant a stale file in the next generation directory to ensure it is cleaned up.
+      next_gen = int(system1.succeed("basename $(readlink /run/agenix)").strip()) + 1
+      system1.succeed(f"mkdir -p /run/agenix.d/{next_gen} && printf stale > /run/agenix.d/{next_gen}/stale")
+      system1.succeed("/run/current-system/activate")
+      assert system1.succeed("cat /etc/agenix-victim").strip() == "sentinel"
+      assert system1.succeed("stat -c '%U:%G' /etc/agenix-victim").strip() == "root:root"
+      assert system1.succeed("test ! -L /var/lib/agenix-direct/secret && cat /var/lib/agenix-direct/secret").strip() == "hello"
+      assert system1.succeed("stat -c '%U:%G:%a' /var/lib/agenix-direct/secret").strip() == "user1:users:400"
+      system1.fail("test -e /run/agenix/stale")
+
+      # Re-activation must not over-mount /run/agenix.d.
+      mount_count = int(system1.succeed("grep -c ' /run/agenix.d ' /proc/mounts").strip())
+      assert mount_count == 1, mount_count
+
+      # Home Manager secrets directories should be 0700 (private to the user) and service active.
+      hm_dir_mode = system1.succeed("stat -c '%a' /run/user/1000/agenix.d").strip()
+      assert hm_dir_mode == "700", hm_dir_mode
+      hm_gen_mode = system1.succeed("stat -Lc '%a' /run/user/1000/agenix").strip()
+      assert hm_gen_mode == "700", hm_gen_mode
+      system1.succeed("su - user1 -c 'XDG_RUNTIME_DIR=/run/user/1000 systemctl --user is-active agenix.service'")
 
     '';
 }
