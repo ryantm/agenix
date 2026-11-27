@@ -46,6 +46,17 @@ pkgs.testers.nixosTest {
     machine.succeed("systemctl is-active agenix-install-secrets.service")
     machine.succeed("systemctl is-active agenix-chown.service")
 
+    # agenix-chown must be ordered before sysinit.target so services do not race with it.
+    before_units = machine.succeed("systemctl show -p Before --value agenix-chown.service")
+    assert "sysinit.target" in before_units.split(), before_units
+
+    # Restarting agenix-install-secrets must also restart agenix-chown to chown the new generation.
+    machine.succeed("systemctl restart agenix-install-secrets.service")
+    machine.succeed("systemctl is-active agenix-install-secrets.service")
+    machine.wait_for_unit("agenix-chown.service")
+    machine.succeed('test "$(readlink /run/agenix)" = /run/agenix.d/2')
+    machine.succeed('test "$(stat -Lc %U:%G /run/agenix/owned)" = user1:users')
+
     # The sysusers path uses services rather than activation snippets.
     install_log = machine.succeed("journalctl -b -u agenix-install-secrets.service --no-pager -o cat")
     chown_log = machine.succeed("journalctl -b -u agenix-chown.service --no-pager -o cat")
