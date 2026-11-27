@@ -27,8 +27,6 @@ stdenvNoCC.mkDerivation rec {
     diffBin = "${diffutils}/bin/diff";
     sshKeygenBin = "${openssh}/bin/ssh-keygen";
     base64Bin = "${coreutils}/bin/base64";
-    headBin = "${coreutils}/bin/head";
-    trBin = "${coreutils}/bin/tr";
     sedBin = "${gnused}/bin/sed";
   };
   dontUnpack = true;

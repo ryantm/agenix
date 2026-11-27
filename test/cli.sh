@@ -123,3 +123,127 @@ fi
 "$agenix" -r -i "$keys/system1" </dev/null
 [[ $(hash one-way.age) != "$before" ]]
 [[ $(decrypt one-way.age -i "$keys/system1" </dev/null) == nose1234 ]]
+
+# Empty default SSH key file should be skipped rather than failing decryption.
+cd "$HOME/secrets"
+: > "$HOME/.ssh/id_rsa"
+[[ $(decrypt secret1.age 2>/dev/null) == hello ]]
+rm "$HOME/.ssh/id_rsa"
+
+# Argument and mode validation.
+if "$agenix" -v >/dev/null 2>&1; then
+  fail 'missing mode flag was accepted'
+fi
+if "$agenix" -r -c >/dev/null 2>&1; then
+  fail 'conflicting mode flags were accepted'
+fi
+if "$agenix" -e "" >/dev/null 2>&1; then
+  fail 'empty -e FILE was accepted'
+fi
+if "$agenix" -e ./ >/dev/null 2>&1; then
+  fail 'dot-slash -e FILE was accepted'
+fi
+if "$agenix" -i "" -d secret1.age >/dev/null 2>&1; then
+  fail 'empty -i PRIVATE_KEY was accepted'
+fi
+
+# Decrypting a non-existent secret must fail even when a rule exists.
+cat > missing-secret-rules.nix <<'EOF'
+let
+  user1 = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIL0idNvgGiucWgup/mP78zyC23uFjYq0evcWdjGQUaBH";
+in {
+  "does-not-exist.age".publicKeys = [ user1 ];
+  "empty-keys.age".publicKeys = [ ];
+}
+EOF
+if AGENIX_RULES=missing-secret-rules.nix "$agenix" -d does-not-exist.age >/dev/null 2>&1; then
+  fail 'decrypting a missing file succeeded'
+fi
+if printf 'piped\n' | AGENIX_RULES=missing-secret-rules.nix "$agenix" -e empty-keys.age >/dev/null 2>&1; then
+  fail 'piped edit with empty publicKeys succeeded'
+fi
+
+# Special characters in rules directory and filenames, plus Nix injection resistance.
+special_dir="$test_tmp/dir with spaces 'quote'"
+mkdir -p "$special_dir"
+cat > "$special_dir/agenix-rules.nix" <<EOF
+let
+  user1 = "$(cat "$keys/user1.pub")";
+  system1 = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPJDyIr/FSz1cJdcoW69R+NrWzwGK/+3gJpqD1t8L2zE test-comment\n";
+in {
+  "space secret.age".publicKeys = [ user1 system1 ];
+  "quote\"and\\\${dollar}.age" = {
+    publicKeys = [ user1 ];
+    armor = true;
+  };
+}
+EOF
+cd "$special_dir"
+printf 'space-payload\n' | "$agenix" -e "space secret.age"
+printf 'quote-payload\n' | "$agenix" -e 'quote"and${dollar}.age'
+[[ $(decrypt "space secret.age" 2>/dev/null) == space-payload ]]
+[[ $(decrypt 'quote"and${dollar}.age' 2>/dev/null) == quote-payload ]]
+"$agenix" --check
+"$agenix" -r -i "$HOME/.ssh/id_ed25519"
+[[ $(decrypt "space secret.age" 2>/dev/null) == space-payload ]]
+[[ $(decrypt 'quote"and${dollar}.age' 2>/dev/null) == quote-payload ]]
+"$agenix" --check
+
+# Attempted Nix expression injection via filename must fail cleanly as a missing rule.
+if printf 'x\n' | "$agenix" -e 'x".publicKeys; builtins.throw ("INJ" + "ECTED") #' > inj-out 2>&1; then
+  fail 'Nix injection filename succeeded'
+fi
+has "$(cat inj-out)" 'There is no rule for'
+lacks "$(cat inj-out)" 'INJECTED'
+
+# --check edge cases: CRLF armor, truncated armor, duplicate stanzas, crafted stanza.
+# Convert armored file to CRLF line endings and verify --check accepts it.
+awk '{ printf "%s\r\n", $0 }' 'quote"and${dollar}.age' > crlf.age
+mv crlf.age 'quote"and${dollar}.age'
+"$agenix" --check
+
+# Truncated armor (missing END line) must fail --check.
+sed '/^-----END AGE ENCRYPTED FILE-----/d' 'quote"and${dollar}.age' > truncated.age
+mv truncated.age 'quote"and${dollar}.age'
+if "$agenix" --check >/dev/null 2>&1; then
+  fail 'truncated armored file passed --check'
+fi
+printf 'quote-payload\n' | "$agenix" -e 'quote"and${dollar}.age'
+
+# Duplicate SSH stanza must be detected by --check.
+user1_tag=$(awk '/^-> ssh-ed25519 /{print $3; exit}' "space secret.age")
+{
+  printf 'age-encryption.org/v1\n'
+  printf -- '-> ssh-ed25519 %s AAAA\n\n' "$user1_tag"
+  printf -- '-> ssh-ed25519 %s BBBB\n\n' "$user1_tag"
+  printf '%s\n' '--- AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+} > dup.age
+cat > dup-rules.nix <<EOF
+{
+  "dup.age".publicKeys = [ "$(cat "$keys/user1.pub")" ];
+}
+EOF
+if AGENIX_RULES=dup-rules.nix "$agenix" --check > dup-report 2>&1; then
+  fail 'duplicate stanza passed --check'
+fi
+grep -q '(duplicate)' dup-report
+
+# Malicious stanza must never execute commands in --check.
+{
+  printf 'age-encryption.org/v1\n'
+  printf -- '-> a]+$(touch %s/pwned)+a[b tag\n\n' "$special_dir"
+  printf '%s\n' '--- AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+} > evil.age
+cat > evil-rules.nix <<EOF
+{
+  "evil.age".publicKeys = [ "$(cat "$keys/user1.pub")" ];
+}
+EOF
+if AGENIX_RULES=evil-rules.nix "$agenix" --check >/dev/null 2>&1; then
+  fail 'malicious stanza passed --check'
+fi
+[[ ! -e "$special_dir/pwned" ]] || fail 'command injection occurred in --check'
+
+# Editing a file with diff output suppressed must not leak temp paths to stdout.
+out=$(printf 'updated-payload\n' | "$agenix" -e "space secret.age")
+lacks "$out" 'differ'
